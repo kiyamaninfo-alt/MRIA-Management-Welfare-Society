@@ -3,6 +3,12 @@
  * Treasury Statement Export Engine (CSV RFC 4180 & Printable PDF Report)
  */
 
+export const ACCOUNT_NAMES = {
+  boc_savings: "Bank of Ceylon Operating Savings",
+  cash_in_hand: "Treasurer Physical Cash Float",
+  fixed_deposits: "BOC Fixed Deposit Capital Reserve",
+};
+
 /**
  * Escapes a cell according to RFC 4180 standards.
  */
@@ -18,7 +24,7 @@ function escapeCsvCell(cell) {
 /**
  * Formats a currency number in LKR format.
  */
-function formatLkr(amount) {
+export function formatLkr(amount) {
   const num = Number(amount || 0);
   return num.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -27,16 +33,46 @@ function formatLkr(amount) {
 }
 
 /**
+ * Normalizes account summaries from get_treasury_statement RPC output.
+ */
+export function getAccountSummariesFromStatement(statementData) {
+  if (!statementData) return [];
+  
+  if (statementData.account_summaries && Array.isArray(statementData.account_summaries)) {
+    return statementData.account_summaries;
+  }
+
+  const opening = statementData.opening_balances || {};
+  const movement = statementData.period_movements || {};
+  const closing = statementData.closing_balances || {};
+
+  const accountKeys = ["boc_savings", "cash_in_hand", "fixed_deposits"];
+  return accountKeys.map((key) => {
+    const op = Number(opening[key] || 0);
+    const mov = Number(movement[key] || 0);
+    const cl = Number(closing[key] || 0);
+    return {
+      account_id: key,
+      account_name: ACCOUNT_NAMES[key] || key,
+      opening_balance: op,
+      period_inflow: mov > 0 ? mov : 0,
+      period_outflow: mov < 0 ? Math.abs(mov) : 0,
+      net_change: mov,
+      closing_balance: cl,
+    };
+  });
+}
+
+/**
  * Exports Treasury Statement data to CSV (RFC 4180).
- *
- * @param {Object} statementData - Output from get_treasury_statement RPC
- * @param {string} startDate - YYYY-MM-DD
- * @param {string} endDate - YYYY-MM-DD
  */
 export function exportTreasuryStatementToCsv(statementData, startDate, endDate) {
   if (!statementData) {
     throw new Error("No statement data available for export.");
   }
+
+  const summaries = getAccountSummariesFromStatement(statementData);
+  const transactions = statementData.transactions || [];
 
   const lines = [];
 
@@ -47,9 +83,8 @@ export function exportTreasuryStatementToCsv(statementData, startDate, endDate) 
   lines.push([]);
 
   // Account Summaries (Opening, Period Change, Closing)
-  lines.push(["Account Summary", "Account Key", "Opening Balance (LKR)", "Inflow (LKR)", "Outflow (LKR)", "Net Change (LKR)", "Closing Balance (LKR)"].map(escapeCsvCell).join(","));
+  lines.push(["Asset Account", "Account Key", "Opening Balance (LKR)", "Period Inflow (LKR)", "Period Outflow (LKR)", "Net Change (LKR)", "Closing Balance (LKR)"].map(escapeCsvCell).join(","));
 
-  const summaries = statementData.account_summaries || [];
   let totalOpening = 0;
   let totalInflow = 0;
   let totalOutflow = 0;
@@ -89,21 +124,22 @@ export function exportTreasuryStatementToCsv(statementData, startDate, endDate) 
   ].map(escapeCsvCell).join(","));
 
   lines.push([]);
-  lines.push(["Detailed Transactions"].map(escapeCsvCell).join(","));
-  lines.push(["Date", "Account", "Type", "Category", "Amount (LKR)", "Reference", "Description", "Performed By"].map(escapeCsvCell).join(","));
+  lines.push(["Detailed Transactions Journal"].map(escapeCsvCell).join(","));
+  lines.push(["Date", "Account", "Type", "Amount (LKR)", "Reference", "Description"].map(escapeCsvCell).join(","));
 
-  const transactions = statementData.transactions || [];
   for (const tx of transactions) {
-    const txDate = tx.transacted_at ? new Date(tx.transacted_at).toLocaleDateString() : "";
+    const txDate = tx.transaction_date || (tx.transacted_at ? new Date(tx.transacted_at).toLocaleDateString() : "");
+    const accLabel = tx.destination_account_id
+      ? (ACCOUNT_NAMES[tx.destination_account_id] || tx.destination_account_id)
+      : (ACCOUNT_NAMES[tx.source_account_id] || tx.source_account_id || "-");
+
     lines.push([
       txDate,
-      tx.account_name || tx.account_id || "",
+      accLabel,
       tx.transaction_type || "",
-      tx.category || "",
       formatLkr(tx.amount),
-      tx.reference_number || "",
+      tx.reference_no || tx.reference_number || "",
       tx.description || "",
-      tx.performer_name || tx.performer_email || "",
     ].map(escapeCsvCell).join(","));
   }
 
@@ -121,17 +157,13 @@ export function exportTreasuryStatementToCsv(statementData, startDate, endDate) 
 
 /**
  * Generates and opens a high-fidelity CSS-paged printable PDF view.
- *
- * @param {Object} statementData - Output from get_treasury_statement RPC
- * @param {string} startDate - YYYY-MM-DD
- * @param {string} endDate - YYYY-MM-DD
  */
 export function printTreasuryStatementPdf(statementData, startDate, endDate) {
   if (!statementData) {
     throw new Error("No statement data available for print.");
   }
 
-  const summaries = statementData.account_summaries || [];
+  const summaries = getAccountSummariesFromStatement(statementData);
   const transactions = statementData.transactions || [];
 
   let totalOpening = 0;
@@ -162,18 +194,25 @@ export function printTreasuryStatementPdf(statementData, startDate, endDate) {
     </tr>
   `).join("");
 
-  const txRowsHtml = transactions.map((tx, idx) => `
-    <tr style="background: ${idx % 2 === 0 ? "#f8fafc" : "#ffffff"};">
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.transacted_at ? new Date(tx.transacted_at).toLocaleDateString() : ""}</td>
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.account_name || tx.account_id}</td>
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-transform: capitalize;">${tx.transaction_type}</td>
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-align: right; font-weight: bold; color: ${tx.transaction_type === "inflow" ? "#166534" : "#b91c1c"};">
-        ${tx.transaction_type === "inflow" ? "+" : "-"}${formatLkr(tx.amount)}
-      </td>
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.reference_number || "-"}</td>
-      <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.description || "-"}</td>
-    </tr>
-  `).join("");
+  const txRowsHtml = transactions.map((tx, idx) => {
+    const accLabel = tx.destination_account_id
+      ? (ACCOUNT_NAMES[tx.destination_account_id] || tx.destination_account_id)
+      : (ACCOUNT_NAMES[tx.source_account_id] || tx.source_account_id || "-");
+    const txDate = tx.transaction_date || (tx.transacted_at ? new Date(tx.transacted_at).toLocaleDateString() : "");
+
+    return `
+      <tr style="background: ${idx % 2 === 0 ? "#f8fafc" : "#ffffff"};">
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${txDate}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${accLabel}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-transform: capitalize;">${tx.transaction_type}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-align: right; font-weight: bold; color: ${tx.transaction_type === "inflow" ? "#166534" : "#b91c1c"};">
+          ${tx.transaction_type === "inflow" ? "+" : "-"}${formatLkr(tx.amount)}
+        </td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.reference_no || tx.reference_number || "-"}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tx.description || "-"}</td>
+      </tr>
+    `;
+  }).join("");
 
   const html = `
     <!DOCTYPE html>
@@ -303,11 +342,11 @@ export function printTreasuryStatementPdf(statementData, startDate, endDate) {
       <table>
         <thead>
           <tr>
-            <th style="width: 75px;">Date</th>
+            <th style="width: 85px;">Date</th>
             <th>Account</th>
             <th>Type</th>
             <th style="text-align: right;">Amount</th>
-            <th>Ref / Receipt</th>
+            <th>Reference No</th>
             <th>Description</th>
           </tr>
         </thead>

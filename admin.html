@@ -19,46 +19,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <!-- Material Symbols Outlined -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            primary: "#006194",
-            "primary-hover": "#004d77",
-            "primary-container": "#007bb9",
-            "on-primary": "#ffffff",
-            surface: "#f8f9ff",
-            "on-surface": "#0b1c30",
-            "on-surface-variant": "#3f4850",
-            "surface-container": "#e5eeff",
-            "surface-container-low": "#eff4ff",
-            "surface-container-lowest": "#ffffff",
-            outline: "#707881",
-            "outline-variant": "#bfc7d2",
-            error: "#ba1a1a",
-          },
-          fontFamily: {
-            sans: ["Plus Jakarta Sans", "Noto Sans Sinhala", "sans-serif"],
-          },
-        },
-      },
-    };
-  </script>
-  <style>
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-      display: inline-block;
-      vertical-align: middle;
-      line-height: 1;
-    }
-    body.lang-si {
-      line-height: 1.65;
-    }
-  </style>
+  <!-- Production Tailwind Stylesheet -->
+  <link rel="stylesheet" href="/assets/styles.css"/>
 </head>
 <body class="bg-[#f8f9ff] text-on-surface antialiased min-h-screen flex flex-col justify-between selection:bg-sky-100 selection:text-primary">
 

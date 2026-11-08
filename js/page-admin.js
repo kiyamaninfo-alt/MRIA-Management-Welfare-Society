@@ -19,7 +19,7 @@ import {
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
-import { exportTreasuryStatementToCsv, printTreasuryStatementPdf } from "./treasury-export.js";
+import { exportTreasuryStatementToCsv, printTreasuryStatementPdf, getAccountSummariesFromStatement } from "./treasury-export.js";
 import { initLanguage, t, getLanguage } from "./i18n.js";
 import {
   showToast,
@@ -510,7 +510,7 @@ async function fetchTreasuryStatement() {
     tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center font-sans text-on-surface-variant">Computing balances across accounts...</td></tr>`;
     currentStatementData = await getTreasuryStatement(sDate, eDate);
 
-    const summaries = currentStatementData.account_summaries || [];
+    const summaries = getAccountSummariesFromStatement(currentStatementData);
     if (summaries.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center font-sans text-on-surface-variant">No records found for selected period.</td></tr>`;
       return;

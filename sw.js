@@ -10,6 +10,7 @@ const STATIC_ASSETS = [
   '/assets/default-bank-qr.svg',
   '/assets/icon-192.png',
   '/assets/icon-512.png',
+  '/assets/styles.css',
   '/assets/docs/constitution_si.pdf',
   '/assets/docs/constitution_en.pdf',
   '/js/config.js',

@@ -521,8 +521,9 @@ export async function getTreasuryBalances() {
 export async function getTreasuryTransactions(limit = 100) {
   const { data, error } = await supabase
     .from("treasury_transactions")
-    .select("*, treasury_accounts(account_name), members:performed_by(full_name, email)")
-    .order("transacted_at", { ascending: false })
+    .select("*, members:recorded_by(full_name, email)")
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -533,33 +534,60 @@ export async function getTreasuryTransactions(limit = 100) {
 }
 
 /**
- * Records an internal treasury transaction (inflow, outflow, or adjustment).
+ * Records an internal treasury transaction (inflow, outflow, or transfer).
  */
 export async function recordTreasuryTransaction({
-  accountId,
-  transactionType,
-  category,
+  transactionType, // 'inflow' | 'outflow' | 'transfer'
+  sourceAccountId = null,
+  destinationAccountId = null,
+  accountId = null,
   amount,
   description,
-  referenceNumber = null,
-  transactedAt = null,
-  performedByMemberId,
+  referenceNo = null,
+  transactionDate = null,
+  recordedByMemberId = null,
+  performedByMemberId = null,
 }) {
-  const txDate = transactedAt ? new Date(transactedAt).toISOString() : new Date().toISOString();
+  let src = sourceAccountId;
+  let dst = destinationAccountId;
+
+  if (transactionType === "inflow") {
+    dst = dst || accountId || "boc_savings";
+    src = null;
+  } else if (transactionType === "outflow") {
+    src = src || accountId || "boc_savings";
+    dst = null;
+  } else if (transactionType === "transfer") {
+    if (!src || !dst) {
+      throw new Error("Transfer requires both source and destination accounts.");
+    }
+    if (src === dst) {
+      throw new Error("Source and destination accounts must be different.");
+    }
+  }
+
+  const dateVal = transactionDate ? transactionDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const ref = referenceNo || `TX-${Date.now().toString().slice(-8)}`;
+  const recorder = recordedByMemberId || performedByMemberId;
+
+  if (!recorder) {
+    throw new Error("Staff member ID is required to record transaction.");
+  }
+
+  const payload = {
+    transaction_date: dateVal,
+    transaction_type: transactionType,
+    source_account_id: src,
+    destination_account_id: dst,
+    amount: Number(amount),
+    reference_no: ref,
+    description: (description || "Internal Treasury Transaction").trim(),
+    recorded_by: recorder,
+  };
+
   const { data, error } = await supabase
     .from("treasury_transactions")
-    .insert([
-      {
-        account_id: accountId,
-        transaction_type: transactionType,
-        category,
-        amount: Number(amount),
-        description,
-        reference_number: referenceNumber,
-        transacted_at: txDate,
-        performed_by: performedByMemberId,
-      },
-    ])
+    .insert([payload])
     .select()
     .single();
 
