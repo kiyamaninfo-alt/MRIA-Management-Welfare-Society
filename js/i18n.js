@@ -245,15 +245,26 @@ export function updateLangToggleButtons() {
   });
 }
 
+export function toggleLanguage() {
+  const newLang = currentLang === 'en' ? 'si' : 'en';
+  setLanguage(newLang);
+}
+
 export function initLanguage() {
   document.querySelectorAll('.lang-toggle-btn, #langToggleBtn').forEach((btn) => {
     btn.classList.add('lang-toggle-btn');
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      const newLang = currentLang === 'en' ? 'si' : 'en';
-      setLanguage(newLang);
+      toggleLanguage();
     });
   });
   updateLangToggleButtons();
   applyTranslations();
 }
+
+// Explicit Global Scope Bindings for inline HTML event handlers
+if (typeof window !== "undefined") {
+  window.toggleLanguage = toggleLanguage;
+  window.setLanguage = setLanguage;
+}
+

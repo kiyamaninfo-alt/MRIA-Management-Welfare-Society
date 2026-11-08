@@ -75,32 +75,39 @@ function renderStaffHeader(member) {
   });
 }
 
-function setupAdminTabs() {
+export function switchTab(targetId) {
   const tabButtons = document.querySelectorAll(".tab-button");
   const tabContents = document.querySelectorAll(".tab-content");
 
   tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.id.replace("tab-btn-", "");
-
-      // Toggle active button style
-      tabButtons.forEach((b) => {
-        b.classList.remove("active-tab", "border-b-2", "border-primary", "text-primary", "font-semibold");
-        b.classList.add("text-on-surface-variant");
-      });
+    const isTarget = btn.id === `tab-btn-${targetId}` || btn.id.replace("tab-btn-", "") === targetId;
+    if (isTarget) {
       btn.classList.add("active-tab", "border-b-2", "border-primary", "text-primary", "font-semibold");
       btn.classList.remove("text-on-surface-variant");
+    } else {
+      btn.classList.remove("active-tab", "border-b-2", "border-primary", "text-primary", "font-semibold");
+      btn.classList.add("text-on-surface-variant");
+    }
+  });
 
-      // Toggle tab contents
-      tabContents.forEach((c) => {
-        if (c.id === targetId) {
-          c.classList.remove("hidden");
-          c.classList.add("block");
-        } else {
-          c.classList.add("hidden");
-          c.classList.remove("block");
-        }
-      });
+  tabContents.forEach((c) => {
+    if (c.id === targetId) {
+      c.classList.remove("hidden");
+      c.classList.add("block");
+    } else {
+      c.classList.add("hidden");
+      c.classList.remove("block");
+    }
+  });
+}
+window.switchTab = switchTab;
+
+function setupAdminTabs() {
+  const tabButtons = document.querySelectorAll(".tab-button");
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.id.replace("tab-btn-", "");
+      switchTab(targetId);
     });
   });
 }
@@ -109,10 +116,16 @@ function setupAdminTabs() {
 
 async function loadSlipApprovalQueue() {
   const container = document.getElementById("slipApprovalQueueBody") || document.querySelector("#slip-approval-queue tbody");
-  if (!container) return;
+  const tabBadge = document.getElementById("tabSlipsCount");
+  const pendingCount = document.getElementById("pendingSlipsCount");
 
   try {
     pendingPaymentsList = await getPendingPayments();
+
+    if (tabBadge) tabBadge.textContent = pendingPaymentsList.length;
+    if (pendingCount) pendingCount.textContent = pendingPaymentsList.length;
+
+    if (!container) return;
 
     if (pendingPaymentsList.length === 0) {
       container.innerHTML = `
@@ -128,18 +141,24 @@ async function loadSlipApprovalQueue() {
     container.innerHTML = pendingPaymentsList
       .map((p) => {
         const memberInfo = p.members || {};
+        const memberName = memberInfo.full_name || memberInfo.email || "Unknown Member";
+        const memberContact = memberInfo.phone || memberInfo.email || "-";
+        const paymentType = (p.payment_type || "monthly_due").replace(/_/g, " ").toUpperCase();
+        const amount = Number(p.amount || 0);
+        const hasSlip = Boolean(p.slip_key);
+
         return `
           <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-            <td class="px-4 py-3 text-xs text-slate-500 font-mono">${formatDate(p.created_at)}</td>
+            <td class="px-4 py-3 text-xs text-slate-500 font-mono">${formatDate(p.created_at || new Date())}</td>
             <td class="px-4 py-3 text-sm">
-              <div class="font-semibold text-slate-900">${memberInfo.full_name || "Member"}</div>
-              <div class="text-xs text-slate-400 font-mono">${memberInfo.phone || memberInfo.email || ""}</div>
+              <div class="font-semibold text-slate-900">${memberName}</div>
+              <div class="text-xs text-slate-400 font-mono">${memberContact}</div>
             </td>
-            <td class="px-4 py-3 text-sm font-medium text-slate-700">${p.payment_type.replace("_", " ").toUpperCase()}</td>
-            <td class="px-4 py-3 text-sm font-mono font-bold text-slate-900">${formatCurrency(p.amount)}</td>
+            <td class="px-4 py-3 text-sm font-medium text-slate-700">${paymentType}</td>
+            <td class="px-4 py-3 text-sm font-mono font-bold text-slate-900">${formatCurrency(amount)}</td>
             <td class="px-4 py-3 text-sm">
-              <button data-review-slip="${p.id}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors">
-                <span class="material-symbols-outlined text-[15px]">visibility</span> Review Slip
+              <button data-review-slip="${p.id}" ${!hasSlip ? 'disabled title="No slip uploaded"' : ''} class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold ${hasSlip ? 'bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'} transition-colors">
+                <span class="material-symbols-outlined text-[15px]">visibility</span> ${hasSlip ? "Review Slip" : "No Slip"}
               </button>
             </td>
             <td class="px-4 py-3 text-sm">
@@ -183,23 +202,28 @@ async function reviewSlip(paymentId) {
   const modalAmount = document.getElementById("modalAmount");
   const modalTime = document.getElementById("modalTime");
 
-  if (modalMember) modalMember.textContent = payment.members?.full_name || "Member";
-  if (modalAmount) modalAmount.textContent = formatCurrency(payment.amount);
-  if (modalTime) modalTime.textContent = formatDate(payment.created_at);
+  const memberName = payment.members?.full_name || payment.members?.email || "Unknown Member";
+  if (modalMember) modalMember.textContent = memberName;
+  if (modalAmount) modalAmount.textContent = formatCurrency(payment.amount || 0);
+  if (modalTime) modalTime.textContent = formatDate(payment.created_at || new Date());
 
   if (modalSlipImg) {
     modalSlipImg.src = "";
-    modalSlipImg.alt = "Loading bank slip...";
-    try {
-      const signedUrl = await getSignedSlipUrl(payment.slip_key);
-      if (signedUrl) {
-        modalSlipImg.src = signedUrl;
-      } else {
-        modalSlipImg.alt = "Slip image not available.";
+    if (!payment.slip_key) {
+      modalSlipImg.alt = "Slip image not attached.";
+    } else {
+      modalSlipImg.alt = "Loading bank slip...";
+      try {
+        const signedUrl = await getSignedSlipUrl(payment.slip_key);
+        if (signedUrl) {
+          modalSlipImg.src = signedUrl;
+        } else {
+          modalSlipImg.alt = "Slip image not available.";
+        }
+      } catch (err) {
+        console.error("Failed to get signed slip URL:", err);
+        modalSlipImg.alt = "Error loading slip: " + err.message;
       }
-    } catch (err) {
-      console.error("Failed to get signed slip URL:", err);
-      modalSlipImg.alt = "Error loading slip: " + err.message;
     }
   }
 
@@ -242,6 +266,17 @@ async function handleRejectSlip(paymentId) {
 
 async function loadCashCollectionForm() {
   const memberSelect = document.getElementById("cashMemberSelect");
+  const dateInput = document.getElementById("cashDateInput");
+  const sysDateDisplay = document.getElementById("systemDateDisplay");
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (dateInput && !dateInput.value) {
+    dateInput.value = todayStr;
+  }
+  if (sysDateDisplay) {
+    sysDateDisplay.textContent = `System Date: ${todayStr}`;
+  }
+
   if (!memberSelect) return;
 
   allMembersList = await getAllMembers();
@@ -263,14 +298,26 @@ function updateCashPreview() {
   const memberSelect = document.getElementById("cashMemberSelect");
   const categorySelect = document.getElementById("cashCategorySelect");
   const amountInput = document.getElementById("cashAmountInput");
+  const dateInput = document.getElementById("cashDateInput");
+  const voucherRefInput = document.getElementById("voucherRefInput");
   const prevMember = document.getElementById("prevMember");
   const prevCategory = document.getElementById("prevCategory");
   const prevAmount = document.getElementById("prevAmount");
   const prevVoucherRef = document.getElementById("prevVoucherRef");
+  const prevVoucherDate = document.getElementById("prevVoucherDate");
 
-  if (prevVoucherRef && !prevVoucherRef.dataset.set) {
-    prevVoucherRef.textContent = `MRIA-CSH-${Math.floor(1000 + Math.random() * 9000)}`;
-    prevVoucherRef.dataset.set = "true";
+  if (prevVoucherRef) {
+    if (voucherRefInput && voucherRefInput.value.trim()) {
+      prevVoucherRef.textContent = voucherRefInput.value.trim();
+    } else if (!prevVoucherRef.dataset.set) {
+      prevVoucherRef.textContent = `MRIA-CSH-${Math.floor(1000 + Math.random() * 9000)}`;
+      prevVoucherRef.dataset.set = "true";
+    }
+  }
+
+  if (prevVoucherDate) {
+    const dVal = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().slice(0, 10);
+    prevVoucherDate.textContent = dVal;
   }
 
   if (memberSelect && prevMember) {
@@ -284,6 +331,7 @@ function updateCashPreview() {
     prevAmount.textContent = formatCurrency(amountInput.value);
   }
 }
+window.updateCashPreview = updateCashPreview;
 
 // ================= 3. DEFAULTERS ROSTER (31ST RULE) =================
 
@@ -457,11 +505,15 @@ function setupAdminActions() {
           submitBtn.textContent = "Logging & Issuing Receipt...";
         }
 
+        const dateInput = document.getElementById("cashDateInput");
+        const paidAt = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().slice(0, 10);
+
         const payment = await recordCashPayment({
           memberId: memberSelect.value,
           amount,
           paymentType: categorySelect ? categorySelect.value : "monthly_due",
           collectedByMemberId: currentStaffMember.id,
+          paidAt,
         });
 
         showToast("Cash payment recorded! Digital receipt generated.", "success");
@@ -469,6 +521,7 @@ function setupAdminActions() {
         openReceiptModal(payment, selMember ? selMember.full_name : "Member");
 
         cashForm.reset();
+        if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
         updateCashPreview();
         await loadDefaultersRoster();
       } catch (err) {
@@ -486,9 +539,14 @@ function setupAdminActions() {
       document.getElementById("cashMemberSelect"),
       document.getElementById("cashCategorySelect"),
       document.getElementById("cashAmountInput"),
+      document.getElementById("cashDateInput"),
+      document.getElementById("voucherRefInput"),
     ];
     inputs.forEach((inp) => {
-      if (inp) inp.addEventListener("input", updateCashPreview);
+      if (inp) {
+        inp.addEventListener("input", updateCashPreview);
+        inp.addEventListener("change", updateCashPreview);
+      }
     });
   }
 

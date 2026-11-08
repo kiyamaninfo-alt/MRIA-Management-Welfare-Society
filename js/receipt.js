@@ -1,12 +1,20 @@
 // Digital Receipt Generator Module
 
 export function renderReceiptHtml(payment, memberName, verifierName = "Association Treasurer") {
-  const receiptNum = `MRIA-REC-${payment.id.slice(0, 8).toUpperCase()}`;
-  const dateStr = new Date(payment.verified_at || payment.created_at).toLocaleString("en-GB", {
-    timeZone: "Asia/Colombo",
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const paymentObj = payment || {};
+  const receiptNum = paymentObj.id
+    ? `MRIA-REC-${paymentObj.id.slice(0, 8).toUpperCase()}`
+    : `MRIA-REC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const rawDate = paymentObj.paid_at || paymentObj.verified_at || paymentObj.created_at || new Date().toISOString();
+  const dateObj = new Date(rawDate);
+  const dateStr = !isNaN(dateObj.getTime())
+    ? dateObj.toLocaleString("en-GB", {
+        timeZone: "Asia/Colombo",
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : new Date().toISOString().slice(0, 10);
 
   const categoryNames = {
     monthly_due: "Monthly Due (මාසික දායක මුදල)",
@@ -18,6 +26,11 @@ export function renderReceiptHtml(payment, memberName, verifierName = "Associati
     bank_transfer: "Bank Transfer (බැංකු තැන්පතු)",
     cash: "Direct Cash (අතින් මුදල්)",
   };
+
+  const paymentTypeKey = paymentObj.payment_type || "monthly_due";
+  const paymentMethodKey = paymentObj.payment_method || "cash";
+  const amountVal = Number(paymentObj.amount || 0).toFixed(2);
+  const payerName = memberName || "Association Member";
 
   return `
     <div id="printableReceipt" class="p-6 bg-white border border-slate-200 rounded-lg max-w-md mx-auto font-sans text-slate-800 shadow-sm print:border-none print:shadow-none">
@@ -42,28 +55,28 @@ export function renderReceiptHtml(payment, memberName, verifierName = "Associati
         </div>
         <div class="flex justify-between">
           <span class="text-slate-500">Received From:</span>
-          <span class="font-semibold text-slate-900">${memberName}</span>
+          <span class="font-semibold text-slate-900">${payerName}</span>
         </div>
         <div class="flex justify-between">
           <span class="text-slate-500">Payment Category:</span>
-          <span class="font-medium text-slate-700">${categoryNames[payment.payment_type] || payment.payment_type}</span>
+          <span class="font-medium text-slate-700">${categoryNames[paymentTypeKey] || paymentTypeKey}</span>
         </div>
         <div class="flex justify-between">
           <span class="text-slate-500">Payment Method:</span>
-          <span class="font-medium text-slate-700">${methodNames[payment.payment_method] || payment.payment_method}</span>
+          <span class="font-medium text-slate-700">${methodNames[paymentMethodKey] || paymentMethodKey}</span>
         </div>
       </div>
 
       <!-- Amount -->
       <div class="py-4 text-center bg-slate-50 rounded my-3 border border-slate-100">
         <span class="text-xs text-slate-500 uppercase tracking-wider block font-medium">Amount Received</span>
-        <span class="text-2xl font-bold text-slate-900">Rs. ${Number(payment.amount).toFixed(2)}</span>
+        <span class="text-2xl font-bold text-slate-900">Rs. ${amountVal}</span>
       </div>
 
       <!-- Verification Footer -->
       <div class="pt-2 text-center text-xs text-slate-500 space-y-1">
         <p class="text-emerald-600 font-medium flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[16px]">verified</span> Verified & Settle in Ledger
+          <span class="material-symbols-outlined text-[16px]">verified</span> Verified & Settled in Ledger
         </p>
         <p class="text-[11px] text-slate-400">Authenticated by: ${verifierName}</p>
         <p class="text-[10px] text-slate-400">Mattala Rajapaksa International Airport (MRIA)</p>

@@ -203,8 +203,8 @@
 </div>
 </div>
 <div class="flex items-center gap-space-sm">
-<span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded border border-outline-variant">
-          System Date: 2025-05-24
+<span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded border border-outline-variant" id="systemDateDisplay">
+          System Date:
         </span>
 <span class="bg-error-container text-on-error-container px-2 py-0.5 rounded border border-error/20 font-semibold">
           Month-End Cutoff: 31st Midnight (Rule 31 Active)
@@ -263,7 +263,7 @@
 <button class="tab-button active-tab px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap bg-surface-container-lowest text-primary border-b-2 border-primary font-semibold transition-all" id="tab-btn-slip-approval-queue" onclick="switchTab('slip-approval-queue')">
 <span class="material-symbols-outlined text-[18px]">fact_check</span>
 <span>1. Slip Verification Queue</span>
-<span class="bg-primary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">4</span>
+<span class="bg-primary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full" id="tabSlipsCount">0</span>
 </button>
 <button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-cash-collection-form" onclick="switchTab('cash-collection-form')">
 <span class="material-symbols-outlined text-[18px]">payments</span>
@@ -297,9 +297,8 @@
 <p class="font-caption text-caption text-on-surface-variant">බැංකු රිසිට්පත් අනුමත කිරීමේ පෝලිම • Strict FIFO Verification with Bank Transaction Audit Cross-Check</p>
 </div>
 <div class="flex items-center gap-space-xs">
-<span class="bg-surface-container px-2 py-1 rounded text-caption font-caption text-on-surface border border-outline-variant">Pending: <strong>4</strong></span>
-<span class="bg-emerald-50 text-emerald-800 px-2 py-1 rounded text-caption font-caption border border-emerald-200">Settled Today: <strong>18</strong></span>
-<span class="bg-error-container text-on-error-container px-2 py-1 rounded text-caption font-caption border border-error/20">Rejected: <strong>1</strong></span>
+<span class="bg-surface-container px-2 py-1 rounded text-caption font-caption text-on-surface border border-outline-variant">Pending: <strong id="pendingSlipsCount">0</strong></span>
+<span class="bg-emerald-50 text-emerald-800 px-2 py-1 rounded text-caption font-caption border border-emerald-200">Real-time Verified</span>
 </div>
 </div>
 <!-- Verification Data Table -->
@@ -317,124 +316,8 @@
 </tr>
 </thead>
 <tbody id="slipApprovalQueueBody" class="divide-y divide-outline-variant">
-<tr class="hover:bg-surface transition-colors" id="slip-row-1">
-<td class="py-3 px-3 font-mono font-medium text-primary">#SLP-2025-058</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">Chaminda Silva</div>
-<div class="text-caption font-caption text-on-surface-variant">EPF: 10482 • Ground Ops</div>
-</td>
-<td class="py-3 px-3">
-<span class="bg-surface-container px-2 py-0.5 rounded text-caption font-caption text-on-surface border border-outline-variant">Monthly Dues (May)</span>
-</td>
-<td class="py-3 px-3 font-semibold text-on-surface">LKR 1,000.00</td>
-<td class="py-3 px-3">
-<button class="group flex items-center gap-1 text-primary hover:underline text-xs" onclick="previewSlip('Chaminda Silva', 'LKR 1,000.00', 'BOC CDM Mattala #99281', '2025-05-24 09:12 AM')">
-<span class="material-symbols-outlined text-[16px]">image</span>
-<span>Review Slip</span>
-</button>
-</td>
-<td class="py-3 px-3 text-caption font-caption text-on-surface-variant">Today, 09:14 AM</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors" onclick="settleSlip(1, 'Approve')">
-<span class="material-symbols-outlined text-[14px]">check</span>
-<span>Approve &amp; Settle</span>
-</button>
-<button class="border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant px-2 py-1 rounded text-xs transition-colors" onclick="promptReject(1)">
-                      Reject
-                    </button>
-</div>
-</td>
-</tr>
-<!-- Row 2 -->
-<tr class="hover:bg-surface transition-colors" id="slip-row-2">
-<td class="py-3 px-3 font-mono font-medium text-primary">#SLP-2025-057</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">K. Bandara</div>
-<div class="text-caption font-caption text-on-surface-variant">EPF: 09841 • Air Traffic Services</div>
-</td>
-<td class="py-3 px-3">
-<span class="bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded text-caption font-caption">Arrears Settlement (3 Mo)</span>
-</td>
-<td class="py-3 px-3 font-semibold text-on-surface">LKR 3,000.00</td>
-<td class="py-3 px-3">
-<button class="group flex items-center gap-1 text-primary hover:underline text-xs" onclick="previewSlip('K. Bandara', 'LKR 3,000.00', 'BOC Online Banking TX-9842', '2025-05-24 08:30 AM')">
-<span class="material-symbols-outlined text-[16px]">image</span>
-<span>Review Slip</span>
-</button>
-</td>
-<td class="py-3 px-3 text-caption font-caption text-on-surface-variant">Today, 08:45 AM</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors" onclick="settleSlip(2, 'Approve')">
-<span class="material-symbols-outlined text-[14px]">check</span>
-<span>Approve &amp; Settle</span>
-</button>
-<button class="border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant px-2 py-1 rounded text-xs transition-colors" onclick="promptReject(2)">
-                      Reject
-                    </button>
-</div>
-</td>
-</tr>
-<!-- Row 3 -->
-<tr class="hover:bg-surface transition-colors" id="slip-row-3">
-<td class="py-3 px-3 font-mono font-medium text-primary">#SLP-2025-056</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">D. N. Jayasinghe</div>
-<div class="text-caption font-caption text-on-surface-variant">EPF: 11204 • Aviation Security</div>
-</td>
-<td class="py-3 px-3">
-<span class="bg-sky-50 text-sky-900 border border-sky-200 px-2 py-0.5 rounded text-caption font-caption">Admission Fee + Dues</span>
-</td>
-<td class="py-3 px-3 font-semibold text-on-surface">LKR 3,500.00</td>
-<td class="py-3 px-3">
-<button class="group flex items-center gap-1 text-primary hover:underline text-xs" onclick="previewSlip('D. N. Jayasinghe', 'LKR 3,500.00', 'BOC Mattala Branch Counter', '2025-05-23 04:15 PM')">
-<span class="material-symbols-outlined text-[16px]">image</span>
-<span>Review Slip</span>
-</button>
-</td>
-<td class="py-3 px-3 text-caption font-caption text-on-surface-variant">Yesterday, 04:30 PM</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors" onclick="settleSlip(3, 'Approve')">
-<span class="material-symbols-outlined text-[14px]">check</span>
-<span>Approve &amp; Settle</span>
-</button>
-<button class="border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant px-2 py-1 rounded text-xs transition-colors" onclick="promptReject(3)">
-                      Reject
-                    </button>
-</div>
-</td>
-</tr>
-<!-- Row 4 -->
-<tr class="hover:bg-surface transition-colors" id="slip-row-4">
-<td class="py-3 px-3 font-mono font-medium text-primary">#SLP-2025-055</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">R. M. Rajapakse</div>
-<div class="text-caption font-caption text-on-surface-variant">EPF: 08912 • Fire &amp; Rescue</div>
-</td>
-<td class="py-3 px-3">
-<span class="bg-surface-container px-2 py-0.5 rounded text-caption font-caption text-on-surface border border-outline-variant">Monthly Dues (May)</span>
-</td>
-<td class="py-3 px-3 font-semibold text-on-surface">LKR 1,000.00</td>
-<td class="py-3 px-3">
-<button class="group flex items-center gap-1 text-primary hover:underline text-xs" onclick="previewSlip('R. M. Rajapakse', 'LKR 1,000.00', 'LankaQR BOC Mobile App', '2025-05-23 02:10 PM')">
-<span class="material-symbols-outlined text-[16px]">image</span>
-<span>Review Slip</span>
-</button>
-</td>
-<td class="py-3 px-3 text-caption font-caption text-on-surface-variant">Yesterday, 02:22 PM</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition-colors" onclick="settleSlip(4, 'Approve')">
-<span class="material-symbols-outlined text-[14px]">check</span>
-<span>Approve &amp; Settle</span>
-</button>
-<button class="border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant px-2 py-1 rounded text-xs transition-colors" onclick="promptReject(4)">
-                      Reject
-                    </button>
-</div>
-</td>
+<tr>
+  <td colspan="7" class="px-4 py-8 text-center text-xs text-slate-400">Loading pending slips queue...</td>
 </tr>
 </tbody>
 </table>
@@ -475,10 +358,10 @@
 <div>
 <label class="block font-label-md text-label-md text-on-surface mb-1">Payment Category</label>
 <select class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashCategorySelect" onchange="updateCashPreview()">
-<option value="Monthly Contribution (May 2025)">Monthly Contribution (LKR 1,000)</option>
-<option value="Admission &amp; Membership Joining Fee">Admission Fee (LKR 2,500)</option>
-<option value="Arrears Clearance (2 Months)">Arrears Clearance (LKR 2,000)</option>
-<option value="Special Bereavement Levy Fund">Special Bereavement Levy</option>
+<option value="monthly_due">Monthly Contribution (LKR 1,000)</option>
+<option value="admission_fee">Admission Fee (LKR 2,500)</option>
+<option value="monthly_due">Arrears Clearance</option>
+<option value="welfare_levy">Special Bereavement Levy</option>
 </select>
 </div>
 <div>
@@ -486,7 +369,11 @@
 <input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashAmountInput" oninput="updateCashPreview()" required="" type="number" value="1000"/>
 </div>
 </div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">Transaction Date</label>
+<input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashDateInput" onchange="updateCashPreview()" type="date"/>
+</div>
 <div>
 <label class="block font-label-md text-label-md text-on-surface mb-1">Handover Physical Voucher #</label>
 <input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-mono text-body-sm" id="voucherRefInput" oninput="updateCashPreview()" type="text" value="MRIA-CSH-9814"/>
@@ -540,7 +427,7 @@
 </div>
 <div class="flex justify-between">
 <span class="text-on-surface-variant">Issued Date:</span>
-<span>2025-05-24 10:48 AM</span>
+<span id="prevVoucherDate"></span>
 </div>
 <div class="flex justify-between">
 <span class="text-on-surface-variant">Staff Beneficiary:</span>

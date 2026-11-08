@@ -117,3 +117,10 @@ export function formatDate(dateString) {
     day: "numeric",
   });
 }
+
+// Explicit Global Scope Bindings for inline HTML event handlers
+if (typeof window !== "undefined") {
+  window.openModal = openModal;
+  window.closeModal = closeModal;
+}
+

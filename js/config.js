@@ -6,5 +6,12 @@ export const CONFIG = {
   WHATSAPP_PHONE: "0759555924",
   WHATSAPP_URL: "https://wa.me/94759555924",
   APP_NAME: "MRIA Management Welfare Association",
-  APP_NAME_SI: "MRIA සුබසාධක කළමනාකරණ සංගමය"
+  APP_NAME_SI: "MRIA සුබසාධක කළමනාකරණ සංගමය",
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    lock: (name, acquireTimeout, fn) => fn(),
+  },
 };
+

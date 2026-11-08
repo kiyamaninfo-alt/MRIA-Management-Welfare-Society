@@ -194,7 +194,7 @@ export async function getSystemSetting(key) {
 export async function getPendingPayments() {
   const { data, error } = await supabase
     .from("payments")
-    .select("*, members(full_name, email, phone)")
+    .select("*, members:members!payments_member_id_fkey(full_name, email, phone)")
     .eq("status", "pending_approval")
     .order("created_at", { ascending: false });
 
@@ -253,7 +253,9 @@ export async function recordCashPayment({
   paymentType = "monthly_due",
   collectedByMemberId,
   notes = null,
+  paidAt = null,
 }) {
+  const transactionDate = paidAt ? new Date(paidAt).toISOString() : new Date().toISOString();
   const { data, error } = await supabase
     .from("payments")
     .insert([
@@ -264,7 +266,8 @@ export async function recordCashPayment({
         payment_method: "cash",
         status: "verified",
         verified_by: collectedByMemberId,
-        verified_at: new Date().toISOString(),
+        verified_at: transactionDate,
+        created_at: transactionDate,
         notes,
       },
     ])

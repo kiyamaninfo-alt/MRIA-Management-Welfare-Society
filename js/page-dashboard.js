@@ -296,9 +296,27 @@ function renderPaymentHistory(payments) {
 function openReceiptModal(payment) {
   const container = document.getElementById("receiptModalContent") || document.querySelector("#receiptModal .modal-body");
   if (container) {
-    container.innerHTML = renderReceiptHtml(payment, currentMember.full_name || currentMember.email);
+    const memberName = currentMember ? (currentMember.full_name || currentMember.email) : "Association Member";
+    container.innerHTML = renderReceiptHtml(payment, memberName);
   }
   openModal("receiptModal");
+}
+
+if (typeof window !== "undefined") {
+  window.openReceiptModal = function (param1, amount, recRef, date) {
+    if (typeof param1 === "object" && param1 !== null) {
+      return openReceiptModal(param1);
+    }
+    const mockPayment = {
+      id: (recRef || "REC000").replace(/[^a-zA-Z0-9]/g, ""),
+      amount: parseFloat((amount || "1000").replace(/,/g, "")) || 1000,
+      payment_type: "monthly_due",
+      payment_method: "bank_transfer",
+      status: "verified",
+      paid_at: date || new Date().toISOString(),
+    };
+    openReceiptModal(mockPayment);
+  };
 }
 
 function populateBenefitTypesDropdown(benefitTypes) {

@@ -2,10 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { CONFIG } from "./config.js";
 
 export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-  auth: {
+  auth: CONFIG.auth || {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    lock: (name, acquireTimeout, fn) => fn(),
   },
 });
 
@@ -30,24 +31,50 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
+  try {
+    localStorage.removeItem("mria_cached_member");
+  } catch (e) {
+    console.warn("Could not clear cached member:", e);
+  }
   await supabase.auth.signOut();
   window.location.href = "/index.html";
 }
 
 export async function getCurrentSession() {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error) return null;
-  return session;
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) return null;
+    return session;
+  } catch (err) {
+    console.warn("Failed to get current session:", err);
+    return null;
+  }
 }
 
 export async function getCurrentUser() {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) return null;
-  return user;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) return null;
+    return user;
+  } catch (err) {
+    console.warn("Failed to get current user:", err);
+    return null;
+  }
 }
 
 export async function getMemberProfile(emailOrUserId) {
-  // Try querying by user_id first
+  // If offline, retrieve cached member immediately
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    try {
+      const cached = localStorage.getItem("mria_cached_member");
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      console.warn("Failed to parse cached member:", e);
+      return null;
+    }
+  }
+
+  // Try querying by user_id or email
   let query = supabase.from("members").select("*");
   if (emailOrUserId.includes("@")) {
     query = query.eq("email", emailOrUserId);
@@ -55,33 +82,81 @@ export async function getMemberProfile(emailOrUserId) {
     query = query.eq("user_id", emailOrUserId);
   }
 
-  const { data, error } = await query.maybeSingle();
-  if (error) {
-    console.warn("Failed to fetch member record:", error);
-    return null;
+  try {
+    const { data, error } = await query.maybeSingle();
+    if (error) {
+      console.warn("Failed to fetch member record from network:", error);
+      const cached = localStorage.getItem("mria_cached_member");
+      return cached ? JSON.parse(cached) : null;
+    }
+
+    if (data && data.is_approved) {
+      try {
+        localStorage.setItem("mria_cached_member", JSON.stringify(data));
+      } catch (e) {
+        console.warn("Failed to cache member profile:", e);
+      }
+    }
+    return data;
+  } catch (err) {
+    console.warn("Exception fetching member record:", err);
+    try {
+      const cached = localStorage.getItem("mria_cached_member");
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
   }
-  return data;
 }
 
 /**
  * Validates session and whitelist approval status.
- * Redirects unapproved users to unauthorized.html and unauthorized roles away from admin.
+ * Handles offline gracefully by using cached profile and avoiding unauthorized redirects when offline.
  */
-export async function requireAuth({ requireApproved = true, allowedRoles = null } = {}) {
+export async function checkAuthAndWhitelist({ requireApproved = true, allowedRoles = null } = {}) {
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+
+  // OFFLINE HANDLING: Never redirect to unauthorized.html when offline
+  if (isOffline) {
+    try {
+      const cachedStr = localStorage.getItem("mria_cached_member");
+      if (cachedStr) {
+        const member = JSON.parse(cachedStr);
+        if (member && (!requireApproved || member.is_approved)) {
+          if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
+            alert("Access Denied: You do not have administrative privileges.");
+            window.location.href = "/dashboard.html";
+            return null;
+          }
+          return {
+            user: { id: member.user_id, email: member.email },
+            member,
+            isApproved: true,
+            isOffline: true,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse cached member in offline mode:", e);
+    }
+    // Do not redirect to unauthorized.html when offline
+    return null;
+  }
+
+  // ONLINE HANDLING
   const session = await getCurrentSession();
 
   if (!session || !session.user) {
     // Not logged in -> redirect to landing
-    if (!window.location.pathname.endsWith("index.html")) {
+    if (!window.location.pathname.endsWith("index.html") && !window.location.pathname.endsWith("/")) {
       window.location.href = "/index.html";
     }
     return null;
   }
 
   const user = session.user;
-  const member = await getMemberProfile(user.id) || await getMemberProfile(user.email);
+  const member = (await getMemberProfile(user.id)) || (await getMemberProfile(user.email));
 
-  // If on unauthorized.html, don't redirect in an infinite loop
   const isUnauthorizedPage = window.location.pathname.endsWith("unauthorized.html");
 
   if (!member || (requireApproved && !member.is_approved)) {
@@ -89,6 +164,13 @@ export async function requireAuth({ requireApproved = true, allowedRoles = null 
       window.location.href = "/unauthorized.html";
     }
     return { user, member, isApproved: false };
+  }
+
+  // Cache verified approved member record
+  try {
+    localStorage.setItem("mria_cached_member", JSON.stringify(member));
+  } catch (e) {
+    console.warn("Failed to cache member profile:", e);
   }
 
   // If approved member visited unauthorized.html, send them to dashboard
@@ -108,3 +190,5 @@ export async function requireAuth({ requireApproved = true, allowedRoles = null 
 
   return { user, member, isApproved: true };
 }
+
+export const requireAuth = checkAuthAndWhitelist;
