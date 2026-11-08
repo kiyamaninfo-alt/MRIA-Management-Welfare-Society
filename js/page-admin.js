@@ -152,6 +152,7 @@ async function loadInitialData() {
   allMembers = await getAllMembers();
   populateMemberDropdowns(allMembers);
   await loadSlipApprovalQueue();
+  await loadTreasuryData();
 }
 
 function populateMemberDropdowns(members) {
@@ -454,7 +455,7 @@ async function loadTreasuryData() {
     let total = 0;
 
     balances.forEach((b) => {
-      const bal = Number(b.balance || 0);
+      const bal = Number(b.current_balance ?? b.balance ?? 0);
       total += bal;
       if (b.account_id === "boc_savings") {
         const el = document.getElementById("balBocSavings");

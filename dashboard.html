@@ -385,13 +385,44 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-on-surface mb-1">Bank Slip File (JPEG, PNG, or PDF max 5MB)</label>
-          <div class="border-2 border-dashed border-sky-200 rounded-xl p-4 text-center bg-sky-50/50 hover:bg-sky-50 transition-colors cursor-pointer" onclick="document.getElementById('slipFileInput').click()">
-            <span class="material-symbols-outlined text-3xl text-primary mb-1">upload_file</span>
-            <p id="fileChosenLabel" class="text-xs text-on-surface-variant font-medium" data-i18n="drop_file_here">
-              Choose or drag deposit slip file
-            </p>
-            <input type="file" id="slipFileInput" accept="image/jpeg,image/png,application/pdf" class="hidden" />
+          <label class="block text-xs font-bold text-on-surface mb-1.5" data-i18n="slip_file_label">Bank Slip File (JPEG, PNG, or PDF max 5MB)</label>
+          
+          <!-- Direct Mobile Action Buttons -->
+          <div class="grid grid-cols-2 gap-2.5 mb-2.5">
+            <button type="button" id="btnOpenSlipCamera" class="flex items-center justify-center gap-2 py-2.5 px-3 bg-sky-50 border-2 border-primary/30 hover:border-primary hover:bg-sky-100 text-primary rounded-xl font-bold text-xs transition-all shadow-sm">
+              <span class="material-symbols-outlined text-[20px]">photo_camera</span>
+              <span data-i18n="take_photo_btn">Open Camera</span>
+            </button>
+            <button type="button" id="btnBrowseSlipFile" class="flex items-center justify-center gap-2 py-2.5 px-3 bg-white border border-outline-variant hover:bg-slate-50 text-on-surface rounded-xl font-bold text-xs transition-all shadow-sm">
+              <span class="material-symbols-outlined text-[20px]">folder_open</span>
+              <span data-i18n="browse_file_btn">Choose File</span>
+            </button>
+          </div>
+
+          <!-- Hidden Camera and File Inputs -->
+          <input type="file" id="slipCameraInput" accept="image/*" capture="environment" class="hidden" />
+          <input type="file" id="slipFileInput" accept="image/jpeg,image/png,application/pdf" class="hidden" />
+
+          <!-- Drag and drop / Live Preview Area -->
+          <div id="slipDropArea" class="border-2 border-dashed border-sky-200 rounded-xl p-4 text-center bg-sky-50/40 hover:bg-sky-50/80 transition-colors cursor-pointer">
+            <div id="slipPreviewEmpty" class="space-y-1">
+              <span class="material-symbols-outlined text-3xl text-primary mb-1">cloud_upload</span>
+              <p id="fileChosenLabel" class="text-xs text-on-surface-variant font-medium" data-i18n="drop_file_here">
+                Take photo with camera or browse file
+              </p>
+            </div>
+            
+            <div id="slipPreviewFilled" class="hidden flex flex-col items-center gap-2">
+              <img id="slipThumbnail" alt="Slip Preview" class="max-h-36 rounded-lg object-contain shadow-sm border border-outline-variant bg-white" />
+              <div class="flex items-center gap-1.5 text-xs font-bold text-primary max-w-full">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                <span id="slipThumbnailName" class="truncate"></span>
+              </div>
+              <button type="button" id="btnRemoveSlipFile" class="text-[11px] text-rose-600 font-bold hover:underline flex items-center gap-1 mt-0.5">
+                <span class="material-symbols-outlined text-[14px]">delete</span>
+                <span>Change / Remove</span>
+              </button>
+            </div>
           </div>
         </div>
 

@@ -393,15 +393,120 @@ function setupActionListeners() {
     });
   }
 
-  // File chosen preview for slip upload
+  // Slip upload handlers: Camera vs File Browser vs Drag & Drop
+  let selectedSlipFile = null;
+
+  const cameraInput = document.getElementById("slipCameraInput");
   const fileInput = document.getElementById("slipFileInput");
-  const fileLabel = document.getElementById("fileChosenLabel");
-  if (fileInput && fileLabel) {
+  const btnCamera = document.getElementById("btnOpenSlipCamera");
+  const btnBrowse = document.getElementById("btnBrowseSlipFile");
+  const dropArea = document.getElementById("slipDropArea");
+  const previewEmpty = document.getElementById("slipPreviewEmpty");
+  const previewFilled = document.getElementById("slipPreviewFilled");
+  const thumbnailImg = document.getElementById("slipThumbnail");
+  const thumbnailName = document.getElementById("slipThumbnailName");
+  const btnRemoveFile = document.getElementById("btnRemoveSlipFile");
+
+  function handleSlipFileSelected(file) {
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("File size exceeds 5 MB. Please select or capture a smaller image.", "warning");
+      return;
+    }
+
+    selectedSlipFile = file;
+
+    if (previewEmpty) previewEmpty.classList.add("hidden");
+    if (previewFilled) previewFilled.classList.remove("hidden");
+    if (thumbnailName) {
+      thumbnailName.textContent = `${file.name || "Captured Photo"} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    }
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (thumbnailImg) {
+          thumbnailImg.src = e.target.result;
+          thumbnailImg.classList.remove("hidden");
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      if (thumbnailImg) {
+        thumbnailImg.classList.add("hidden");
+      }
+    }
+  }
+
+  function resetSlipFile() {
+    selectedSlipFile = null;
+    if (cameraInput) cameraInput.value = "";
+    if (fileInput) fileInput.value = "";
+    if (previewEmpty) previewEmpty.classList.remove("hidden");
+    if (previewFilled) previewFilled.classList.add("hidden");
+    if (thumbnailImg) thumbnailImg.src = "";
+    if (thumbnailName) thumbnailName.textContent = "";
+  }
+
+  if (btnCamera && cameraInput) {
+    btnCamera.addEventListener("click", () => {
+      cameraInput.click();
+    });
+  }
+
+  if (btnBrowse && fileInput) {
+    btnBrowse.addEventListener("click", () => {
+      fileInput.click();
+    });
+  }
+
+  if (dropArea) {
+    dropArea.addEventListener("click", (e) => {
+      if (e.target.closest("#btnRemoveSlipFile")) return;
+      if (!selectedSlipFile && fileInput) {
+        fileInput.click();
+      }
+    });
+
+    dropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropArea.classList.add("bg-sky-100/70", "border-primary");
+    });
+
+    dropArea.addEventListener("dragleave", () => {
+      dropArea.classList.remove("bg-sky-100/70", "border-primary");
+    });
+
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("bg-sky-100/70", "border-primary");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleSlipFileSelected(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  if (cameraInput) {
+    cameraInput.addEventListener("change", () => {
+      if (cameraInput.files && cameraInput.files[0]) {
+        handleSlipFileSelected(cameraInput.files[0]);
+      }
+    });
+  }
+
+  if (fileInput) {
     fileInput.addEventListener("change", () => {
       if (fileInput.files && fileInput.files[0]) {
-        fileLabel.textContent = `Selected: ${fileInput.files[0].name} (${(fileInput.files[0].size / 1024 / 1024).toFixed(2)} MB)`;
-        fileLabel.classList.add("text-primary", "font-bold");
+        handleSlipFileSelected(fileInput.files[0]);
       }
+    });
+  }
+
+  if (btnRemoveFile) {
+    btnRemoveFile.addEventListener("click", (e) => {
+      e.stopPropagation();
+      resetSlipFile();
     });
   }
 
@@ -410,12 +515,12 @@ function setupActionListeners() {
   if (slipForm) {
     slipForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-        showToast("Please choose a bank slip file to upload.", "warning");
+      if (!selectedSlipFile) {
+        showToast("Please capture a photo with camera or choose a deposit slip file.", "warning");
         return;
       }
 
-      const file = fileInput.files[0];
+      const file = selectedSlipFile;
       const category = document.getElementById("slipCategorySelect").value;
       const amount = Number(document.getElementById("slipAmountInput").value);
 
@@ -446,7 +551,7 @@ function setupActionListeners() {
         showToast("Bank slip uploaded successfully for treasurer verification!", "success");
         closeModal("slip-upload-modal");
         slipForm.reset();
-        if (fileLabel) fileLabel.textContent = t("drop_file_here");
+        resetSlipFile();
 
         await refreshDashboardData();
       } catch (err) {

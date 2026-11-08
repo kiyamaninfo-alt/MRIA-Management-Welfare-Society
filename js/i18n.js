@@ -104,6 +104,9 @@ export const translations = {
     enter_amount: "Payment Amount (LKR)",
     drop_file_here: "Drag and drop bank slip (JPEG, PNG, or PDF max 5MB)",
     choose_file: "Choose File",
+    take_photo_btn: "Open Camera",
+    browse_file_btn: "Choose File",
+    slip_file_label: "Bank Slip File (JPEG, PNG, or PDF max 5MB)",
     submit_slip: "Submit Payment Slip",
     submitting: "Submitting...",
 
@@ -284,8 +287,11 @@ export const translations = {
     upload_slip_modal_title: "බැංකු ගෙවීම් රිසිට්පත යොමු කිරීම",
     select_category: "ගෙවීම් කාණ්ඩය තෝරන්න",
     enter_amount: "ගෙවූ මුදල (රු.)",
-    drop_file_here: "බැංකු රිසිට්පත මෙතැනට දමන්න (JPEG, PNG හෝ PDF උපරිම 5MB)",
+    drop_file_here: "කැමරාවෙන් ඡායාරූපයක් ගන්න හෝ ගොනුවක් තෝරන්න (උපරිම 5MB)",
     choose_file: "ගොනුව තෝරන්න",
+    take_photo_btn: "කැමරාව විවෘත කරන්න",
+    browse_file_btn: "ගොනුවක් තෝරන්න",
+    slip_file_label: "බැංකු රිසිට්පත් ඡායාරූපය හෝ PDF ගොනුව (උපරිම 5MB)",
     submit_slip: "රිසිට්පත ඉදිරිපත් කරන්න",
     submitting: "ඉදිරිපත් වෙමින් පවතී...",
 
