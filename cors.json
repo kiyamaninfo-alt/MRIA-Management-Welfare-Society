@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "id": "mria-pwa-cors",
+      "allowed": {
+        "origins": ["*"],
+        "methods": ["GET", "PUT", "POST", "HEAD", "DELETE"],
+        "headers": ["*"]
+      },
+      "exposeHeaders": ["ETag", "Content-Type", "Content-Length", "x-amz-request-id", "x-amz-checksum-crc32"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
