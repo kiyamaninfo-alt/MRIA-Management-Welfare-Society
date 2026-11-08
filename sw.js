@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mria-welfare-v1';
+const CACHE_NAME = 'mria-welfare-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -16,7 +16,11 @@ const STATIC_ASSETS = [
   '/js/api.js',
   '/js/storage.js',
   '/js/receipt.js',
-  '/js/ui.js'
+  '/js/ui.js',
+  '/js/page-index.js',
+  '/js/page-dashboard.js',
+  '/js/page-admin.js',
+  '/js/page-unauthorized.js'
 ];
 
 self.addEventListener('install', (event) => {

@@ -33,11 +33,43 @@ export async function signInWithGoogle() {
 export async function signOut() {
   try {
     localStorage.removeItem("mria_cached_member");
+    sessionStorage.clear();
+    // Clear Supabase auth keys from localStorage
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("sb-") || key.includes("supabase.auth.token"))) {
+        localStorage.removeItem(key);
+      }
+    }
   } catch (e) {
-    console.warn("Could not clear cached member:", e);
+    console.warn("Could not clear cached member / storage:", e);
   }
-  await supabase.auth.signOut();
-  window.location.href = "/index.html";
+
+  try {
+    // Add a 1500ms safety timeout so signOut never hangs if offline or blocked
+    await Promise.race([
+      supabase.auth.signOut(),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch (err) {
+    console.warn("Error during supabase.auth.signOut:", err);
+  } finally {
+    window.location.href = "/index.html";
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.signOut = signOut;
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action='signout'], #signOutBtn, button[title='Sign Out'], [data-signout]");
+    if (btn) {
+      e.preventDefault();
+      await signOut();
+    }
+  });
 }
 
 export async function getCurrentSession() {
