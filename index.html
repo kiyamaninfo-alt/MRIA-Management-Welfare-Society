@@ -1,490 +1,323 @@
 <!DOCTYPE html>
-
-<html class="scroll-smooth" lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>MRIA Management Welfare Association | Official Member Portal</title>
-<link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#0284C7"/>
-<script type="importmap">
-{
-  "imports": {
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.46.1"
+<html class="scroll-smooth" lang="si">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>MRIA කළමනාකාර සුබසාධක සංගමය | MRIA Management Welfare Association</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0284C7"/>
+  <script type="importmap">
+  {
+    "imports": {
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.46.1"
+    }
   }
-}
-</script>
-<!-- Plus Jakarta Sans & Sinhala Display Webfonts -->
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;family=Noto+Sans+Sinhala:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
-<!-- Material Symbols Outlined -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<!-- Tailwind CSS CDN -->
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<!-- Tailwind Configuration Script -->
-<script id="tailwind-config">
+  </script>
+  <!-- Plus Jakarta Sans & Sinhala Webfonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <!-- Material Symbols Outlined -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
       theme: {
         extend: {
-          "colors": {
-            "on-tertiary-fixed-variant": "#6b3b00",
-            "on-secondary": "#ffffff",
-            "on-tertiary": "#ffffff",
-            "secondary": "#565e74",
-            "secondary-fixed": "#dae2fd",
-            "surface-tint": "#006398",
-            "on-secondary-fixed-variant": "#3f465c",
-            "primary": "#006194",
-            "secondary-container": "#dae2fd",
-            "on-surface": "#0b1c30",
-            "surface-dim": "#cbdbf5",
-            "on-surface-variant": "#3f4850",
-            "error-container": "#ffdad6",
-            "inverse-surface": "#213145",
-            "tertiary-container": "#ac6200",
-            "inverse-on-surface": "#eaf1ff",
-            "surface-container-high": "#dce9ff",
-            "on-primary": "#ffffff",
-            "background": "#f8f9ff",
-            "inverse-primary": "#93ccff",
-            "surface-container-lowest": "#ffffff",
-            "primary-fixed-dim": "#93ccff",
-            "on-error-container": "#93000a",
-            "surface-container-highest": "#d3e4fe",
-            "surface-container-low": "#eff4ff",
-            "tertiary-fixed-dim": "#ffb875",
-            "outline-variant": "#bfc7d2",
-            "surface": "#f8f9ff",
-            "surface-container": "#e5eeff",
-            "on-secondary-container": "#5c647a",
-            "on-secondary-fixed": "#131b2e",
-            "on-primary-fixed": "#001d31",
-            "tertiary": "#894d00",
-            "on-background": "#0b1c30",
-            "on-primary-fixed-variant": "#004b73",
-            "outline": "#707881",
-            "surface-variant": "#d3e4fe",
-            "error": "#ba1a1a",
-            "on-tertiary-fixed": "#2d1600",
+          colors: {
+            primary: "#006194",
+            "primary-hover": "#004d77",
             "primary-container": "#007bb9",
-            "primary-fixed": "#cce5ff",
-            "tertiary-fixed": "#ffdcc0",
-            "surface-bright": "#f8f9ff",
-            "on-tertiary-container": "#fffbff",
-            "secondary-fixed-dim": "#bec6e0",
-            "on-error": "#ffffff",
-            "on-primary-container": "#fdfcff"
+            "on-primary": "#ffffff",
+            surface: "#f8f9ff",
+            "on-surface": "#0b1c30",
+            "on-surface-variant": "#3f4850",
+            "surface-container": "#e5eeff",
+            "surface-container-low": "#eff4ff",
+            "surface-container-lowest": "#ffffff",
+            outline: "#707881",
+            "outline-variant": "#bfc7d2",
+            error: "#ba1a1a",
           },
-          "borderRadius": {
-            "DEFAULT": "0.125rem",
-            "lg": "0.25rem",
-            "xl": "0.5rem",
-            "full": "0.75rem"
+          fontFamily: {
+            sans: ["Plus Jakarta Sans", "Noto Sans Sinhala", "sans-serif"],
           },
-          "spacing": {
-            "gutter": "1.3125rem",
-            "space-sm": "0.8125rem",
-            "margin": "3.4375rem",
-            "space-2xl": "5.5625rem",
-            "margin-mobile": "1.3125rem",
-            "space-lg": "2.125rem",
-            "gutter-mobile": "0.8125rem",
-            "space-md": "1.3125rem",
-            "space-xs": "0.5rem",
-            "space-xl": "3.4375rem"
-          },
-          "fontFamily": {
-            "headline-sm": ["Plus Jakarta Sans"],
-            "body-sm": ["Plus Jakarta Sans"],
-            "body-lg": ["Plus Jakarta Sans"],
-            "headline-lg-mobile": ["Plus Jakarta Sans"],
-            "headline-lg": ["Plus Jakarta Sans"],
-            "display-mobile": ["Plus Jakarta Sans"],
-            "caption": ["Plus Jakarta Sans"],
-            "label-md": ["Plus Jakarta Sans"],
-            "display": ["Plus Jakarta Sans"],
-            "headline-md": ["Plus Jakarta Sans"]
-          },
-          "fontSize": {
-            "headline-sm": [
-              "20px",
-              { "lineHeight": "28px", "letterSpacing": "-0.005em", "fontWeight": "500" }
-            ],
-            "body-sm": [
-              "13px",
-              { "lineHeight": "21px", "letterSpacing": "0.005em", "fontWeight": "400" }
-            ],
-            "body-lg": [
-              "16px",
-              { "lineHeight": "26px", "letterSpacing": "0em", "fontWeight": "400" }
-            ],
-            "headline-lg-mobile": [
-              "30px",
-              { "lineHeight": "38px", "letterSpacing": "-0.015em", "fontWeight": "600" }
-            ],
-            "headline-lg": [
-              "42px",
-              { "lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "600" }
-            ],
-            "display-mobile": [
-              "42px",
-              { "lineHeight": "52px", "letterSpacing": "-0.025em", "fontWeight": "600" }
-            ],
-            "caption": [
-              "10px",
-              { "lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "600" }
-            ],
-            "label-md": [
-              "13px",
-              { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "500" }
-            ],
-            "display": [
-              "68px",
-              { "lineHeight": "82px", "letterSpacing": "-0.03em", "fontWeight": "600" }
-            ],
-            "headline-md": [
-              "26px",
-              { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "500" }
-            ]
-          }
-        }
-      }
-    }
+        },
+      },
+    };
   </script>
-<style>
+  <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       display: inline-block;
       vertical-align: middle;
       line-height: 1;
     }
-    .sinhala-text {
-      font-family: 'Noto Sans Sinhala', 'Plus Jakarta Sans', sans-serif;
+    body.lang-si {
+      line-height: 1.65;
+    }
+    body.lang-si h1, body.lang-si h2, body.lang-si h3 {
+      line-height: 1.35;
     }
   </style>
 </head>
-<body class="bg-surface text-on-surface antialiased font-body-lg selection:bg-primary-fixed selection:text-on-primary-fixed flex flex-col min-h-screen">
-<!-- TOP NAVIGATION BAR (Shared Component: TopNavBar) -->
-<header class="bg-surface-container-lowest border-b border-outline-variant w-full sticky top-0 z-50">
-<div class="w-full max-w-7xl mx-auto px-gutter flex items-center justify-between h-[68px]">
-<!-- Brand & Emblem Crest -->
-<a class="flex items-center gap-space-xs group" href="#">
-<img alt="MRIA Emblem Crest" class="w-9 h-9 object-contain rounded" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
-<div class="flex flex-col justify-center">
-<span class="text-headline-sm font-headline-sm text-on-surface tracking-tight leading-none group-hover:text-primary transition-colors duration-150">
+<body class="bg-[#f8f9ff] text-on-surface min-h-screen flex flex-col justify-between selection:bg-sky-100 selection:text-primary">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-white border-b border-outline-variant sticky top-0 z-50 shadow-sm">
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-[72px]">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center bg-sky-50 border border-sky-100 shrink-0">
+          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-base sm:text-lg font-bold text-on-surface leading-tight tracking-tight">
+            MRIA කළමනාකාර සුබසාධක සංගමය
+          </span>
+          <span class="text-xs text-on-surface-variant font-medium">
             MRIA Management Welfare Association
           </span>
-<span class="text-caption font-caption text-on-surface-variant uppercase tracking-wider mt-0.5 sinhala-text">
-            MRIA සුබසාධක කළමනාකරණ සංගමය
-          </span>
-</div>
-</a>
-<!-- Navigation Links (Desktop) -->
-<nav class="hidden md:flex items-center gap-space-lg">
-<a class="text-primary font-label-md text-label-md border-b-2 border-primary pb-1 transition-colors duration-150" href="#benefits">
-          Benefits
-        </a>
-<a class="text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors duration-150" href="#trust">
-          Trust
-        </a>
-<a class="text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors duration-150" href="#security">
-          Security
-        </a>
-</nav>
-<!-- Trailing Controls & CTAs -->
-<div class="flex items-center gap-space-xs">
-<!-- Language Switcher -->
-<button class="h-[38px] px-space-xs rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low transition-colors duration-150 flex items-center gap-1.5 text-label-md font-label-md" id="langToggleBtn" title="Change Language" type="button">
-<span class="material-symbols-outlined text-[18px] text-primary" data-icon="translate">translate</span>
-<span class="font-semibold text-primary">EN</span>
-<span class="text-outline">|</span>
-<span class="text-on-surface-variant sinhala-text text-caption">සිංහල</span>
-</button>
-<!-- Install PWA App Button -->
-<button class="hidden sm:inline-flex items-center gap-1.5 h-[38px] px-space-sm rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low hover:border-primary transition-colors duration-150 text-label-md font-label-md" id="installAppBtn" type="button">
-<span class="material-symbols-outlined text-[18px] text-primary" data-icon="install_mobile">install_mobile</span>
-<span>Install App</span>
-</button>
-<!-- Google OAuth Header Jump / CTA -->
-<a class="inline-flex items-center gap-1.5 h-[38px] px-space-sm rounded bg-primary text-on-primary hover:bg-primary-container transition-colors duration-150 text-label-md font-label-md shadow-sm" href="#auth-section">
-<span>Sign In with Google</span>
-</a>
-</div>
-</div>
-</header>
-<!-- MAIN CANVAS -->
-<main class="flex-grow">
-<!-- HERO SECTION & GOOGLE SIGN-IN GATEWAY -->
-<section class="w-full max-w-7xl mx-auto px-gutter py-space-xl lg:py-space-2xl" id="auth-section">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg lg:gap-space-xl items-center">
-<!-- Left Column: Editorial Architectural Typography -->
-<div class="lg:col-span-7 flex flex-col items-start">
-<!-- Micro Badge -->
-<div class="inline-flex items-center gap-space-xs px-space-xs py-1 rounded bg-surface-container-low border border-outline-variant mb-space-md">
-<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-<span class="text-caption font-caption text-primary tracking-widest uppercase">
-              OFFICIAL PROGRESSIVE WEB APP • Mattala Rajapaksa International Airport Staff Welfare
-            </span>
-</div>
-<!-- Hero Display Headline -->
-<h1 class="hidden lg:block text-display font-display text-on-surface tracking-tight mb-space-sm leading-[1.08]">
-            Transparent Welfare. Empowering Every Member.
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Language Switcher -->
+        <button id="langToggleBtn" class="lang-toggle-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant hover:border-primary text-xs font-semibold bg-white transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[16px] text-primary">translate</span>
+          <span>EN | සිංහල</span>
+        </button>
+
+        <!-- Contact Administration -->
+        <button onclick="openContactModal()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant hover:border-primary text-xs font-semibold text-on-surface hover:text-primary bg-white transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[16px] text-primary">contact_support</span>
+          <span data-i18n="contact_admin">Contact Administration</span>
+        </button>
+
+        <!-- Install PWA App Button -->
+        <button id="installAppBtn" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 text-xs font-semibold hover:bg-sky-100 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[16px]">install_mobile</span>
+          <span>Install App</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN HERO SECTION -->
+  <main class="flex-grow">
+    <section class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        
+        <!-- Left Column: Copywriting -->
+        <div class="lg:col-span-7 space-y-5">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-100/70 border border-sky-200 text-sky-800 text-xs font-bold tracking-wide uppercase">
+            <span class="w-2 h-2 rounded-full bg-sky-600 animate-pulse"></span>
+            <span data-i18n="sub_headline">100% DEDICATED STAFF WELFARE</span>
+          </div>
+
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-on-surface tracking-tight leading-tight">
+            MRIA කළමනාකාර සුබසාධක සංගමය
           </h1>
-<h1 class="block lg:hidden text-headline-lg-mobile font-headline-lg-mobile text-on-surface tracking-tight mb-space-sm">
-            Transparent Welfare. Empowering Every Member.
-          </h1>
-<!-- Bilingual Tagline -->
-<p class="text-body-lg font-body-lg text-primary sinhala-text font-medium mb-space-xs">
-            සාමාජික සුබසාධනය හා විනිවිදභාවයෙන් යුතු මූල්‍ය කළමනාකරණය.
+
+          <p class="text-lg sm:text-xl font-semibold text-primary" data-i18n="hero_tagline">
+            Digital Platform - MRIA Management Welfare Association
           </p>
-<p class="text-body-lg font-body-lg text-on-surface-variant max-w-xl mb-space-lg">
+
+          <p class="text-sm sm:text-base text-on-surface-variant max-w-xl leading-relaxed">
             A secure, automated digital ecosystem created for the staff and management of Mattala Rajapaksa International Airport (MRIA). Access verified financial ledgers, emergency bereavement allocations, and transparent welfare governance in real time.
           </p>
-<!-- Micro Features Indicators -->
-<div class="grid grid-cols-3 gap-space-sm w-full max-w-lg pt-space-xs border-t border-outline-variant">
-<div>
-<div class="text-caption font-caption uppercase tracking-wider text-outline">Compliance</div>
-<div class="text-label-md font-label-md text-on-surface mt-0.5">Audit-Verified</div>
-</div>
-<div>
-<div class="text-caption font-caption uppercase tracking-wider text-outline">Receipts</div>
-<div class="text-label-md font-label-md text-on-surface mt-0.5">Cryptographic</div>
-</div>
-<div>
-<div class="text-caption font-caption uppercase tracking-wider text-outline">Architecture</div>
-<div class="text-label-md font-label-md text-on-surface mt-0.5">PWA Offline Sync</div>
-</div>
-</div>
-</div>
-<!-- Right Column: Focused Google OAuth Authentication Card -->
-<div class="lg:col-span-5 w-full">
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md sm:p-space-lg relative shadow-[0_4px_16px_-2px_rgba(15,23,42,0.04),0_2px_6px_-1px_rgba(15,23,42,0.02)]">
-<!-- Association Crest Emblem & Identity Header -->
-<div class="flex items-center gap-space-sm mb-space-md pb-space-sm border-b border-outline-variant">
-<img alt="MRIA Emblem Crest" class="w-12 h-12 object-contain rounded p-1 bg-surface-container-low border border-outline-variant" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface leading-tight">
-                  Member Portal
+
+          <div class="grid grid-cols-3 gap-4 pt-4 border-t border-outline-variant max-w-lg">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-outline">Ledger Governance</div>
+              <div class="text-xs sm:text-sm font-semibold text-on-surface mt-0.5">3-Asset Ledger</div>
+            </div>
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-outline">Receipt Vouchers</div>
+              <div class="text-xs sm:text-sm font-semibold text-on-surface mt-0.5">Instant PDF & QR</div>
+            </div>
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-outline">Platform PWA</div>
+              <div class="text-xs sm:text-sm font-semibold text-on-surface mt-0.5">Offline Ready</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Sign In Card -->
+        <div class="lg:col-span-5 w-full">
+          <div class="bg-white border border-outline-variant rounded-2xl p-6 sm:p-8 shadow-xl relative">
+            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-outline-variant">
+              <div class="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center p-2 text-primary">
+                <span class="material-symbols-outlined text-[28px]">account_circle</span>
+              </div>
+              <div>
+                <h2 class="text-xl font-bold text-on-surface leading-tight" data-i18n="sign_in_google">
+                  Member Portal Sign In
                 </h2>
-<p class="text-caption font-caption text-primary uppercase tracking-wider sinhala-text mt-0.5">
-                  සාමාජික පිවිසුම
+                <p class="text-xs text-on-surface-variant mt-0.5">
+                  Mattala Rajapaksa International Airport
                 </p>
-</div>
-</div>
-<p class="text-body-sm font-body-sm text-on-surface-variant mb-space-md">
+              </div>
+            </div>
+
+            <p class="text-xs sm:text-sm text-on-surface-variant mb-6 leading-relaxed">
               Sign in with your registered Google account to access your welfare ledger, request grants, and verify monthly contributions.
             </p>
-<!-- Google OAuth Action Button -->
-<div class="space-y-space-sm">
-<button class="w-full flex items-center justify-center gap-3 h-[48px] px-space-md bg-surface-container-lowest hover:bg-surface-container-low text-on-surface border border-outline-variant rounded transition-all duration-150 focus:ring-2 focus:ring-primary focus:outline-none group shadow-sm" id="googleSignInBtn" type="button">
-<!-- Official Google G SVG Icon -->
-<svg class="w-5 h-5 flex-shrink-0" viewbox="0 0 24 24">
-<path d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.02h3.88c2.27-2.09 3.665-5.17 3.665-9.11z" fill="#4285F4"></path>
-<path d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.02c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.11C3.25 21.31 7.31 24 12 24z" fill="#34A853"></path>
-<path d="M5.28 14.3c-.24-.72-.38-1.49-.38-2.3s.14-1.58.38-2.3V6.59H1.26C.46 8.19 0 9.99 0 12s.46 3.81 1.26 5.41l4.02-3.11z" fill="#FBBC05"></path>
-<path d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.69 1.26 6.59l4.02 3.11c.95-2.83 3.6-4.95 6.72-4.95z" fill="#EA4335"></path>
-</svg>
-<div class="text-left flex flex-col items-start leading-tight">
-<span class="text-label-md font-label-md font-semibold text-on-surface group-hover:text-primary transition-colors">
-                    Sign in with Google
-                  </span>
-<span class="text-[10px] text-on-surface-variant sinhala-text font-normal">
-                    Google මඟින් පිවිසෙන්න
-                  </span>
-</div>
-</button>
-<div class="hidden p-space-xs bg-surface-container-low border border-primary text-body-sm font-body-sm text-primary rounded flex items-center gap-2" id="authNotice">
-<span class="material-symbols-outlined text-[18px]" data-icon="sync">sync</span>
-<span>Connecting to Google Identity Gateway...</span>
-</div>
-</div>
-<!-- Security & PWA Badge Row -->
-<div class="mt-space-md pt-space-sm border-t border-outline-variant space-y-space-xs">
-<div class="flex items-center gap-1.5 text-caption font-caption text-on-surface-variant">
-<span class="material-symbols-outlined text-[15px] text-primary" data-icon="lock">lock</span>
-<span>256-Bit Encrypted • Verified Airport Management Domain Only</span>
-</div>
-<div class="flex items-center justify-between">
-<span class="inline-flex items-center gap-1 text-caption font-caption text-primary bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant">
-<span class="material-symbols-outlined text-[13px]" data-icon="offline_bolt">offline_bolt</span>
+
+            <div class="space-y-4">
+              <button id="googleSignInBtn" type="button" class="w-full flex items-center justify-center gap-3 h-[50px] px-4 bg-white hover:bg-sky-50/50 text-on-surface border border-outline-variant rounded-xl transition-all duration-150 font-semibold shadow-sm group">
+                <svg class="w-5 h-5 flex-shrink-0" viewbox="0 0 24 24">
+                  <path d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.02h3.88c2.27-2.09 3.665-5.17 3.665-9.11z" fill="#4285F4"></path>
+                  <path d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.02c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.11C3.25 21.31 7.31 24 12 24z" fill="#34A853"></path>
+                  <path d="M5.28 14.3c-.24-.72-.38-1.49-.38-2.3s.14-1.58.38-2.3V6.59H1.26C.46 8.19 0 9.99 0 12s.46 3.81 1.26 5.41l4.02-3.11z" fill="#FBBC05"></path>
+                  <path d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.69 1.26 6.59l4.02 3.11c.95-2.83 3.6-4.95 6.72-4.95z" fill="#EA4335"></path>
+                </svg>
+                <span class="text-sm text-on-surface group-hover:text-primary transition-colors" data-i18n="sign_in_google">
+                  Sign in with Google
+                </span>
+              </button>
+
+              <div id="authNotice" class="hidden p-3 bg-sky-50 border border-sky-200 text-xs text-sky-800 rounded-xl flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] animate-spin">sync</span>
+                <span>Connecting to Google Identity Gateway...</span>
+              </div>
+            </div>
+
+            <!-- Security Badge Row -->
+            <div class="mt-6 pt-4 border-t border-outline-variant space-y-2">
+              <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px] text-primary">lock</span>
+                <span>256-Bit Encrypted • Official Member Authentication</span>
+              </div>
+              <div class="flex items-center justify-between text-xs text-on-surface-variant">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-700 font-medium">
+                  <span class="material-symbols-outlined text-[14px]">offline_bolt</span>
                   PWA Ready • Offline Sync Enabled
                 </span>
-<span class="text-caption font-caption text-outline">v2.4.0 Build</span>
-</div>
-</div>
-<!-- Member Help Microtext -->
-<p class="text-caption font-caption text-outline mt-space-sm text-center">
-              Experiencing sign-in issues? Contact Association Secretary: <a class="text-primary hover:underline" href="tel:0759555924">0759555924</a>
-</p>
-</div>
-</div>
-</div>
-</section>
-<!-- TRUST STRIP / METRICS BANNER -->
-<section class="w-full bg-surface-container-lowest border-y border-outline-variant py-space-md" id="trust">
-<div class="w-full max-w-7xl mx-auto px-gutter">
-<div class="grid grid-cols-2 md:grid-cols-4 gap-space-md items-center">
-<div class="flex flex-col border-l-2 border-primary pl-space-xs">
-<span class="text-headline-md font-headline-md text-on-surface leading-none">100%</span>
-<span class="text-caption font-caption uppercase tracking-wider text-on-surface-variant mt-1">Audit Transparency</span>
-<span class="text-[11px] text-outline sinhala-text">සම්පූර්ණ විගණන විනිවිදභාවය</span>
-</div>
-<div class="flex flex-col border-l-2 border-primary pl-space-xs">
-<span class="text-headline-md font-headline-md text-on-surface leading-none">Instant</span>
-<span class="text-caption font-caption uppercase tracking-wider text-on-surface-variant mt-1">Cloud Receipts</span>
-<span class="text-[11px] text-outline sinhala-text">ඩිජිටල් තහවුරු කිරීම්</span>
-</div>
-<div class="flex flex-col border-l-2 border-primary pl-space-xs">
-<span class="text-headline-md font-headline-md text-on-surface leading-none">99.9%</span>
-<span class="text-caption font-caption uppercase tracking-wider text-on-surface-variant mt-1">PWA High Availability</span>
-<span class="text-[11px] text-outline sinhala-text">නොබැඳි (Offline) ක්‍රියාකාරිත්වය</span>
-</div>
-<div class="flex flex-col border-l-2 border-primary pl-space-xs">
-<span class="text-headline-md font-headline-md text-on-surface leading-none">MRIA</span>
-<span class="text-caption font-caption uppercase tracking-wider text-on-surface-variant mt-1">Dedicated Staff Welfare</span>
-<span class="text-[11px] text-outline sinhala-text">ගුවන් තොටුපළ කළමනාකරණය</span>
-</div>
-</div>
-</div>
-</section>
-<!-- VALUE PROPOSITION CARDS (BENEFITS) -->
-<section class="w-full max-w-7xl mx-auto px-gutter py-space-xl" id="benefits">
-<div class="max-w-2xl mb-space-lg">
-<span class="text-caption font-caption uppercase tracking-widest text-primary font-semibold">Institutional Governance</span>
-<h2 class="text-headline-lg font-headline-lg text-on-surface tracking-tight mt-1">
-          Welfare Architecture Built for Clarity.
-        </h2>
-<p class="text-body-lg font-body-lg text-on-surface-variant mt-space-xs">
-          Engineered to give every registered member complete visual transparency into contributions, grant disbursements, and audit trails.
-        </p>
-</div>
-<!-- Bento Grid (3 Value Proposition Cards) -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
-<!-- Card 1: Monthly Dues Tracking -->
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md md:p-space-lg flex flex-col justify-between hover:border-primary transition-colors duration-150">
-<div>
-<div class="w-10 h-10 rounded bg-surface-container-low border border-outline-variant flex items-center justify-center text-primary mb-space-md">
-<span class="material-symbols-outlined text-[24px]" data-icon="account_balance_wallet">account_balance_wallet</span>
-</div>
-<span class="text-caption font-caption uppercase tracking-wider text-outline block mb-1">Financial Ledger</span>
-<h3 class="text-headline-md font-headline-md text-on-surface mb-0.5">
+                <span class="text-[10px] text-outline font-mono">v3.0</span>
+              </div>
+            </div>
+
+            <!-- Contact Link -->
+            <p class="text-xs text-outline mt-4 text-center">
+              Experiencing sign-in issues? 
+              <button type="button" onclick="openContactModal()" class="text-primary hover:underline font-semibold">
+                Contact Administration (krishaja@gmail.com)
+              </button>
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VALUE PROPOSITIONS -->
+    <section class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10" id="benefits">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Card 1 -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:border-primary transition-colors">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-primary mb-4">
+              <span class="material-symbols-outlined text-[26px]">account_balance_wallet</span>
+            </div>
+            <h3 class="text-lg font-bold text-on-surface mb-2" data-i18n="dues_history">
               Monthly Dues Tracking
             </h3>
-<p class="text-label-md font-label-md text-primary sinhala-text mb-space-sm font-medium">
-              මාසික සාමාජික මුදල් වාර්තා
-            </p>
-<p class="text-body-sm font-body-sm text-on-surface-variant">
+            <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
               Real-time automated ledger, transparent contribution balances, and automated statements generated at every payroll reconciliation cycle.
             </p>
-</div>
-<div class="pt-space-md mt-space-md border-t border-outline-variant flex items-center justify-between text-caption font-caption text-on-surface-variant">
-<span>Ledger Integrity</span>
-<span class="text-primary font-semibold">Auto-Synced</span>
-</div>
-</div>
-<!-- Card 2: Bereavement & Welfare Aid -->
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md md:p-space-lg flex flex-col justify-between hover:border-primary transition-colors duration-150">
-<div>
-<div class="w-10 h-10 rounded bg-surface-container-low border border-outline-variant flex items-center justify-center text-primary mb-space-md">
-<span class="material-symbols-outlined text-[24px]" data-icon="volunteer_activism">volunteer_activism</span>
-</div>
-<span class="text-caption font-caption uppercase tracking-wider text-outline block mb-1">Emergency Relief</span>
-<h3 class="text-headline-md font-headline-md text-on-surface mb-0.5">
+          </div>
+          <div class="pt-4 mt-4 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+            <span>Ledger Invariant</span>
+            <span class="text-primary font-semibold">31st Rule Compliant</span>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:border-primary transition-colors">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-primary mb-4">
+              <span class="material-symbols-outlined text-[26px]">volunteer_activism</span>
+            </div>
+            <h3 class="text-lg font-bold text-on-surface mb-2" data-i18n="claim_modal_title">
               Bereavement &amp; Welfare Aid
             </h3>
-<p class="text-label-md font-label-md text-primary sinhala-text mb-space-sm font-medium">
-              අවමංගල්‍ය හා සුබසාධන ආධාර
-            </p>
-<p class="text-body-sm font-body-sm text-on-surface-variant">
+            <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
               Rapid welfare claims approval pipeline, emergency medical relief disbursement, and transparent verification conforming to Association by-laws.
             </p>
-</div>
-<div class="pt-space-md mt-space-md border-t border-outline-variant flex items-center justify-between text-caption font-caption text-on-surface-variant">
-<span>Processing Time</span>
-<span class="text-primary font-semibold">&lt; 24 Hours</span>
-</div>
-</div>
-<!-- Card 3: Instant Digital Receipts -->
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md md:p-space-lg flex flex-col justify-between hover:border-primary transition-colors duration-150">
-<div>
-<div class="w-10 h-10 rounded bg-surface-container-low border border-outline-variant flex items-center justify-center text-primary mb-space-md">
-<span class="material-symbols-outlined text-[24px]" data-icon="verified">verified</span>
-</div>
-<span class="text-caption font-caption uppercase tracking-wider text-outline block mb-1">Cryptographic Proof</span>
-<h3 class="text-headline-md font-headline-md text-on-surface mb-0.5">
-              Instant Digital Receipts
+          </div>
+          <div class="pt-4 mt-4 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+            <span>Committee Review</span>
+            <span class="text-primary font-semibold">Automated Alerts</span>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:border-primary transition-colors">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-primary mb-4">
+              <span class="material-symbols-outlined text-[26px]">verified</span>
+            </div>
+            <h3 class="text-lg font-bold text-on-surface mb-2" data-i18n="view_receipt">
+              Instant Digital Vouchers
             </h3>
-<p class="text-label-md font-label-md text-primary sinhala-text mb-space-sm font-medium">
-              ක්ෂණික ඩිජිටල් රිසිට්පත්
+            <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed" data-i18n="voucher_desc">
+              Instant downloadable PDF vouchers with official verification seals for every contribution and emergency grant transaction.
             </p>
-<p class="text-body-sm font-body-sm text-on-surface-variant">
-              Instant downloadable PDF &amp; SMS vouchers with official verification seals for every contribution and emergency grant transaction.
-            </p>
-</div>
-<div class="pt-space-md mt-space-md border-t border-outline-variant flex items-center justify-between text-caption font-caption text-on-surface-variant">
-<span>Validation</span>
-<span class="text-primary font-semibold">QR Tamper-Proof</span>
-</div>
-</div>
-</div>
-</section>
-<!-- SECURITY & BY-LAWS COMPLIANCE SECTION -->
-<section class="w-full bg-surface-container-low border-t border-outline-variant py-space-xl" id="security">
-<div class="w-full max-w-7xl mx-auto px-gutter">
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md md:p-space-xl flex flex-col md:flex-row items-center justify-between gap-space-lg">
-<div class="space-y-space-xs max-w-2xl">
-<span class="text-caption font-caption text-primary uppercase tracking-wider">Zero Trust Security Standards</span>
-<h3 class="text-headline-md font-headline-md text-on-surface">
-              Authorized Airport Personnel Access Only
+          </div>
+          <div class="pt-4 mt-4 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+            <span>Security Verification</span>
+            <span class="text-primary font-semibold">Official Seal</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CONSTITUTION & CONTACT BANNER -->
+    <section class="w-full bg-sky-50 border-t border-sky-100 py-10">
+      <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="bg-white border border-sky-200 rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+          <div class="space-y-1 text-center md:text-left">
+            <h3 class="text-lg font-bold text-on-surface">
+              MRIA කළමනාකාර සුබසාධක සංගමය — By-Laws & Governance
             </h3>
-<p class="text-body-sm font-body-sm text-on-surface-variant">
-              Membership databases are tied to MRIA management personnel accounts. External or unauthorized access attempts are logged and restricted in compliance with Sri Lanka statutory airport welfare regulations.
+            <p class="text-xs sm:text-sm text-on-surface-variant">
+              Download the official approved constitution document or reach out directly to the Secretariat.
             </p>
-</div>
-<div class="flex-shrink-0 flex items-center gap-space-sm">
-<a class="inline-flex items-center gap-2 h-[42px] px-space-md rounded bg-surface-container-lowest text-on-surface border border-outline-variant hover:border-primary transition-colors text-label-md font-label-md" href="tel:0759555924">
-<span class="material-symbols-outlined text-[18px] text-primary" data-icon="phone_in_talk">phone_in_talk</span>
-<span>0759555924</span>
-</a>
-<a class="inline-flex items-center gap-2 h-[42px] px-space-md rounded bg-primary text-on-primary hover:bg-primary-container transition-colors text-label-md font-label-md" href="#auth-section">
-<span>Access Member App</span>
-</a>
-</div>
-</div>
-</div>
-</section>
-</main>
-<!-- FOOTER (Shared Component: Footer) -->
-<footer class="bg-surface border-t border-outline-variant w-full">
-<div class="w-full max-w-7xl mx-auto px-gutter py-space-xl flex flex-col md:flex-row items-center justify-between gap-space-md">
-<!-- Association Branding & Copyright -->
-<div class="flex flex-col items-center md:items-start text-center md:text-left">
-<span class="text-label-md font-label-md text-on-surface uppercase tracking-wider">
-          MRIA Management Welfare Association
-        </span>
-<p class="text-body-sm font-body-sm text-on-surface-variant mt-1 sinhala-text">
-          © MRIA Management Welfare Association (MRIA සුබසාධක කළමනාකරණ සංගමය). Contact: 0759555924.
-        </p>
-</div>
-<!-- Links Cluster -->
-<div class="flex flex-wrap items-center justify-center gap-x-space-md gap-y-space-xs">
-<a class="text-on-surface-variant hover:text-primary transition-colors duration-150 text-body-sm font-body-sm cursor-pointer" href="#constitution">
-          Constitution
-        </a>
-<a class="text-on-surface-variant hover:text-primary transition-colors duration-150 text-body-sm font-body-sm cursor-pointer" href="#privacy">
-          Privacy Policy
-        </a>
-<a class="text-on-surface-variant hover:text-primary transition-colors duration-150 text-body-sm font-body-sm cursor-pointer" href="#security-terms">
-          Security Terms
-        </a>
-<a class="text-on-surface-variant hover:text-primary transition-colors duration-150 text-body-sm font-body-sm cursor-pointer" href="tel:0759555924">
-          Contact: 0759555924
-        </a>
-</div>
-</div>
-</footer>
-<!-- Interactive Logic for Language Toggle & Google OAuth Authentication -->
-<script type="module" src="/js/page-index.js"></script>
-</body></html>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <button onclick="downloadConstitutionPdf()" class="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-outline-variant bg-white text-on-surface hover:border-primary text-xs font-bold transition-all shadow-sm">
+              <span class="material-symbols-outlined text-[18px] text-primary">description</span>
+              <span data-i18n="download_constitution">Download Constitution (PDF)</span>
+            </button>
+            <button onclick="openContactModal()" class="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all shadow-sm">
+              <span class="material-symbols-outlined text-[18px]">mail</span>
+              <span data-i18n="contact_admin">Contact Administration</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- UNIFIED FOOTER -->
+  <footer class="bg-white border-t border-outline-variant w-full py-6">
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-on-surface-variant">
+      <div class="font-semibold text-on-surface" data-i18n="footer_text">
+        © MRIA කළමනාකාර සුබසාධක සංගමය
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="downloadConstitutionPdf()" class="hover:text-primary transition-colors cursor-pointer" data-i18n="download_constitution">Constitution</button>
+        <button onclick="openContactModal()" class="hover:text-primary transition-colors cursor-pointer" data-i18n="contact_admin">Contact</button>
+        <span class="text-outline">|</span>
+        <span>Mattala Rajapaksa International Airport</span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/js/page-index.js"></script>
+</body>
+</html>

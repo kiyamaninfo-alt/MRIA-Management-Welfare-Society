@@ -7,13 +7,20 @@ import {
   getDefaultersRoster,
   getAllMembers,
   updateMemberRole,
+  updateMemberProfile,
   createMember,
-  publishAnnouncement,
-  getSystemSetting,
+  getAllBenefitClaims,
+  reviewBenefitClaim,
+  disburseBenefitClaim,
+  getTreasuryBalances,
+  recordTreasuryTransaction,
+  getTreasuryStatement,
+  getAuditLogs,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
-import { initLanguage, t } from "./i18n.js";
+import { exportTreasuryStatementToCsv, printTreasuryStatementPdf } from "./treasury-export.js";
+import { initLanguage, t, getLanguage } from "./i18n.js";
 import {
   showToast,
   openModal,
@@ -24,50 +31,56 @@ import {
   formatDate,
 } from "./ui.js";
 
-let currentStaffMember = null;
-let allMembersList = [];
-let pendingPaymentsList = [];
+let currentStaff = null;
+let allMembers = [];
+let pendingPayments = [];
+let currentStatementData = null;
+
+// Role-based Module Permissions Matrix
+const ROLE_TABS = {
+  admin: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
+  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters"],
+  treasurer: ["treasury", "slips", "cash", "defaulters"],
+  secretary: ["secretary", "claims", "defaulters", "cms"],
+  committee_member: ["claims", "defaulters"],
+};
 
 document.addEventListener("DOMContentLoaded", async () => {
   initLanguage();
   initOfflineDetection();
   setupModalDismissers();
 
-  // 1. Authenticate with RBAC requirement
-  const staffRoles = ["admin", "manager", "official", "treasurer"];
+  const staffRoles = ["admin", "manager", "secretary", "treasurer", "committee_member"];
   const authState = await requireAuth({ requireApproved: true, allowedRoles: staffRoles });
   if (!authState) return;
 
-  const { user, member } = authState;
-  currentStaffMember = member;
+  const { member } = authState;
+  currentStaff = member;
 
-  // 2. Render staff identity and badge
+  // Render staff header
   renderStaffHeader(member);
 
-  // 3. Setup Tab switching logic
-  setupAdminTabs();
+  // Filter tabs according to RBAC role
+  applyRoleTabPermissions(member.role);
 
-  // 4. Initial data loads
-  await loadSlipApprovalQueue();
-  await loadCashCollectionForm();
-  await loadDefaultersRoster();
-  await loadMemberOnboarding();
+  // Initialize data
+  await loadInitialData();
 
-  // 5. Setup Action Listeners
-  setupAdminActions();
+  // Setup form actions
+  setupAdminForms();
 });
 
 function renderStaffHeader(member) {
-  const staffName = document.getElementById("staffNameDisplay") || document.querySelector("[data-staff-name]");
-  if (staffName) staffName.textContent = member.full_name || member.email;
+  const nameEl = document.getElementById("staffNameDisplay");
+  if (nameEl) nameEl.textContent = member.full_name || member.email;
 
-  const roleBadge = document.getElementById("staffRoleBadge") || document.querySelector("[data-staff-role]");
-  if (roleBadge) {
-    roleBadge.textContent = t(`role_${member.role}`) || member.role.toUpperCase();
-  }
+  const roleEl = document.getElementById("staffRoleBadge");
+  if (roleEl) roleEl.textContent = t(`role_${member.role}`) || member.role.toUpperCase();
 
-  // Wire Sign Out
-  document.querySelectorAll("[data-action='signout'], #signOutBtn").forEach((btn) => {
+  const epfEl = document.getElementById("staffEpfDisplay");
+  if (epfEl) epfEl.textContent = `EPF: ${member.epf_number || "N/A"}`;
+
+  document.querySelectorAll("[data-action='signout']").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.preventDefault();
       await signOut();
@@ -75,23 +88,45 @@ function renderStaffHeader(member) {
   });
 }
 
-export function switchTab(targetId) {
-  const tabButtons = document.querySelectorAll(".tab-button");
+function applyRoleTabPermissions(role) {
+  const allowed = ROLE_TABS[role] || ["claims"];
+  const tabButtons = document.querySelectorAll("#adminTabsNav .tab-button");
+
+  let firstAllowedTab = null;
+
+  tabButtons.forEach((btn) => {
+    const tabKey = btn.id.replace("tab-btn-", "");
+    if (allowed.includes(tabKey)) {
+      btn.classList.remove("hidden");
+      if (!firstAllowedTab) firstAllowedTab = tabKey;
+    } else {
+      btn.classList.add("hidden");
+    }
+  });
+
+  // Switch to first allowed tab
+  if (firstAllowedTab) {
+    switchAdminTab(firstAllowedTab);
+  }
+}
+
+export function switchAdminTab(targetTab) {
+  const tabButtons = document.querySelectorAll("#adminTabsNav .tab-button");
   const tabContents = document.querySelectorAll(".tab-content");
 
   tabButtons.forEach((btn) => {
-    const isTarget = btn.id === `tab-btn-${targetId}` || btn.id.replace("tab-btn-", "") === targetId;
-    if (isTarget) {
-      btn.classList.add("active-tab", "border-b-2", "border-primary", "text-primary", "font-semibold");
+    const tabKey = btn.id.replace("tab-btn-", "");
+    if (tabKey === targetTab) {
+      btn.classList.add("active-tab", "bg-sky-100", "text-primary");
       btn.classList.remove("text-on-surface-variant");
     } else {
-      btn.classList.remove("active-tab", "border-b-2", "border-primary", "text-primary", "font-semibold");
+      btn.classList.remove("active-tab", "bg-sky-100", "text-primary");
       btn.classList.add("text-on-surface-variant");
     }
   });
 
   tabContents.forEach((c) => {
-    if (c.id === targetId) {
+    if (c.id === `tab-content-${targetTab}`) {
       c.classList.remove("hidden");
       c.classList.add("block");
     } else {
@@ -99,545 +134,623 @@ export function switchTab(targetId) {
       c.classList.remove("block");
     }
   });
-}
-window.switchTab = switchTab;
 
-function setupAdminTabs() {
-  const tabButtons = document.querySelectorAll(".tab-button");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.id.replace("tab-btn-", "");
-      switchTab(targetId);
-    });
+  // Lazy-load data for active tab
+  if (targetTab === "treasury") loadTreasuryData();
+  if (targetTab === "secretary") loadSecretaryData();
+  if (targetTab === "claims") loadClaimsData();
+  if (targetTab === "defaulters") loadDefaultersData();
+  if (targetTab === "audit") loadAuditLogsData();
+}
+window.switchAdminTab = switchAdminTab;
+
+async function loadInitialData() {
+  allMembers = await getAllMembers();
+  populateMemberDropdowns(allMembers);
+  await loadSlipApprovalQueue();
+}
+
+function populateMemberDropdowns(members) {
+  const cashSelect = document.getElementById("cashMemberSelect");
+  if (!cashSelect) return;
+
+  cashSelect.innerHTML = '<option value="" disabled selected>-- Select Member --</option>';
+  members.filter((m) => m.is_approved).forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = `${m.full_name} (EPF: ${m.epf_number || "N/A"}) - ${m.designation || "Staff"}`;
+    cashSelect.appendChild(opt);
   });
 }
 
-// ================= 1. SLIP APPROVAL QUEUE =================
+// ================= TAB 1: SLIPS APPROVAL =================
 
 async function loadSlipApprovalQueue() {
-  const container = document.getElementById("slipApprovalQueueBody") || document.querySelector("#slip-approval-queue tbody");
-  const tabBadge = document.getElementById("tabSlipsCount");
-  const pendingCount = document.getElementById("pendingSlipsCount");
+  const tbody = document.getElementById("slipApprovalQueueBody");
+  const badge = document.getElementById("tabSlipsCount");
 
   try {
-    pendingPaymentsList = await getPendingPayments();
+    pendingPayments = await getPendingPayments();
+    if (badge) badge.textContent = pendingPayments.length;
 
-    if (tabBadge) tabBadge.textContent = pendingPaymentsList.length;
-    if (pendingCount) pendingCount.textContent = pendingPaymentsList.length;
+    if (!tbody) return;
 
-    if (!container) return;
-
-    if (pendingPaymentsList.length === 0) {
-      container.innerHTML = `
-        <tr>
-          <td colspan="6" class="px-4 py-8 text-center text-xs text-slate-400">
-            No bank slips awaiting verification at this time.
-          </td>
-        </tr>
-      `;
+    if (pendingPayments.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-on-surface-variant">No bank slips awaiting verification at this time.</td></tr>`;
       return;
     }
 
-    container.innerHTML = pendingPaymentsList
-      .map((p) => {
-        const memberInfo = p.members || {};
-        const memberName = memberInfo.full_name || memberInfo.email || "Unknown Member";
-        const memberContact = memberInfo.phone || memberInfo.email || "-";
-        const paymentType = (p.payment_type || "monthly_due").replace(/_/g, " ").toUpperCase();
-        const amount = Number(p.amount || 0);
-        const hasSlip = Boolean(p.slip_key);
+    tbody.innerHTML = pendingPayments.map((p) => {
+      const m = p.members || {};
+      const memberName = m.full_name || m.email || "Unknown Member";
+      const memberEpf = m.epf_number || "N/A";
+      const memberDesig = m.designation || "-";
+      const hasSlip = Boolean(p.slip_key);
 
-        return `
-          <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-            <td class="px-4 py-3 text-xs text-slate-500 font-mono">${formatDate(p.created_at || new Date())}</td>
-            <td class="px-4 py-3 text-sm">
-              <div class="font-semibold text-slate-900">${memberName}</div>
-              <div class="text-xs text-slate-400 font-mono">${memberContact}</div>
-            </td>
-            <td class="px-4 py-3 text-sm font-medium text-slate-700">${paymentType}</td>
-            <td class="px-4 py-3 text-sm font-mono font-bold text-slate-900">${formatCurrency(amount)}</td>
-            <td class="px-4 py-3 text-sm">
-              <button data-review-slip="${p.id}" ${!hasSlip ? 'disabled title="No slip uploaded"' : ''} class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold ${hasSlip ? 'bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'} transition-colors">
-                <span class="material-symbols-outlined text-[15px]">visibility</span> ${hasSlip ? "Review Slip" : "No Slip"}
+      const slipBtn = hasSlip
+        ? `<button onclick="window.viewSlip('${p.slip_key}')" class="inline-flex items-center gap-1 text-primary hover:underline font-bold">
+             <span class="material-symbols-outlined text-[15px]">visibility</span>
+             <span>View Slip</span>
+           </button>`
+        : `<span class="text-on-surface-variant font-mono">No File</span>`;
+
+      return `
+        <tr class="hover:bg-sky-50/30 transition-colors">
+          <td class="py-2.5 px-3 font-mono">${formatDate(p.created_at)}</td>
+          <td class="py-2.5 px-3">
+            <div class="font-bold text-on-surface">${memberName}</div>
+            <div class="text-[11px] text-on-surface-variant">EPF: ${memberEpf} • ${memberDesig}</div>
+          </td>
+          <td class="py-2.5 px-3 font-medium capitalize">${(p.payment_type || "").replace(/_/g, " ")}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(p.amount)}</td>
+          <td class="py-2.5 px-3">${slipBtn}</td>
+          <td class="py-2.5 px-3 text-right">
+            <div class="inline-flex items-center gap-2">
+              <button onclick="window.approveSlip('${p.id}')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 text-xs">
+                Approve (FIFO)
               </button>
-            </td>
-            <td class="px-4 py-3 text-sm">
-              <div class="flex items-center gap-1.5">
-                <button data-approve-slip="${p.id}" class="px-2.5 py-1 rounded text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">
-                  Approve (FIFO)
-                </button>
-                <button data-reject-slip="${p.id}" class="px-2 py-1 rounded text-xs font-semibold bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 border border-slate-200 transition-colors">
-                  Reject
-                </button>
-              </div>
-            </td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    // Wire Review, Approve, Reject buttons
-    container.querySelectorAll("[data-review-slip]").forEach((btn) => {
-      btn.addEventListener("click", () => reviewSlip(btn.getAttribute("data-review-slip")));
-    });
-
-    container.querySelectorAll("[data-approve-slip]").forEach((btn) => {
-      btn.addEventListener("click", () => handleApproveSlip(btn.getAttribute("data-approve-slip")));
-    });
-
-    container.querySelectorAll("[data-reject-slip]").forEach((btn) => {
-      btn.addEventListener("click", () => handleRejectSlip(btn.getAttribute("data-reject-slip")));
-    });
+              <button onclick="window.rejectSlipPrompt('${p.id}')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg font-bold hover:bg-rose-50 text-xs">
+                Reject
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
   } catch (err) {
-    console.error("Failed to load pending payments:", err);
+    console.error("Failed to load slip queue:", err);
   }
 }
 
-async function reviewSlip(paymentId) {
-  const payment = pendingPaymentsList.find((p) => p.id === paymentId);
-  if (!payment) return;
-
-  const modalSlipImg = document.getElementById("modalSlipImg");
-  const modalMember = document.getElementById("modalMember");
-  const modalAmount = document.getElementById("modalAmount");
-  const modalTime = document.getElementById("modalTime");
-
-  const memberName = payment.members?.full_name || payment.members?.email || "Unknown Member";
-  if (modalMember) modalMember.textContent = memberName;
-  if (modalAmount) modalAmount.textContent = formatCurrency(payment.amount || 0);
-  if (modalTime) modalTime.textContent = formatDate(payment.created_at || new Date());
-
-  if (modalSlipImg) {
-    modalSlipImg.src = "";
-    if (!payment.slip_key) {
-      modalSlipImg.alt = "Slip image not attached.";
-    } else {
-      modalSlipImg.alt = "Loading bank slip...";
-      try {
-        const signedUrl = await getSignedSlipUrl(payment.slip_key);
-        if (signedUrl) {
-          modalSlipImg.src = signedUrl;
-        } else {
-          modalSlipImg.alt = "Slip image not available.";
-        }
-      } catch (err) {
-        console.error("Failed to get signed slip URL:", err);
-        modalSlipImg.alt = "Error loading slip: " + err.message;
+window.viewSlip = async function (slipKey) {
+  try {
+    const signedUrl = await getSignedSlipUrl(slipKey);
+    const container = document.getElementById("slipViewerContent");
+    if (signedUrl && container) {
+      if (slipKey.toLowerCase().endsWith(".pdf")) {
+        container.innerHTML = `<iframe src="${signedUrl}" class="w-full h-[500px] rounded-xl border border-outline-variant"></iframe>`;
+      } else {
+        container.innerHTML = `<img src="${signedUrl}" alt="Bank Slip" class="max-h-[500px] mx-auto rounded-xl shadow-sm object-contain" />`;
       }
+      openModal("viewSlipModal");
     }
+  } catch (err) {
+    showToast(err.message || "Failed to load slip image.", "error");
+  }
+};
+
+window.approveSlip = async function (paymentId) {
+  if (!confirm("Are you sure you want to approve this deposit slip? Dues will be reconciled via FIFO.")) return;
+  try {
+    await verifyPayment(paymentId, currentStaff.id);
+    showToast("Bank slip approved and reconciled successfully!", "success");
+    await loadSlipApprovalQueue();
+    await loadTreasuryData();
+  } catch (err) {
+    showToast(err.message || "Approval failed.", "error");
+  }
+};
+
+window.rejectSlipPrompt = async function (paymentId) {
+  const reason = prompt("Enter reason for rejection:");
+  if (reason === null) return;
+  try {
+    await rejectPayment(paymentId, currentStaff.id, reason || "Incorrect amount or unverified slip");
+    showToast("Payment slip rejected.", "info");
+    await loadSlipApprovalQueue();
+  } catch (err) {
+    showToast(err.message || "Rejection failed.", "error");
+  }
+};
+
+// ================= TAB 2: CASH DESK =================
+
+function setupAdminForms() {
+  const cashForm = document.getElementById("cashCollectionForm");
+  if (cashForm) {
+    cashForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const memberId = document.getElementById("cashMemberSelect").value;
+      const amount = Number(document.getElementById("cashAmountInput").value);
+      const category = document.getElementById("cashCategorySelect").value;
+      const notes = document.getElementById("cashNotesInput").value;
+      const dateVal = document.getElementById("cashDateInput").value;
+
+      if (!memberId || !amount) {
+        showToast("Please select a member and valid amount.", "warning");
+        return;
+      }
+
+      try {
+        const payment = await recordCashPayment({
+          memberId,
+          amount,
+          paymentType: category,
+          collectedByMemberId: currentStaff.id,
+          notes,
+          paidAt: dateVal || null,
+        });
+
+        const selectedMember = allMembers.find((m) => m.id === memberId);
+        const memberName = selectedMember ? selectedMember.full_name : "Member";
+
+        const previewContainer = document.getElementById("cashReceiptPreview");
+        if (previewContainer) {
+          previewContainer.innerHTML = renderReceiptHtml(payment, memberName, currentStaff.full_name);
+        }
+
+        showToast("Cash payment recorded! Official voucher generated.", "success");
+        cashForm.reset();
+        await loadTreasuryData();
+      } catch (err) {
+        showToast(err.message || "Failed to record cash payment.", "error");
+      }
+    });
   }
 
-  openModal("slipModal");
+  // Internal Treasury Transaction Form
+  const txForm = document.getElementById("treasuryTxForm");
+  if (txForm) {
+    txForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const accountId = document.getElementById("txAccountSelect").value;
+      const txType = document.getElementById("txTypeSelect").value;
+      const amount = Number(document.getElementById("txAmountInput").value);
+      const desc = document.getElementById("txDescInput").value;
+
+      if (!amount || amount <= 0) {
+        showToast("Enter a valid amount.", "warning");
+        return;
+      }
+
+      try {
+        await recordTreasuryTransaction({
+          accountId,
+          transactionType: txType,
+          category: "manual_adjustment",
+          amount,
+          description: desc,
+          performedByMemberId: currentStaff.id,
+        });
+
+        showToast("Treasury transaction committed successfully!", "success");
+        txForm.reset();
+        await loadTreasuryData();
+      } catch (err) {
+        showToast(err.message || "Transaction recording failed.", "error");
+      }
+    });
+  }
+
+  // Statement triggers
+  const btnFetchStmt = document.getElementById("btnFetchStatement");
+  if (btnFetchStmt) {
+    btnFetchStmt.addEventListener("click", () => fetchTreasuryStatement());
+  }
+
+  const btnExportCsv = document.getElementById("btnExportCsv");
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener("click", () => {
+      const sDate = document.getElementById("stmtStartDate").value;
+      const eDate = document.getElementById("stmtEndDate").value;
+      if (!currentStatementData) {
+        showToast("Please fetch statement data first.", "warning");
+        return;
+      }
+      exportTreasuryStatementToCsv(currentStatementData, sDate, eDate);
+      showToast("CSV statement exported successfully!", "success");
+    });
+  }
+
+  const btnPrintPdf = document.getElementById("btnPrintPdf");
+  if (btnPrintPdf) {
+    btnPrintPdf.addEventListener("click", () => {
+      const sDate = document.getElementById("stmtStartDate").value;
+      const eDate = document.getElementById("stmtEndDate").value;
+      if (!currentStatementData) {
+        showToast("Please fetch statement data first.", "warning");
+        return;
+      }
+      printTreasuryStatementPdf(currentStatementData, sDate, eDate);
+    });
+  }
+
+  // Secretary Add Member Form
+  const addMemberForm = document.getElementById("addMemberForm");
+  if (addMemberForm) {
+    addMemberForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("addMemberEmail").value;
+      const fullName = document.getElementById("addMemberFullName").value;
+      const epfNumber = document.getElementById("addMemberEpf").value;
+      const designation = document.getElementById("addMemberDesignation").value;
+      const role = document.getElementById("addMemberRole").value;
+      const phone = document.getElementById("addMemberPhone").value;
+
+      try {
+        await createMember({
+          email,
+          fullName,
+          epfNumber,
+          designation,
+          phone,
+          role,
+          isApproved: true,
+        });
+
+        showToast("Member pre-registered successfully!", "success");
+        closeModal("addMemberModal");
+        addMemberForm.reset();
+        await loadSecretaryData();
+      } catch (err) {
+        showToast(err.message || "Failed to create member.", "error");
+      }
+    });
+  }
+
+  // Secretary Edit Profile Form
+  const editMemberForm = document.getElementById("editMemberForm");
+  if (editMemberForm) {
+    editMemberForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const memberId = document.getElementById("editMemberId").value;
+      const fullName = document.getElementById("editMemberFullName").value;
+      const epfNumber = document.getElementById("editMemberEpf").value;
+      const designation = document.getElementById("editMemberDesignation").value;
+      const phone = document.getElementById("editMemberPhone").value;
+      const nic = document.getElementById("editMemberNic").value;
+
+      try {
+        await updateMemberProfile(memberId, {
+          fullName,
+          epfNumber,
+          designation,
+          phone,
+          nic,
+        });
+
+        showToast("Member profile updated successfully!", "success");
+        closeModal("editMemberModal");
+        await loadSecretaryData();
+      } catch (err) {
+        showToast(err.message || "Update profile failed.", "error");
+      }
+    });
+  }
 }
 
-async function handleApproveSlip(paymentId) {
-  if (!confirm("Are you sure you want to approve this payment slip? FIFO settlement will reconcile any pending monthly dues.")) {
+// ================= TAB 3: SOCIETY TREASURY =================
+
+async function loadTreasuryData() {
+  try {
+    const balances = await getTreasuryBalances();
+    let total = 0;
+
+    balances.forEach((b) => {
+      const bal = Number(b.balance || 0);
+      total += bal;
+      if (b.account_id === "boc_savings") {
+        const el = document.getElementById("balBocSavings");
+        if (el) el.textContent = formatCurrency(bal);
+      }
+      if (b.account_id === "cash_in_hand") {
+        const el = document.getElementById("balCashInHand");
+        if (el) el.textContent = formatCurrency(bal);
+      }
+      if (b.account_id === "fixed_deposits") {
+        const el = document.getElementById("balFixedDeposits");
+        if (el) el.textContent = formatCurrency(bal);
+      }
+    });
+
+    const totalEl = document.getElementById("treasuryTotalFunds");
+    if (totalEl) totalEl.textContent = formatCurrency(total);
+
+    // Default dates if empty
+    const sInput = document.getElementById("stmtStartDate");
+    const eInput = document.getElementById("stmtEndDate");
+    if (sInput && !sInput.value) {
+      const now = new Date();
+      sInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    }
+    if (eInput && !eInput.value) {
+      eInput.value = new Date().toISOString().slice(0, 10);
+    }
+  } catch (err) {
+    console.error("Failed to load treasury balances:", err);
+  }
+}
+
+window.setStatementPeriod = function (type) {
+  const now = new Date();
+  const sInput = document.getElementById("stmtStartDate");
+  const eInput = document.getElementById("stmtEndDate");
+
+  if (type === "monthly") {
+    sInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    eInput.value = now.toISOString().slice(0, 10);
+  } else if (type === "yearly") {
+    sInput.value = `${now.getFullYear()}-01-01`;
+    eInput.value = now.toISOString().slice(0, 10);
+  }
+  fetchTreasuryStatement();
+};
+
+async function fetchTreasuryStatement() {
+  const sDate = document.getElementById("stmtStartDate").value;
+  const eDate = document.getElementById("stmtEndDate").value;
+  const tbody = document.getElementById("statementSummariesBody");
+
+  if (!sDate || !eDate) {
+    showToast("Please choose both start and end dates.", "warning");
     return;
   }
 
   try {
-    await verifyPayment(paymentId, currentStaffMember.id);
-    showToast("Payment slip approved! Dues reconciled via FIFO.", "success");
-    closeModal("slipModal");
-    await loadSlipApprovalQueue();
-    await loadDefaultersRoster();
+    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center font-sans text-on-surface-variant">Computing balances across accounts...</td></tr>`;
+    currentStatementData = await getTreasuryStatement(sDate, eDate);
+
+    const summaries = currentStatementData.account_summaries || [];
+    if (summaries.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center font-sans text-on-surface-variant">No records found for selected period.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = summaries.map((s) => `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-sans font-bold text-on-surface">${s.account_name || s.account_id}</td>
+        <td class="py-2.5 px-3 text-right">${formatCurrency(s.opening_balance)}</td>
+        <td class="py-2.5 px-3 text-right text-emerald-700 font-bold">+${formatCurrency(s.period_inflow)}</td>
+        <td class="py-2.5 px-3 text-right text-rose-700 font-bold">-${formatCurrency(s.period_outflow)}</td>
+        <td class="py-2.5 px-3 text-right font-bold text-primary">${formatCurrency(s.closing_balance)}</td>
+      </tr>
+    `).join("");
+
+    showToast("Treasury statement generated successfully!", "success");
   } catch (err) {
-    console.error("Payment approval error:", err);
-    showToast(err.message || "Failed to approve slip.", "error");
+    console.error("Statement fetch error:", err);
+    showToast(err.message || "Failed to fetch statement.", "error");
   }
 }
 
-async function handleRejectSlip(paymentId) {
-  const reason = prompt("Please provide a reason for rejection (e.g., Unclear image, mismatched amount):");
-  if (!reason) return;
+// ================= TAB 4: SECRETARY CONSOLE =================
+
+async function loadSecretaryData() {
+  const tbody = document.getElementById("memberDirectoryBody");
+  const pendingBadge = document.getElementById("tabPendingMembersCount");
 
   try {
-    await rejectPayment(paymentId, currentStaffMember.id, reason);
-    showToast("Payment slip rejected.", "info");
-    closeModal("slipModal");
-    await loadSlipApprovalQueue();
+    allMembers = await getAllMembers();
+    const pendingList = allMembers.filter((m) => !m.is_approved);
+    if (pendingBadge) pendingBadge.textContent = pendingList.length;
+
+    if (!tbody) return;
+
+    tbody.innerHTML = allMembers.map((m) => {
+      const isApproved = m.is_approved;
+      const statusClass = isApproved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800 font-bold";
+
+      const approveAction = !isApproved
+        ? `<button onclick="window.approveMember('${m.id}')" class="mutation-btn px-2.5 py-1 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-hover shadow-sm">
+             Verify &amp; Approve
+           </button>`
+        : "";
+
+      return `
+        <tr class="hover:bg-sky-50/30 transition-colors">
+          <td class="py-2.5 px-3 font-mono font-bold text-primary">${m.epf_number || "PENDING"}</td>
+          <td class="py-2.5 px-3 font-bold text-on-surface">${m.full_name}</td>
+          <td class="py-2.5 px-3 text-on-surface-variant">${m.designation || "-"}</td>
+          <td class="py-2.5 px-3">
+            <div>${m.email}</div>
+            <div class="text-[11px] text-on-surface-variant font-mono">${m.phone || "-"}</div>
+          </td>
+          <td class="py-2.5 px-3 uppercase font-semibold text-[11px] text-on-surface-variant">${m.role}</td>
+          <td class="py-2.5 px-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] ${statusClass}">
+              ${isApproved ? "Approved" : "Pending Review"}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-right">
+            <div class="inline-flex items-center gap-2">
+              ${approveAction}
+              <button onclick="window.openEditMemberModal('${m.id}')" class="px-2.5 py-1 border border-outline-variant rounded-lg text-xs font-semibold hover:border-primary">
+                Edit
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
   } catch (err) {
-    console.error("Payment rejection error:", err);
-    showToast(err.message || "Failed to reject slip.", "error");
+    console.error("Secretary data error:", err);
   }
 }
 
-// ================= 2. DIRECT CASH COLLECTION =================
-
-async function loadCashCollectionForm() {
-  const memberSelect = document.getElementById("cashMemberSelect");
-  const dateInput = document.getElementById("cashDateInput");
-  const sysDateDisplay = document.getElementById("systemDateDisplay");
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (dateInput && !dateInput.value) {
-    dateInput.value = todayStr;
+window.approveMember = async function (memberId) {
+  try {
+    await updateMemberRole(memberId, undefined, true);
+    showToast("Member approved successfully!", "success");
+    await loadSecretaryData();
+  } catch (err) {
+    showToast(err.message || "Approval failed.", "error");
   }
-  if (sysDateDisplay) {
-    sysDateDisplay.textContent = `System Date: ${todayStr}`;
-  }
+};
 
-  if (!memberSelect) return;
+window.openEditMemberModal = function (memberId) {
+  const m = allMembers.find((item) => item.id === memberId);
+  if (!m) return;
 
-  allMembersList = await getAllMembers();
-  memberSelect.innerHTML = '<option value="" disabled selected>-- Select Association Member --</option>';
+  document.getElementById("editMemberId").value = m.id;
+  document.getElementById("editMemberFullName").value = m.full_name || "";
+  document.getElementById("editMemberEpf").value = m.epf_number || "";
+  document.getElementById("editMemberDesignation").value = m.designation || "";
+  document.getElementById("editMemberPhone").value = m.phone || "";
+  document.getElementById("editMemberNic").value = m.nic || "";
 
-  allMembersList
-    .filter((m) => m.is_approved)
-    .forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.id;
-      opt.textContent = `${m.full_name} (${m.phone || m.email})`;
-      memberSelect.appendChild(opt);
-    });
+  openModal("editMemberModal");
+};
 
-  updateCashPreview();
-}
+// ================= TAB 5: WELFARE CLAIMS =================
 
-function updateCashPreview() {
-  const memberSelect = document.getElementById("cashMemberSelect");
-  const categorySelect = document.getElementById("cashCategorySelect");
-  const amountInput = document.getElementById("cashAmountInput");
-  const dateInput = document.getElementById("cashDateInput");
-  const voucherRefInput = document.getElementById("voucherRefInput");
-  const prevMember = document.getElementById("prevMember");
-  const prevCategory = document.getElementById("prevCategory");
-  const prevAmount = document.getElementById("prevAmount");
-  const prevVoucherRef = document.getElementById("prevVoucherRef");
-  const prevVoucherDate = document.getElementById("prevVoucherDate");
+async function loadClaimsData() {
+  const tbody = document.getElementById("benefitClaimsQueueBody");
+  if (!tbody) return;
 
-  if (prevVoucherRef) {
-    if (voucherRefInput && voucherRefInput.value.trim()) {
-      prevVoucherRef.textContent = voucherRefInput.value.trim();
-    } else if (!prevVoucherRef.dataset.set) {
-      prevVoucherRef.textContent = `MRIA-CSH-${Math.floor(1000 + Math.random() * 9000)}`;
-      prevVoucherRef.dataset.set = "true";
+  try {
+    const claims = await getAllBenefitClaims();
+    if (claims.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-on-surface-variant">No welfare claims submitted yet.</td></tr>`;
+      return;
     }
-  }
 
-  if (prevVoucherDate) {
-    const dVal = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().slice(0, 10);
-    prevVoucherDate.textContent = dVal;
-  }
+    tbody.innerHTML = claims.map((c) => {
+      const m = c.members || {};
+      const bt = c.benefit_types || {};
+      const applicantName = m.full_name || m.email || "Member";
+      const applicantEpf = m.epf_number || "N/A";
+      const benefitTitle = bt.title_en || "Welfare Grant";
 
-  if (memberSelect && prevMember) {
-    const selOpt = memberSelect.options[memberSelect.selectedIndex];
-    prevMember.textContent = selOpt ? selOpt.text : "-";
-  }
-  if (categorySelect && prevCategory) {
-    prevCategory.textContent = categorySelect.options[categorySelect.selectedIndex]?.text || "-";
-  }
-  if (amountInput && prevAmount) {
-    prevAmount.textContent = formatCurrency(amountInput.value);
+      let actions = "";
+      if (c.status === "submitted") {
+        actions = `
+          <button onclick="window.reviewClaim('${c.id}', 'approved')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>
+          <button onclick="window.reviewClaim('${c.id}', 'rejected')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-50">Reject</button>
+        `;
+      } else if (c.status === "approved") {
+        actions = `
+          <button onclick="window.disburseClaim('${c.id}', ${c.claim_amount})" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900">
+            Disburse Grant
+          </button>
+        `;
+      } else {
+        actions = `<span class="text-on-surface-variant text-xs capitalize">${c.status}</span>`;
+      }
+
+      return `
+        <tr class="hover:bg-sky-50/30 transition-colors">
+          <td class="py-2.5 px-3 font-mono">${formatDate(c.created_at)}</td>
+          <td class="py-2.5 px-3">
+            <div class="font-bold text-on-surface">${applicantName}</div>
+            <div class="text-[11px] text-on-surface-variant">EPF: ${applicantEpf}</div>
+          </td>
+          <td class="py-2.5 px-3 font-medium">${benefitTitle}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(c.claim_amount)}</td>
+          <td class="py-2.5 px-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${c.status === "disbursed" ? "bg-emerald-50 text-emerald-800" : "bg-sky-50 text-sky-800"}">
+              ${c.status.toUpperCase()}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-right">
+            <div class="inline-flex items-center gap-2">${actions}</div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Claims data error:", err);
   }
 }
-window.updateCashPreview = updateCashPreview;
 
-// ================= 3. DEFAULTERS ROSTER (31ST RULE) =================
+window.reviewClaim = async function (claimId, status) {
+  const notes = prompt(`Enter review notes for ${status}:`);
+  if (notes === null) return;
+  try {
+    await reviewBenefitClaim(claimId, status, currentStaff.id, notes);
+    showToast(`Claim marked as ${status}.`, "success");
+    await loadClaimsData();
+  } catch (err) {
+    showToast(err.message || "Review action failed.", "error");
+  }
+};
 
-async function loadDefaultersRoster() {
-  const tbody = document.getElementById("defaultersTableBody") || document.querySelector("#defaulters-table tbody");
+window.disburseClaim = async function (claimId, amount) {
+  if (!confirm(`Are you sure you want to disburse LKR ${amount}? This will automatically record an outflow in the Society Treasury.`)) return;
+  try {
+    await disburseBenefitClaim({
+      claimId,
+      disbursedAmount: amount,
+      disbursedByMemberId: currentStaff.id,
+      notes: "Disbursed via Treasury Management Console",
+    });
+    showToast("Grant disbursed and logged to Treasury successfully!", "success");
+    await loadClaimsData();
+    await loadTreasuryData();
+  } catch (err) {
+    showToast(err.message || "Disbursement failed.", "error");
+  }
+};
+
+// ================= TAB 6: DEFAULTERS ROSTER =================
+
+async function loadDefaultersData() {
+  const tbody = document.getElementById("defaultersTableBody");
   if (!tbody) return;
 
   try {
     const defaulters = await getDefaultersRoster();
-
     if (defaulters.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="5" class="px-4 py-8 text-center text-xs text-emerald-600 font-medium">
-            <span class="material-symbols-outlined text-lg align-middle">verified</span>
-            All active members have settled their dues! No defaulters found.
-          </td>
-        </tr>
-      `;
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-on-surface-variant">No members in default. All dues settled.</td></tr>`;
       return;
     }
 
-    // Group by member
-    const grouped = {};
-    defaulters.forEach((d) => {
-      if (!grouped[d.member_id]) {
-        grouped[d.member_id] = {
-          name: d.full_name,
-          phone: d.phone,
-          email: d.email,
-          duesCount: 0,
-          totalAmount: 0,
-        };
-      }
-      grouped[d.member_id].duesCount += 1;
-      grouped[d.member_id].totalAmount += Number(d.amount);
-    });
-
-    tbody.innerHTML = Object.values(grouped)
-      .map((m) => {
-        const waMsg = encodeURIComponent(
-          `ආයුබෝවන් ${m.name}, ඔබගේ MRIA සුබසාධක සංගමයේ මාසික දායක මුදල් ${m.duesCount} ක් සඳහා රු. ${m.totalAmount.toFixed(2)} හිඟ මුදලක් පවතී. කරුණාකර හැකි ඉක්මනින් පියවීමට කාරුණික වන්න.`
-        );
-        const waLink = `https://wa.me/94${m.phone.replace(/^0/, "")}?text=${waMsg}`;
-
-        return `
-          <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-            <td class="px-4 py-3 text-sm font-semibold text-slate-900">${m.name}</td>
-            <td class="px-4 py-3 text-xs text-slate-500 font-mono">${m.phone}</td>
-            <td class="px-4 py-3 text-sm text-center">
-              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                ${m.duesCount} Month(s)
-              </span>
-            </td>
-            <td class="px-4 py-3 text-sm font-mono font-bold text-rose-600">${formatCurrency(m.totalAmount)}</td>
-            <td class="px-4 py-3 text-sm">
-              <a href="${waLink}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors">
-                <span class="material-symbols-outlined text-[15px]">send</span> WhatsApp Reminder
-              </a>
-            </td>
-          </tr>
-        `;
-      })
-      .join("");
+    tbody.innerHTML = defaulters.map((d) => `
+      <tr class="hover:bg-rose-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-mono font-bold text-rose-700">${d.epf_number || "N/A"}</td>
+        <td class="py-2.5 px-3 font-semibold text-on-surface">${d.full_name}</td>
+        <td class="py-2.5 px-3">${d.billing_month}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-rose-700">${formatCurrency(d.amount)}</td>
+        <td class="py-2.5 px-3 font-mono">${formatDate(d.due_date)}</td>
+      </tr>
+    `).join("");
   } catch (err) {
     console.error("Defaulters load error:", err);
   }
 }
 
-// ================= 4. MEMBER ONBOARDING & RBAC =================
+// ================= TAB 8: AUDIT LOGS =================
 
-async function loadMemberOnboarding() {
-  const tbody = document.getElementById("membersTableBody") || document.querySelector("#member-onboarding-table tbody");
+async function loadAuditLogsData() {
+  const tbody = document.getElementById("auditLogsBody");
   if (!tbody) return;
 
   try {
-    allMembersList = await getAllMembers();
+    const logs = await getAuditLogs();
+    if (logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-on-surface-variant font-sans">No audit logs recorded yet.</td></tr>`;
+      return;
+    }
 
-    tbody.innerHTML = allMembersList
-      .map((m) => {
-        const isSelf = m.id === currentStaffMember.id;
-        return `
-          <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-            <td class="px-4 py-3 text-sm">
-              <div class="font-semibold text-slate-900">${m.full_name}</div>
-              <div class="text-xs text-slate-400 font-mono">${m.email}</div>
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-600 font-mono">${m.phone}</td>
-            <td class="px-4 py-3 text-center">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${m.is_legacy_member ? "bg-sky-50 text-sky-700 border border-sky-200" : "bg-slate-50 text-slate-500 border border-slate-200"}">
-                ${m.is_legacy_member ? "LEGACY" : "REGULAR"}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-center">
-              <label class="inline-flex items-center cursor-pointer">
-                <input type="checkbox" data-member-approved="${m.id}" ${m.is_approved ? "checked" : ""} ${isSelf ? "disabled" : ""} class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
-              </label>
-            </td>
-            <td class="px-4 py-3 text-sm">
-              <select data-member-role="${m.id}" ${isSelf ? "disabled" : ""} class="h-8 px-2 text-xs border border-slate-200 rounded bg-white text-slate-800 focus:border-primary">
-                <option value="member" ${m.role === "member" ? "selected" : ""}>Member</option>
-                <option value="treasurer" ${m.role === "treasurer" ? "selected" : ""}>Treasurer (භාණ්ඩාගාරික)</option>
-                <option value="official" ${m.role === "official" ? "selected" : ""}>Official</option>
-                <option value="manager" ${m.role === "manager" ? "selected" : ""}>Manager</option>
-                <option value="admin" ${m.role === "admin" ? "selected" : ""}>Admin</option>
-              </select>
-            </td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    // Wire approval toggle
-    tbody.querySelectorAll("[data-member-approved]").forEach((chk) => {
-      chk.addEventListener("change", async () => {
-        const memberId = chk.getAttribute("data-member-approved");
-        try {
-          await updateMemberRole(memberId, undefined, chk.checked, undefined);
-          showToast(`Member approval updated to ${chk.checked ? "Approved" : "Pending"}.`, "success");
-        } catch (err) {
-          showToast(err.message || "Failed to update member.", "error");
-          chk.checked = !chk.checked;
-        }
-      });
-    });
-
-    // Wire role dropdown change
-    tbody.querySelectorAll("[data-member-role]").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        const memberId = sel.getAttribute("data-member-role");
-        try {
-          await updateMemberRole(memberId, sel.value, undefined, undefined);
-          showToast(`Member role updated to ${sel.value}.`, "success");
-        } catch (err) {
-          showToast(err.message || "Failed to update role.", "error");
-        }
-      });
-    });
+    tbody.innerHTML = logs.map((log) => `
+      <tr class="hover:bg-sky-50/30 transition-colors text-[11px]">
+        <td class="py-2.5 px-3 text-on-surface-variant">${new Date(log.created_at).toLocaleString()}</td>
+        <td class="py-2.5 px-3 font-bold">${log.performed_by_email || log.performed_by || "SYSTEM"}</td>
+        <td class="py-2.5 px-3 uppercase text-primary font-bold">${log.action}</td>
+        <td class="py-2.5 px-3">${log.target_table || "-"}</td>
+        <td class="py-2.5 px-3 max-w-xs truncate" title="${JSON.stringify(log.diff || {})}">${JSON.stringify(log.diff || {})}</td>
+      </tr>
+    `).join("");
   } catch (err) {
-    console.error("Member onboarding load error:", err);
+    console.error("Audit log error:", err);
   }
-}
-
-// ================= SETUP ACTION LISTENERS =================
-
-function setupAdminActions() {
-  // Cash Collection Form Submit
-  const cashForm = document.getElementById("cashForm");
-  if (cashForm) {
-    cashForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const memberSelect = document.getElementById("cashMemberSelect");
-      const categorySelect = document.getElementById("cashCategorySelect");
-      const amountInput = document.getElementById("cashAmountInput");
-      const submitBtn = cashForm.querySelector("button[type='submit']");
-
-      if (!memberSelect || !memberSelect.value) {
-        showToast("Please select a member.", "warning");
-        return;
-      }
-
-      const amount = Number(amountInput ? amountInput.value : 0);
-      if (!amount || amount <= 0) {
-        showToast("Please enter a valid amount.", "warning");
-        return;
-      }
-
-      try {
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.textContent = "Logging & Issuing Receipt...";
-        }
-
-        const dateInput = document.getElementById("cashDateInput");
-        const paidAt = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().slice(0, 10);
-
-        const payment = await recordCashPayment({
-          memberId: memberSelect.value,
-          amount,
-          paymentType: categorySelect ? categorySelect.value : "monthly_due",
-          collectedByMemberId: currentStaffMember.id,
-          paidAt,
-        });
-
-        showToast("Cash payment recorded! Digital receipt generated.", "success");
-        const selMember = allMembersList.find((m) => m.id === memberSelect.value);
-        openReceiptModal(payment, selMember ? selMember.full_name : "Member");
-
-        cashForm.reset();
-        if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
-        updateCashPreview();
-        await loadDefaultersRoster();
-      } catch (err) {
-        console.error("Cash collection error:", err);
-        showToast(err.message || "Failed to log cash payment.", "error");
-      } finally {
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Issue Instant Cash Receipt";
-        }
-      }
-    });
-
-    const inputs = [
-      document.getElementById("cashMemberSelect"),
-      document.getElementById("cashCategorySelect"),
-      document.getElementById("cashAmountInput"),
-      document.getElementById("cashDateInput"),
-      document.getElementById("voucherRefInput"),
-    ];
-    inputs.forEach((inp) => {
-      if (inp) {
-        inp.addEventListener("input", updateCashPreview);
-        inp.addEventListener("change", updateCashPreview);
-      }
-    });
-  }
-
-  // Add Member Modal & Form
-  const onboardForm = document.getElementById("onboardForm");
-  if (onboardForm) {
-    onboardForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const nameInp = document.getElementById("onboardName");
-      const emailInp = document.getElementById("onboardEmail");
-      const phoneInp = document.getElementById("onboardPhone");
-      const nicInp = document.getElementById("onboardNic");
-      const legacyChk = document.getElementById("legacyCheck");
-      const roleSel = document.getElementById("onboardRole");
-
-      try {
-        await createMember({
-          email: emailInp.value,
-          fullName: nameInp.value,
-          phone: phoneInp.value,
-          nic: nicInp ? nicInp.value : null,
-          role: roleSel ? roleSel.value : "member",
-          isLegacy: legacyChk ? legacyChk.checked : false,
-          isApproved: true,
-        });
-
-        showToast("New member successfully registered and approved!", "success");
-        closeModal("onboardModal");
-        onboardForm.reset();
-        await loadMemberOnboarding();
-        await loadCashCollectionForm();
-      } catch (err) {
-        showToast(err.message || "Failed to register member.", "error");
-      }
-    });
-  }
-
-  // Open Onboard Modal buttons
-  document.querySelectorAll("[data-open-modal='onboardModal']").forEach((btn) => {
-    btn.addEventListener("click", () => openModal("onboardModal"));
-  });
-
-  // Announcement Form Submit
-  const announcementForm = document.getElementById("announcementForm");
-  if (announcementForm) {
-    announcementForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const titleEn = document.getElementById("annTitleEn")?.value;
-      const titleSi = document.getElementById("annTitleSi")?.value;
-      const contentEn = document.getElementById("annContentEn")?.value;
-      const contentSi = document.getElementById("annContentSi")?.value;
-      const isPinned = document.getElementById("pinPwa")?.checked || false;
-
-      try {
-        await publishAnnouncement({
-          titleEn,
-          titleSi,
-          contentEn,
-          contentSi,
-          priority: "normal",
-          isPinned,
-          createdByMemberId: currentStaffMember.id,
-        });
-        showToast("Announcement published successfully!", "success");
-        announcementForm.reset();
-      } catch (err) {
-        showToast(err.message || "Failed to publish announcement.", "error");
-      }
-    });
-  }
-}
-
-function openReceiptModal(payment, memberName) {
-  let modal = document.getElementById("receiptModal");
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.id = "receiptModal";
-    modal.className = "fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4";
-    modal.innerHTML = `
-      <div class="relative w-full max-w-lg bg-white rounded-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-        <button onclick="document.getElementById('receiptModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
-        <div id="receiptModalContent"></div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  }
-
-  const content = document.getElementById("receiptModalContent");
-  if (content) {
-    content.innerHTML = renderReceiptHtml(payment, memberName, currentStaffMember.full_name);
-  }
-  modal.classList.remove("hidden");
-  modal.classList.add("flex");
 }

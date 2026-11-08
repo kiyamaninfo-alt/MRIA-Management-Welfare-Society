@@ -1,4 +1,5 @@
 import { supabase } from "./auth.js";
+import { CONFIG } from "./config.js";
 
 // ================= MEMBER DASHBOARD APIS =================
 
@@ -134,9 +135,10 @@ export async function getMemberClaims(memberId) {
 }
 
 /**
- * Submits a welfare benefit claim.
+ * Submits a welfare benefit claim and triggers async committee email notification.
  */
 export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount, notes }) {
+  // 1. Insert claim into DB
   const { data, error } = await supabase
     .from("benefit_claims")
     .insert([
@@ -146,6 +148,53 @@ export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount,
         claim_amount: Number(claimAmount),
         status: "submitted",
         notes,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // 2. Asynchronously notify committee members via Edge Function
+  if (data && data.id) {
+    try {
+      const session = (await supabase.auth.getSession())?.data?.session;
+      if (session?.access_token) {
+        fetch(`${CONFIG.FUNCTIONS_URL}/send-claim-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ claimId: data.id }),
+        }).catch((err) => {
+          console.warn("[API] Asynchronous email dispatch notification failed silently:", err);
+        });
+      }
+    } catch (e) {
+      console.warn("[API] Error calling notification trigger:", e);
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Self-registration submission for unlisted users on unauthorized page.
+ */
+export async function submitRegistrationRequest({ email, fullName, epfNumber, designation, phone }) {
+  const { data, error } = await supabase
+    .from("members")
+    .insert([
+      {
+        email: email.trim().toLowerCase(),
+        full_name: fullName.trim(),
+        epf_number: epfNumber.trim(),
+        designation: designation.trim(),
+        phone: phone ? phone.trim() : null,
+        role: "member",
+        is_approved: false,
+        is_legacy_member: false,
       },
     ])
     .select()
@@ -186,7 +235,21 @@ export async function getSystemSetting(key) {
   return data.value;
 }
 
-// ================= ADMIN & TREASURER APIS =================
+/**
+ * Updates a system setting.
+ */
+export async function updateSystemSetting(key, value) {
+  const { data, error } = await supabase
+    .from("system_settings")
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= ADMIN, SECRETARY & TREASURER APIS =================
 
 /**
  * Fetches pending slip payments for treasurer/admin review.
@@ -194,7 +257,7 @@ export async function getSystemSetting(key) {
 export async function getPendingPayments() {
   const { data, error } = await supabase
     .from("payments")
-    .select("*, members:members!payments_member_id_fkey(full_name, email, phone)")
+    .select("*, members:members!payments_member_id_fkey(full_name, email, phone, epf_number, designation)")
     .eq("status", "pending_approval")
     .order("created_at", { ascending: false });
 
@@ -279,23 +342,7 @@ export async function recordCashPayment({
 }
 
 /**
- * Fetches the defaulters roster post-31st.
- */
-export async function getDefaultersRoster() {
-  const { data, error } = await supabase
-    .from("defaulters_roster")
-    .select("*")
-    .order("billing_month", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching defaulters:", error);
-    return [];
-  }
-  return data || [];
-}
-
-/**
- * Fetches all members for admin onboarding & role management.
+ * Fetches all members for admin & secretary management.
  */
 export async function getAllMembers() {
   const { data, error } = await supabase
@@ -311,7 +358,7 @@ export async function getAllMembers() {
 }
 
 /**
- * Updates a member's role or approved status.
+ * Updates a member's role or approval status (Admin only).
  */
 export async function updateMemberRole(memberId, role, isApproved, isLegacyMember) {
   const updates = {};
@@ -332,17 +379,43 @@ export async function updateMemberRole(memberId, role, isApproved, isLegacyMembe
 }
 
 /**
- * Pre-registers a new member.
+ * Secretary profile updates (CRUD on member demographic attributes).
+ */
+export async function updateMemberProfile(memberId, { fullName, epfNumber, designation, phone, nic, address }) {
+  const updates = {};
+  if (fullName !== undefined) updates.full_name = fullName.trim();
+  if (epfNumber !== undefined) updates.epf_number = epfNumber.trim();
+  if (designation !== undefined) updates.designation = designation.trim();
+  if (phone !== undefined) updates.phone = phone ? phone.trim() : null;
+  if (nic !== undefined) updates.nic = nic ? nic.trim() : null;
+  if (address !== undefined) updates.address = address ? address.trim() : null;
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("members")
+    .update(updates)
+    .eq("id", memberId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Pre-registers a new member (Secretary / Admin).
  */
 export async function createMember({
   email,
   fullName,
+  epfNumber,
+  designation,
   phone,
   nic,
   address,
   role = "member",
   isLegacy = false,
-  isApproved = false,
+  isApproved = true,
 }) {
   const { data, error } = await supabase
     .from("members")
@@ -350,7 +423,9 @@ export async function createMember({
       {
         email: email.trim().toLowerCase(),
         full_name: fullName.trim(),
-        phone: phone.trim(),
+        epf_number: epfNumber.trim(),
+        designation: designation.trim(),
+        phone: phone ? phone.trim() : null,
         nic: nic ? nic.trim() : null,
         address: address ? address.trim() : null,
         role,
@@ -363,6 +438,179 @@ export async function createMember({
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Fetches all welfare benefit claims for committee review.
+ */
+export async function getAllBenefitClaims() {
+  const { data, error } = await supabase
+    .from("benefit_claims")
+    .select("*, members(full_name, email, epf_number, designation, phone), benefit_types(title_en, title_si)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching all benefit claims:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Reviews (approves/rejects) a benefit claim.
+ */
+export async function reviewBenefitClaim(claimId, status, reviewerMemberId, notes = null) {
+  const updates = {
+    status,
+    approved_by: reviewerMemberId,
+    notes,
+  };
+  const { data, error } = await supabase
+    .from("benefit_claims")
+    .update(updates)
+    .eq("id", claimId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Disburses a benefit claim (automatically records outflow in Treasury via trigger).
+ */
+export async function disburseBenefitClaim({ claimId, disbursedAmount, disbursedByMemberId, notes = null }) {
+  const { data, error } = await supabase
+    .from("benefit_claims")
+    .update({
+      status: "disbursed",
+      disbursed_amount: Number(disbursedAmount),
+      disbursed_by: disbursedByMemberId,
+      disbursed_at: new Date().toISOString(),
+      notes,
+    })
+    .eq("id", claimId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= SOCIETY TREASURY APIS =================
+
+/**
+ * Fetches current running balances across the 3 segregated asset accounts.
+ */
+export async function getTreasuryBalances() {
+  const { data, error } = await supabase
+    .from("treasury_account_balances")
+    .select("*")
+    .order("account_id", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching treasury balances:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Fetches recent treasury transactions ledger.
+ */
+export async function getTreasuryTransactions(limit = 100) {
+  const { data, error } = await supabase
+    .from("treasury_transactions")
+    .select("*, treasury_accounts(account_name), members:performed_by(full_name, email)")
+    .order("transacted_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching treasury transactions:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Records an internal treasury transaction (inflow, outflow, or adjustment).
+ */
+export async function recordTreasuryTransaction({
+  accountId,
+  transactionType,
+  category,
+  amount,
+  description,
+  referenceNumber = null,
+  transactedAt = null,
+  performedByMemberId,
+}) {
+  const txDate = transactedAt ? new Date(transactedAt).toISOString() : new Date().toISOString();
+  const { data, error } = await supabase
+    .from("treasury_transactions")
+    .insert([
+      {
+        account_id: accountId,
+        transaction_type: transactionType,
+        category,
+        amount: Number(amount),
+        description,
+        reference_number: referenceNumber,
+        transacted_at: txDate,
+        performed_by: performedByMemberId,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Calls PostgreSQL RPC to compute Opening, Period, and Closing Balances for statements.
+ */
+export async function getTreasuryStatement(startDate, endDate) {
+  const { data, error } = await supabase.rpc("get_treasury_statement", {
+    p_start_date: startDate,
+    p_end_date: endDate,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetches defaulters roster post-31st.
+ */
+export async function getDefaultersRoster() {
+  const { data, error } = await supabase
+    .from("defaulters_roster")
+    .select("*")
+    .order("billing_month", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching defaulters:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Fetches immutable audit logs (Admin only).
+ */
+export async function getAuditLogs(limit = 100) {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching audit logs:", error);
+    return [];
+  }
+  return data || [];
 }
 
 /**

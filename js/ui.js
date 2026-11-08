@@ -1,4 +1,6 @@
-// UI Helpers, Toast Notifications, Offline Detection & Modal Management
+// UI Helpers, Toast Notifications, Offline Detection, Modals & Interactive Ledgers
+import { t, getLanguage } from "./i18n.js";
+import { CONFIG } from "./config.js";
 
 export function showToast(message, type = "info") {
   let toastContainer = document.getElementById("toastContainer");
@@ -64,6 +66,167 @@ export function setupModalDismissers() {
   });
 }
 
+/**
+ * Interactive Contact Administration Modal targeting krishaja@gmail.com
+ */
+export function openContactModal(userEmail = "", userName = "") {
+  let modal = document.getElementById("contactAdminModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "contactAdminModal";
+    modal.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4";
+    modal.innerHTML = `
+      <div class="bg-surface rounded-2xl max-w-md w-full p-6 shadow-2xl border border-outline-variant relative">
+        <button id="closeContactModalBtn" class="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            <span class="material-symbols-outlined">mail</span>
+          </div>
+          <div>
+            <h3 class="font-bold text-title text-on-surface" data-i18n="contact_modal_title">Contact Administration</h3>
+            <p class="text-caption text-on-surface-variant">krishaja@gmail.com</p>
+          </div>
+        </div>
+        <p class="text-caption text-on-surface-variant mb-4" data-i18n="contact_recipient_info">
+          Inquiries are directed to the Welfare Administration (krishaja@gmail.com).
+        </p>
+        <form id="contactAdminForm" class="space-y-3">
+          <div>
+            <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="full_name">Your Name</label>
+            <input type="text" id="contactSenderName" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+          </div>
+          <div>
+            <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="email_address">Your Email</label>
+            <input type="email" id="contactSenderEmail" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+          </div>
+          <div>
+            <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="contact_subject">Subject</label>
+            <input type="text" id="contactSubject" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+          </div>
+          <div>
+            <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="contact_message">Message</label>
+            <textarea id="contactMessage" rows="4" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required></textarea>
+          </div>
+          <button type="submit" class="w-full py-2.5 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">send</span>
+            <span data-i18n="send_inquiry">Send Inquiry</span>
+          </button>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("closeContactModalBtn").addEventListener("click", () => {
+      closeModal("contactAdminModal");
+    });
+
+    document.getElementById("contactAdminForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const subject = encodeURIComponent(document.getElementById("contactSubject").value);
+      const message = encodeURIComponent(document.getElementById("contactMessage").value);
+      const mailtoUrl = `mailto:${CONFIG.ADMIN_EMAIL}?subject=${subject}&body=${message}`;
+      window.location.href = mailtoUrl;
+      showToast(t("inquiry_sent"), "success");
+      closeModal("contactAdminModal");
+    });
+  }
+
+  // Prefill if available
+  if (userName) document.getElementById("contactSenderName").value = userName;
+  if (userEmail) document.getElementById("contactSenderEmail").value = userEmail;
+
+  openModal("contactAdminModal");
+}
+
+/**
+ * Renders the interactive payment history popup detailing paid vs unpaid months.
+ */
+export function openDuesBreakdownModal(dues = [], memberBalance = {}) {
+  let modal = document.getElementById("duesBreakdownModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "duesBreakdownModal";
+    modal.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4";
+    modal.innerHTML = `
+      <div class="bg-surface rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-outline-variant relative">
+        <div class="p-5 border-b border-outline-variant flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <span class="material-symbols-outlined">receipt_long</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-title text-on-surface" data-i18n="dues_breakdown_title">Monthly Contributions Breakdown</h3>
+              <p class="text-caption text-on-surface-variant" data-i18n="click_for_history">Paid vs. Unpaid Ledger</p>
+            </div>
+          </div>
+          <button id="closeDuesBreakdownBtn" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div id="duesBreakdownContent" class="p-5 overflow-y-auto space-y-3">
+          <!-- Dynamic ledger entries -->
+        </div>
+
+        <div class="p-4 border-t border-outline-variant bg-surface-variant/30 flex justify-between items-center">
+          <span class="text-body font-semibold text-on-surface" data-i18n="outstanding_dues">Outstanding Dues</span>
+          <span id="modalTotalOutstanding" class="text-title font-bold text-error">Rs. 0.00</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("closeDuesBreakdownBtn").addEventListener("click", () => {
+      closeModal("duesBreakdownModal");
+    });
+  }
+
+  const container = document.getElementById("duesBreakdownContent");
+  const totalEl = document.getElementById("modalTotalOutstanding");
+
+  totalEl.textContent = formatCurrency(memberBalance.totalPending || 0);
+
+  if (dues.length === 0) {
+    container.innerHTML = `<div class="text-center py-6 text-on-surface-variant text-body" data-i18n="no_records">No records found.</div>`;
+  } else {
+    container.innerHTML = dues.map((d) => {
+      const isPaid = d.status === "paid";
+      return `
+        <div class="flex items-center justify-between p-3 rounded-xl border ${isPaid ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"}">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined ${isPaid ? "text-emerald-600" : "text-rose-600"}">
+              ${isPaid ? "check_circle" : "pending"}
+            </span>
+            <div>
+              <div class="font-semibold text-body text-on-surface">${d.billing_month}</div>
+              <div class="text-caption text-on-surface-variant">Due Date: ${d.due_date || "31st"}</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold text-body ${isPaid ? "text-emerald-700" : "text-rose-700"}">${formatCurrency(d.amount)}</div>
+            <span class="text-caption font-medium px-2 py-0.5 rounded-full ${isPaid ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}">
+              ${isPaid ? t("paid") : t("pending")}
+            </span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  openModal("duesBreakdownModal");
+}
+
+/**
+ * Downloads the official Constitution PDF according to the active language toggle.
+ */
+export function downloadConstitutionPdf() {
+  const lang = getLanguage();
+  const pdfPath = lang === "si" ? "/assets/docs/constitution_si.pdf" : "/assets/docs/constitution_en.pdf";
+  window.open(pdfPath, "_blank");
+}
+
 export function initOfflineDetection() {
   const offlineBanner = document.getElementById("offlineBanner");
 
@@ -122,5 +285,7 @@ export function formatDate(dateString) {
 if (typeof window !== "undefined") {
   window.openModal = openModal;
   window.closeModal = closeModal;
+  window.openContactModal = openContactModal;
+  window.openDuesBreakdownModal = openDuesBreakdownModal;
+  window.downloadConstitutionPdf = downloadConstitutionPdf;
 }
-

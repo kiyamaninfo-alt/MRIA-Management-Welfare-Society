@@ -1,1033 +1,728 @@
 <!DOCTYPE html>
-
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>MRIA Management Welfare Association | Governance &amp; Admin Console</title>
-<link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#0284C7"/>
-<script type="importmap">
-{
-  "imports": {
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.46.1"
+<html lang="si">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>MRIA කළමනාකාර සුබසාධක සංගමය | Management &amp; Treasury Console</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0284C7"/>
+  <script type="importmap">
+  {
+    "imports": {
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.46.1"
+    }
   }
-}
-</script>
-<!-- Google Fonts: Plus Jakarta Sans -->
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
-<!-- Material Symbols Outlined -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<!-- Tailwind CSS CDN -->
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
+  </script>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <!-- Material Symbols Outlined -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
       theme: {
         extend: {
           colors: {
-            "surface-dim": "#cbdbf5",
-            "on-primary-fixed-variant": "#004b73",
-            "secondary-fixed": "#dae2fd",
-            "on-secondary-fixed": "#131b2e",
-            "surface-container-low": "#eff4ff",
-            "outline-variant": "#bfc7d2",
-            "background": "#f8f9ff",
-            "on-primary": "#ffffff",
-            "on-error-container": "#93000a",
-            "tertiary": "#894d00",
-            "on-tertiary-fixed-variant": "#6b3b00",
-            "primary-fixed-dim": "#93ccff",
-            "inverse-on-surface": "#eaf1ff",
-            "secondary-container": "#dae2fd",
-            "on-secondary-fixed-variant": "#3f465c",
-            "on-background": "#0b1c30",
-            "secondary": "#565e74",
-            "on-primary-fixed": "#001d31",
-            "inverse-primary": "#93ccff",
-            "surface-container-highest": "#d3e4fe",
-            "surface": "#f8f9ff",
-            "on-tertiary-container": "#fffbff",
-            "on-surface-variant": "#3f4850",
-            "on-secondary": "#ffffff",
-            "surface-bright": "#f8f9ff",
-            "on-tertiary": "#ffffff",
-            "on-surface": "#0b1c30",
-            "on-primary-container": "#fdfcff",
-            "on-tertiary-fixed": "#2d1600",
-            "primary-fixed": "#cce5ff",
-            "outline": "#707881",
-            "on-secondary-container": "#5c647a",
-            "primary": "#006194",
-            "on-error": "#ffffff",
-            "inverse-surface": "#213145",
-            "surface-tint": "#006398",
-            "secondary-fixed-dim": "#bec6e0",
+            primary: "#006194",
+            "primary-hover": "#004d77",
             "primary-container": "#007bb9",
-            "surface-container-high": "#dce9ff",
-            "error": "#ba1a1a",
-            "tertiary-container": "#ac6200",
-            "surface-variant": "#d3e4fe",
-            "error-container": "#ffdad6",
-            "tertiary-fixed-dim": "#ffb875",
+            "on-primary": "#ffffff",
+            surface: "#f8f9ff",
+            "on-surface": "#0b1c30",
+            "on-surface-variant": "#3f4850",
             "surface-container": "#e5eeff",
-            "tertiary-fixed": "#ffdcc0",
-            "surface-container-lowest": "#ffffff"
-          },
-          borderRadius: {
-            DEFAULT: "0.125rem",
-            lg: "0.25rem",
-            xl: "0.5rem",
-            full: "0.75rem"
-          },
-          spacing: {
-            "space-2xl": "5.5625rem",
-            "space-xs": "0.5rem",
-            "space-xl": "3.4375rem",
-            "space-lg": "2.125rem",
-            "space-sm": "0.8125rem",
-            "margin-mobile": "1.3125rem",
-            "gutter": "1.3125rem",
-            "space-md": "1.3125rem",
-            "gutter-mobile": "0.8125rem",
-            "margin": "3.4375rem"
+            "surface-container-low": "#eff4ff",
+            "surface-container-lowest": "#ffffff",
+            outline: "#707881",
+            "outline-variant": "#bfc7d2",
+            error: "#ba1a1a",
           },
           fontFamily: {
-            "display-mobile": ["Plus Jakarta Sans"],
-            "headline-sm": ["Plus Jakarta Sans"],
-            "display": ["Plus Jakarta Sans"],
-            "caption": ["Plus Jakarta Sans"],
-            "label-md": ["Plus Jakarta Sans"],
-            "headline-lg-mobile": ["Plus Jakarta Sans"],
-            "body-sm": ["Plus Jakarta Sans"],
-            "body-lg": ["Plus Jakarta Sans"],
-            "headline-lg": ["Plus Jakarta Sans"],
-            "headline-md": ["Plus Jakarta Sans"]
+            sans: ["Plus Jakarta Sans", "Noto Sans Sinhala", "sans-serif"],
           },
-          fontSize: {
-            "display-mobile": ["42px", { lineHeight: "52px", letterSpacing: "-0.025em", fontWeight: "600" }],
-            "headline-sm": ["20px", { lineHeight: "28px", letterSpacing: "-0.005em", fontWeight: "500" }],
-            "display": ["68px", { lineHeight: "82px", letterSpacing: "-0.03em", fontWeight: "600" }],
-            "caption": ["10px", { lineHeight: "14px", letterSpacing: "0.05em", fontWeight: "600" }],
-            "label-md": ["13px", { lineHeight: "18px", letterSpacing: "0.01em", fontWeight: "500" }],
-            "headline-lg-mobile": ["30px", { lineHeight: "38px", letterSpacing: "-0.015em", fontWeight: "600" }],
-            "body-sm": ["13px", { lineHeight: "21px", letterSpacing: "0.005em", fontWeight: "400" }],
-            "body-lg": ["16px", { lineHeight: "26px", letterSpacing: "0em", fontWeight: "400" }],
-            "headline-lg": ["42px", { lineHeight: "52px", letterSpacing: "-0.02em", fontWeight: "600" }],
-            "headline-md": ["26px", { lineHeight: "34px", letterSpacing: "-0.01em", fontWeight: "500" }]
-          }
-        }
-      }
-    }
+        },
+      },
+    };
   </script>
-<style>
-    body {
-      background-color: #f8f9ff;
-      color: #0b1c30;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
+  <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       display: inline-block;
       vertical-align: middle;
       line-height: 1;
     }
-    .custom-scroll::-webkit-scrollbar {
-      height: 6px;
-      width: 6px;
-    }
-    .custom-scroll::-webkit-scrollbar-thumb {
-      background-color: #bfc7d2;
-      border-radius: 4px;
+    body.lang-si {
+      line-height: 1.65;
     }
   </style>
 </head>
-<body class="bg-background text-on-surface min-h-screen flex flex-col font-body-sm text-body-sm selection:bg-primary selection:text-white">
-<!-- TOP APP BAR -->
-<header class="bg-surface-container-lowest border-b border-outline-variant sticky top-0 z-40">
-<div class="w-full max-w-7xl mx-auto px-gutter flex items-center justify-between h-[68px]">
-<!-- Brand & Insignia -->
-<div class="flex items-center gap-space-sm">
-<img alt="MRIA Emblem Crest" class="w-10 h-10 object-contain rounded-lg p-0.5 border border-outline-variant bg-surface-container-low" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
-<div class="flex flex-col">
-<div class="flex items-center gap-space-xs">
-<span class="text-headline-sm font-headline-sm text-on-surface tracking-tight">MRIA Management Welfare Association</span>
-<span class="bg-surface-container text-primary font-caption text-caption px-1.5 py-0.5 rounded border border-outline-variant">ADMIN v2.4</span>
-</div>
-<span class="font-caption text-caption text-on-surface-variant">MRIA සුබසාධක කළමනාකරණ සංගමය • Mattala Rajapaksa International Airport</span>
-</div>
-</div>
-<!-- Trailing Identity & Actions -->
-<div class="flex items-center gap-space-md">
-<!-- Staff Admin Badge -->
-<div class="hidden lg:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-1 rounded border border-outline-variant">
-<span class="material-symbols-outlined text-primary text-[18px]">verified_user</span>
-<div class="text-left leading-tight">
-<div class="font-label-md text-label-md text-on-surface font-semibold">Welfare Secretariat</div>
-<div class="font-caption text-caption text-on-surface-variant">Executive Council / Super Admin</div>
-</div>
-</div>
-<!-- Language Switcher -->
-<button class="flex items-center gap-1 text-on-surface-variant hover:text-primary border border-outline-variant px-2.5 py-1 rounded bg-surface-container-lowest font-label-md text-label-md transition-colors" id="langToggleBtn" title="Toggle English / Sinhala">
-<span class="material-symbols-outlined text-[16px]">translate</span>
-<span>සිං / EN</span>
-</button>
-<!-- Member Portal View link -->
-<a class="hidden sm:flex items-center gap-1 text-primary hover:text-on-primary-fixed-variant font-label-md text-label-md font-medium transition-colors" href="#member-view">
-<span class="material-symbols-outlined text-[18px]">open_in_new</span>
-<span>Member Portal</span>
-</a>
-<!-- Sign Out Action -->
-<button class="flex items-center gap-1 text-error hover:bg-error-container/40 px-space-sm py-1.5 rounded transition-colors font-label-md text-label-md font-medium cursor-pointer" data-action="signout" id="signOutBtn" onclick="signOut()" title="Sign Out">
-<span class="material-symbols-outlined text-[18px]">logout</span>
-<span class="hidden sm:inline">Sign Out</span>
-</button>
-</div>
-</div>
-</header>
-<!-- STATUTORY STATUS RIBBON -->
-<section class="bg-surface-container-low border-b border-outline-variant py-2">
-<div class="w-full max-w-7xl mx-auto px-gutter flex flex-wrap items-center justify-between text-on-surface-variant font-caption text-caption gap-2">
-<div class="flex items-center gap-space-md flex-wrap">
-<div class="flex items-center gap-1.5 text-on-surface">
-<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-<span class="font-semibold text-primary">Statutory Audit Sync Active</span>
-</div>
-<div class="hidden sm:inline text-outline-variant">|</div>
-<div class="flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px] text-primary">lock</span>
-<span>Fiscal Year 2024/2025 Ledger Locked &amp; Reconciled</span>
-</div>
-</div>
-<div class="flex items-center gap-space-sm">
-<span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded border border-outline-variant" id="systemDateDisplay">
-          System Date:
-        </span>
-<span class="bg-error-container text-on-error-container px-2 py-0.5 rounded border border-error/20 font-semibold">
-          Month-End Cutoff: 31st Midnight (Rule 31 Active)
-        </span>
-</div>
-</div>
-</section>
-<!-- MAIN MANAGEMENT WORKSPACE -->
-<main class="w-full max-w-7xl mx-auto px-gutter py-space-md flex-1">
-<!-- KPI STATS SUMMARY ROW -->
-<div class="grid grid-cols-2 md:grid-cols-4 gap-space-sm mb-space-md">
-<div class="bg-surface-container-lowest border border-outline-variant p-space-sm rounded">
-<div class="font-caption text-caption text-on-surface-variant flex items-center justify-between">
-<span>VERIFICATION QUEUE</span>
-<span class="material-symbols-outlined text-primary text-[18px]">receipt_long</span>
-</div>
-<div class="text-headline-md font-headline-md text-on-surface mt-1">04 <span class="text-xs font-normal text-on-surface-variant">Pending</span></div>
-<div class="text-caption font-caption text-emerald-600 mt-1 flex items-center gap-1">
-<span class="material-symbols-outlined text-[12px]">check_circle</span> 18 settled today
+<body class="bg-[#f8f9ff] text-on-surface antialiased min-h-screen flex flex-col justify-between selection:bg-sky-100 selection:text-primary">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-white border-b border-outline-variant sticky top-0 z-40 shadow-sm">
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-[72px]">
+      
+      <!-- Brand & Emblem -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-sky-50 border border-sky-100 shrink-0">
+          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
         </div>
-</div>
-<div class="bg-surface-container-lowest border border-outline-variant p-space-sm rounded">
-<div class="font-caption text-caption text-on-surface-variant flex items-center justify-between">
-<span>ACTIVE DEFAULTERS</span>
-<span class="material-symbols-outlined text-error text-[18px]">warning</span>
-</div>
-<div class="text-headline-md font-headline-md text-error mt-1">12 <span class="text-xs font-normal text-on-surface-variant">Staff</span></div>
-<div class="text-caption font-caption text-error mt-1 flex items-center gap-1">
-<span>Past 60-day Rule VII Cutoff</span>
-</div>
-</div>
-<div class="bg-surface-container-lowest border border-outline-variant p-space-sm rounded">
-<div class="font-caption text-caption text-on-surface-variant flex items-center justify-between">
-<span>TOTAL CHARTER MEMBERS</span>
-<span class="material-symbols-outlined text-secondary text-[18px]">group</span>
-</div>
-<div class="text-headline-md font-headline-md text-on-surface mt-1">348 <span class="text-xs font-normal text-on-surface-variant">Enrolled</span></div>
-<div class="text-caption font-caption text-primary mt-1">
-          98.2% Mattala Airport Deployment
+        <div class="flex flex-col">
+          <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight">
+            MRIA කළමනාකාර සුබසාධක සංගමය
+          </span>
+          <span class="text-[11px] text-on-surface-variant font-medium">
+            Administrative &amp; Treasury Management Console
+          </span>
         </div>
-</div>
-<div class="bg-surface-container-lowest border border-outline-variant p-space-sm rounded">
-<div class="font-caption text-caption text-on-surface-variant flex items-center justify-between">
-<span>CURRENT AID RESERVES</span>
-<span class="material-symbols-outlined text-tertiary text-[18px]">account_balance</span>
-</div>
-<div class="text-headline-md font-headline-md text-on-surface mt-1">LKR 4.28M</div>
-<div class="text-caption font-caption text-on-surface-variant mt-1">
-          BOC Acc: ...48201 Reconciled
+      </div>
+
+      <!-- Navigation & Identity Badge -->
+      <div class="flex items-center gap-3">
+        
+        <!-- Staff Identity Header -->
+        <div class="hidden md:flex items-center gap-2.5 px-3 py-1.5 bg-sky-50/70 rounded-xl border border-sky-200">
+          <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 shrink-0"></div>
+          <div class="text-left text-xs">
+            <div class="font-bold text-on-surface leading-tight" id="staffNameDisplay">
+              Loading Official...
+            </div>
+            <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span id="staffRoleBadge" class="font-bold text-primary">-</span>
+              <span>•</span>
+              <span id="staffEpfDisplay">-</span>
+            </div>
+          </div>
         </div>
-</div>
-</div>
-<!-- TABS CONTROLLER BAR -->
-<div class="bg-surface-container-lowest border border-outline-variant rounded mb-space-md shadow-sm">
-<nav class="flex overflow-x-auto custom-scroll border-b border-outline-variant divide-x divide-outline-variant/60">
-<button class="tab-button active-tab px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap bg-surface-container-lowest text-primary border-b-2 border-primary font-semibold transition-all" id="tab-btn-slip-approval-queue" onclick="switchTab('slip-approval-queue')">
-<span class="material-symbols-outlined text-[18px]">fact_check</span>
-<span>1. Slip Verification Queue</span>
-<span class="bg-primary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full" id="tabSlipsCount">0</span>
-</button>
-<button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-cash-collection-form" onclick="switchTab('cash-collection-form')">
-<span class="material-symbols-outlined text-[18px]">payments</span>
-<span>2. Direct Cash Desk</span>
-</button>
-<button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-defaulters-table" onclick="switchTab('defaulters-table')">
-<span class="material-symbols-outlined text-[18px]">person_off</span>
-<span>3. Defaulters Roster (Rule 31)</span>
-<span class="bg-error/10 text-error text-[10px] font-bold px-1.5 py-0.5 rounded-full">12</span>
-</button>
-<button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-member-onboarding-table" onclick="switchTab('member-onboarding-table')">
-<span class="material-symbols-outlined text-[18px]">manage_accounts</span>
-<span>4. Member Directory &amp; RBAC</span>
-</button>
-<button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-welfare-claims" onclick="switchTab('welfare-claims')">
-<span class="material-symbols-outlined text-[18px]">volunteer_activism</span>
-<span>5. Claims &amp; Announcements</span>
-</button>
-<button class="tab-button px-space-md py-3 font-label-md text-label-md flex items-center gap-2 whitespace-nowrap text-on-surface-variant hover:text-primary transition-all" id="tab-btn-qr-uploader" onclick="switchTab('qr-uploader')">
-<span class="material-symbols-outlined text-[18px]">qr_code_2</span>
-<span>6. Bank QR &amp; System Specs</span>
-</button>
-</nav>
-</div>
-<!-- TAB 1: SLIP VERIFICATION QUEUE -->
-<div class="tab-content block" id="slip-approval-queue">
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-space-sm border-b border-outline-variant gap-space-sm mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Slip Verification &amp; FIFO Settlement Queue</h2>
-<p class="font-caption text-caption text-on-surface-variant">බැංකු රිසිට්පත් අනුමත කිරීමේ පෝලිම • Strict FIFO Verification with Bank Transaction Audit Cross-Check</p>
-</div>
-<div class="flex items-center gap-space-xs">
-<span class="bg-surface-container px-2 py-1 rounded text-caption font-caption text-on-surface border border-outline-variant">Pending: <strong id="pendingSlipsCount">0</strong></span>
-<span class="bg-emerald-50 text-emerald-800 px-2 py-1 rounded text-caption font-caption border border-emerald-200">Real-time Verified</span>
-</div>
-</div>
-<!-- Verification Data Table -->
-<div class="overflow-x-auto">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="border-b border-outline-variant text-on-surface-variant font-caption text-caption uppercase">
-<th class="py-2 px-3">Ref ID</th>
-<th class="py-2 px-3">Staff Member &amp; EPF</th>
-<th class="py-2 px-3">Category</th>
-<th class="py-2 px-3">Amount</th>
-<th class="py-2 px-3">Slip Proof</th>
-<th class="py-2 px-3">Timestamp</th>
-<th class="py-2 px-3 text-right">Verification Action</th>
-</tr>
-</thead>
-<tbody id="slipApprovalQueueBody" class="divide-y divide-outline-variant">
-<tr>
-  <td colspan="7" class="px-4 py-8 text-center text-xs text-slate-400">Loading pending slips queue...</td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="mt-space-sm pt-space-xs border-t border-outline-variant flex items-center justify-between text-on-surface-variant font-caption text-caption">
-<span>* Automatic FIFO Ledger Rule: Payments settle oldest overdue months first to protect member bereavement eligibility.</span>
-<button class="text-primary hover:underline flex items-center gap-1 font-semibold">
-<span class="material-symbols-outlined text-[14px]">history</span>
-<span>View Historical Settled Log</span>
-</button>
-</div>
-</div>
-</div>
-<!-- TAB 2: DIRECT CASH COLLECTION -->
-<div class="tab-content hidden" id="cash-collection-form">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md">
-<!-- Left Column: Cash Intake Form -->
-<div class="lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Executive Cash Intake Desk</h2>
-<p class="font-caption text-caption text-on-surface-variant">මුදල් භාරගැනීමේ පෝරමය • Issue instant statutory welfare voucher</p>
-</div>
-<span class="material-symbols-outlined text-primary text-[28px]">payments</span>
-</div>
-<form class="space-y-space-sm" id="cashForm" onsubmit="event.preventDefault(); issueCashVoucher();">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Select Member (EPF / Staff NIC)</label>
-<select class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashMemberSelect" onchange="updateCashPreview()">
-<option value="EPF 10482 - Chaminda Silva (Ground Ops)">EPF 10482 - Chaminda Silva (Ground Ops)</option>
-<option value="EPF 09841 - K. Bandara (Air Traffic Services)">EPF 09841 - K. Bandara (Air Traffic Services)</option>
-<option value="EPF 11204 - D. N. Jayasinghe (Security)">EPF 11204 - D. N. Jayasinghe (Security)</option>
-<option value="EPF 07419 - S. Perera (Engineering &amp; Maintenance)">EPF 07419 - S. Perera (Engineering &amp; Maintenance)</option>
-<option value="EPF 12055 - H. M. Wickramasinghe (Cargo)">EPF 12055 - H. M. Wickramasinghe (Cargo)</option>
-</select>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Payment Category</label>
-<select class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashCategorySelect" onchange="updateCashPreview()">
-<option value="monthly_due">Monthly Contribution (LKR 1,000)</option>
-<option value="admission_fee">Admission Fee (LKR 2,500)</option>
-<option value="monthly_due">Arrears Clearance</option>
-<option value="welfare_levy">Special Bereavement Levy</option>
-</select>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Cash Amount (LKR)</label>
-<input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashAmountInput" oninput="updateCashPreview()" required="" type="number" value="1000"/>
-</div>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Transaction Date</label>
-<input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" id="cashDateInput" onchange="updateCashPreview()" type="date"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Handover Physical Voucher #</label>
-<input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-mono text-body-sm" id="voucherRefInput" oninput="updateCashPreview()" type="text" value="MRIA-CSH-9814"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Receiving Cashier / Executive</label>
-<input class="w-full h-[42px] px-space-sm bg-surface-container-low border border-outline-variant rounded text-on-surface-variant font-body-sm text-body-sm" readonly="" type="text" value="Welfare Treasurer Desk - Hall A"/>
-</div>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Notes / Internal Remarks</label>
-<input class="w-full h-[42px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm" placeholder="e.g. Received directly at Airport Terminal Staff Room" type="text"/>
-</div>
-<div class="pt-2 flex items-center justify-between">
-<span class="text-caption font-caption text-on-surface-variant flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px] text-emerald-600">verified</span>
-                Directly commits to Association Cash Book Ledger
-              </span>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white h-[42px] px-space-md rounded font-label-md text-label-md font-semibold transition-colors flex items-center gap-2" type="submit">
-<span class="material-symbols-outlined text-[18px]">receipt</span>
-<span>Issue Instant Cash Receipt</span>
-</button>
-</div>
-</form>
-</div>
-<!-- Right Column: Live Printable Receipt Voucher Preview -->
-<div class="lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded p-space-md flex flex-col justify-between">
-<div>
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<span class="text-caption font-caption text-primary uppercase font-bold tracking-wider">Live Statutory Voucher Preview</span>
-<h3 class="text-headline-sm font-headline-sm text-on-surface">Thermal / A5 Official Receipt</h3>
-</div>
-<button class="border border-outline-variant hover:bg-surface-container px-2.5 py-1 rounded text-caption font-caption flex items-center gap-1 text-on-surface transition-colors" onclick="window.print()">
-<span class="material-symbols-outlined text-[14px]">print</span>
-<span>Print Copy</span>
-</button>
-</div>
-<!-- Receipt Container -->
-<div class="border border-dashed border-outline-variant p-space-md bg-surface rounded text-on-surface font-mono" id="receiptVoucher">
-<div class="text-center pb-space-xs border-b border-outline-variant">
-<div class="font-bold text-sm">MRIA MANAGEMENT WELFARE ASSOCIATION</div>
-<div class="text-xs text-on-surface-variant">MRIA සුබසාධක කළමනාකරණ සංගමය</div>
-<div class="text-[11px] text-on-surface-variant">Mattala Rajapaksa International Airport, Hambantota</div>
-<div class="text-[11px] font-semibold text-primary mt-1">OFFICIAL CASH INTAKE RECEIPT</div>
-</div>
-<div class="py-space-xs space-y-1 text-xs">
-<div class="flex justify-between">
-<span class="text-on-surface-variant">Receipt No:</span>
-<span class="font-bold" id="prevVoucherRef">MRIA-CSH-9814</span>
-</div>
-<div class="flex justify-between">
-<span class="text-on-surface-variant">Issued Date:</span>
-<span id="prevVoucherDate"></span>
-</div>
-<div class="flex justify-between">
-<span class="text-on-surface-variant">Staff Beneficiary:</span>
-<span class="font-semibold text-right" id="prevMember">EPF 10482 - Chaminda Silva</span>
-</div>
-<div class="flex justify-between">
-<span class="text-on-surface-variant">Contribution Type:</span>
-<span class="text-right" id="prevCategory">Monthly Contribution</span>
-</div>
-</div>
-<div class="border-t border-b border-outline-variant py-2 my-2 flex justify-between items-center text-sm font-bold">
-<span>TOTAL AMOUNT RECEIVED:</span>
-<span class="text-primary text-base" id="prevAmount">LKR 1,000.00</span>
-</div>
-<div class="pt-2 text-[10px] text-on-surface-variant space-y-1">
-<div class="flex justify-between items-center">
-<span>Treasurer Sig / Seal: [DIGITALLY AUTHORIZED]</span>
-<span class="text-emerald-700 font-bold flex items-center gap-1">
-<span class="material-symbols-outlined text-[12px]">check_circle</span> SEC-VERIFIED
-                  </span>
-</div>
-<div class="text-center text-[9px] text-outline pt-2">
-                  Constitution Art. IV Sec 2: Official acknowledgement for death/bereavement grant eligibility.
-                </div>
-</div>
-</div>
-</div>
-<div class="mt-space-sm pt-space-xs border-t border-outline-variant text-caption font-caption text-on-surface-variant flex items-center justify-between">
-<span>Thermal layout optimized for 80mm POS slip printers.</span>
-<span class="text-emerald-600 font-medium">Automatic SMS/Email notification queued</span>
-</div>
-</div>
-</div>
-</div>
-<!-- TAB 3: DEFAULTERS ROSTER (RULE 31) -->
-<div class="tab-content hidden" id="defaulters-table">
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<!-- Statutory Warning Banner -->
-<div class="bg-error-container/40 border border-error/20 p-space-sm rounded mb-space-md flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-error text-[24px] mt-0.5">report_problem</span>
-<div>
-<div class="font-headline-sm font-semibold text-error text-sm">Statutory Clause VII Enforcement: Month-End Cutoff (Rule 31)</div>
-<p class="font-body-sm text-body-sm text-on-surface mt-0.5">
-              Any member exceeding 60-day arrears past the 31st midnight cutoff automatically forfeits immediate bereavement grant entitlements (LKR 100,000.00 ceiling) until fully reconciled via FIFO settlement.
-            </p>
-</div>
-</div>
-<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-space-sm border-b border-outline-variant gap-space-sm mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Defaulters Roster &amp; Restrictive Notices</h2>
-<p class="font-caption text-caption text-on-surface-variant">හිඟ මුදල් නාමලේඛනය • Members requiring statutory reconciliation</p>
-</div>
-<div class="flex items-center gap-space-xs">
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-space-sm py-1.5 rounded text-xs font-medium flex items-center gap-1 transition-colors" onclick="bulkWhatsAppAlert()">
-<span class="material-symbols-outlined text-[16px]">chat</span>
-<span>Send Reminders via WhatsApp</span>
-</button>
-<button class="border border-outline-variant hover:bg-surface-container px-space-sm py-1.5 rounded text-xs text-on-surface flex items-center gap-1 transition-colors">
-<span class="material-symbols-outlined text-[16px]">download</span>
-<span>Export CSV</span>
-</button>
-</div>
-</div>
-<div class="overflow-x-auto">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="border-b border-outline-variant text-on-surface-variant font-caption text-caption uppercase">
-<th class="py-2 px-3">EPF Number</th>
-<th class="py-2 px-3">Member Name</th>
-<th class="py-2 px-3">Department / Section</th>
-<th class="py-2 px-3">Overdue Count</th>
-<th class="py-2 px-3">Total Arrears (LKR)</th>
-<th class="py-2 px-3">Statutory Status</th>
-<th class="py-2 px-3 text-right">Quick Reconciliation Action</th>
-</tr>
-</thead>
-<tbody id="defaultersTableBody" class="divide-y divide-outline-variant">
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3 font-mono font-medium text-on-surface">EPF 08412</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">Nalaka Gunasekara</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 841920194V • 077-4820194</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Mattala Air Traffic Services</td>
-<td class="py-3 px-3">
-<span class="bg-error/10 text-error font-semibold px-2 py-0.5 rounded text-xs">3 Months Overdue</span>
-</td>
-<td class="py-3 px-3 font-semibold text-error">LKR 3,000.00</td>
-<td class="py-3 px-3">
-<span class="bg-error-container text-on-error-container text-[11px] font-semibold px-2 py-0.5 rounded border border-error/20">Bereavement Suspended</span>
-</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<a class="text-emerald-700 hover:bg-emerald-50 border border-emerald-300 px-2 py-1 rounded text-xs flex items-center gap-1" href="https://wa.me/94774820194?text=MRIA%20Welfare%20Notice:%20Dear%20Mr.%20Nalaka,%20your%20welfare%20arrears%20stand%20at%20LKR%203,000.00.%20Please%20settle%20before%2031st." target="_blank">
-<span class="material-symbols-outlined text-[14px]">chat</span>
-<span>WhatsApp Notice</span>
-</a>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-2 py-1 rounded text-xs transition-colors" onclick="reconcileMember('EPF 08412', 'Nalaka Gunasekara')">
-                      Reconcile
-                    </button>
-</div>
-</td>
-</tr>
-<!-- Defaulter 2 -->
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3 font-mono font-medium text-on-surface">EPF 09381</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">S. Wickremasinghe</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 881029481V • 071-2940182</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Ground Operations &amp; Ramp</td>
-<td class="py-3 px-3">
-<span class="bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded text-xs">2 Months Overdue</span>
-</td>
-<td class="py-3 px-3 font-semibold text-error">LKR 2,000.00</td>
-<td class="py-3 px-3">
-<span class="bg-amber-50 text-amber-900 text-[11px] font-semibold px-2 py-0.5 rounded border border-amber-300">Pending Forfeiture</span>
-</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<a class="text-emerald-700 hover:bg-emerald-50 border border-emerald-300 px-2 py-1 rounded text-xs flex items-center gap-1" href="https://wa.me/94712940182?text=MRIA%20Welfare%20Reminder:%20Dear%20Mr.%20Wickremasinghe,%20welfare%20dues%20overdue:%20LKR%202,000.00." target="_blank">
-<span class="material-symbols-outlined text-[14px]">chat</span>
-<span>WhatsApp Notice</span>
-</a>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-2 py-1 rounded text-xs transition-colors" onclick="reconcileMember('EPF 09381', 'S. Wickremasinghe')">
-                      Reconcile
-                    </button>
-</div>
-</td>
-</tr>
-<!-- Defaulter 3 -->
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3 font-mono font-medium text-on-surface">EPF 11093</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">A. C. Fernando</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 921049182V • 075-9555924</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Airport Rescue &amp; Fire Fighting</td>
-<td class="py-3 px-3">
-<span class="bg-error/10 text-error font-semibold px-2 py-0.5 rounded text-xs">4 Months Overdue</span>
-</td>
-<td class="py-3 px-3 font-semibold text-error">LKR 4,000.00</td>
-<td class="py-3 px-3">
-<span class="bg-error-container text-on-error-container text-[11px] font-semibold px-2 py-0.5 rounded border border-error/20">Bereavement Suspended</span>
-</td>
-<td class="py-3 px-3 text-right">
-<div class="flex items-center justify-end gap-1">
-<a class="text-emerald-700 hover:bg-emerald-50 border border-emerald-300 px-2 py-1 rounded text-xs flex items-center gap-1" href="https://wa.me/94759555924?text=MRIA%20Welfare%20Urgent:%20Settlement%20required%20for%204-month%20arrears%20(LKR%204,000.00)." target="_blank">
-<span class="material-symbols-outlined text-[14px]">chat</span>
-<span>WhatsApp Notice</span>
-</a>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-2 py-1 rounded text-xs transition-colors" onclick="reconcileMember('EPF 11093', 'A. C. Fernando')">
-                      Reconcile
-                    </button>
-</div>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-<!-- TAB 4: MEMBER ONBOARDING & RBAC -->
-<div class="tab-content hidden" id="member-onboarding-table">
-<div class="bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-space-sm border-b border-outline-variant gap-space-sm mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Member Directory &amp; Access Control (RBAC)</h2>
-<p class="font-caption text-caption text-on-surface-variant">සාමාජික නාමාවලිය සහ ප්‍රවේශ පාලනය • Governance of Airport Staff Credentials</p>
-</div>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-space-sm py-2 rounded font-label-md text-label-md font-semibold flex items-center gap-1 transition-colors" onclick="openModal('onboardModal')">
-<span class="material-symbols-outlined text-[18px]">person_add</span>
-<span>Register New Member</span>
-</button>
-</div>
-<!-- Filter bar -->
-<div class="flex flex-wrap items-center gap-space-sm mb-space-sm">
-<div class="relative flex-1 min-w-[240px]">
-<span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
-<input class="w-full h-[40px] pl-9 pr-3 bg-surface-container-lowest border border-outline-variant rounded text-on-surface text-body-sm focus:border-primary" placeholder="Search by EPF, Name, Department, or NIC..." type="text"/>
-</div>
-<select class="h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface">
-<option>All Roles (Super Admin, Treasurer, Member)</option>
-<option>Super Admin</option>
-<option>Treasurer</option>
-<option>Secretary</option>
-<option>Member</option>
-</select>
-<select class="h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface">
-<option>All Departments</option>
-<option>Air Traffic Services</option>
-<option>Ground Operations</option>
-<option>Aviation Security</option>
-<option>Engineering</option>
-</select>
-</div>
-<!-- Table -->
-<div class="overflow-x-auto">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="border-b border-outline-variant text-on-surface-variant font-caption text-caption uppercase">
-<th class="py-2 px-3">EPF &amp; NIC</th>
-<th class="py-2 px-3">Full Name &amp; Official Email</th>
-<th class="py-2 px-3">Department</th>
-<th class="py-2 px-3">Governance Role (RBAC)</th>
-<th class="py-2 px-3">Charter Status</th>
-<th class="py-2 px-3 text-right">Actions</th>
-</tr>
-</thead>
-<tbody id="membersTableBody" class="divide-y divide-outline-variant">
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3">
-<div class="font-mono font-semibold text-primary">EPF 10482</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 852019482V</div>
-</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">Chaminda Silva</div>
-<div class="text-caption font-caption text-on-surface-variant">chaminda.s@airport.lk</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Ground Operations</td>
-<td class="py-3 px-3">
-<select class="h-8 px-2 text-xs bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary">
-<option selected="">Member</option>
-<option>Super Admin</option>
-<option>Treasurer</option>
-<option>Secretary</option>
-</select>
-</td>
-<td class="py-3 px-3">
-<span class="bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded text-[11px] font-semibold inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[12px]">star</span>
-<span>Legacy (Pre-2020)</span>
-</span>
-</td>
-<td class="py-3 px-3 text-right">
-<button class="text-primary hover:text-on-primary-fixed-variant text-xs font-semibold px-2 py-1">Edit</button>
-</td>
-</tr>
-<!-- User 2 -->
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3">
-<div class="font-mono font-semibold text-primary">EPF 04219</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 791029482V</div>
-</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">Priyantha Dissanayake</div>
-<div class="text-caption font-caption text-on-surface-variant">priyantha.d@airport.lk</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Air Traffic Services</td>
-<td class="py-3 px-3">
-<select class="h-8 px-2 text-xs bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary">
-<option>Member</option>
-<option>Super Admin</option>
-<option selected="">Treasurer</option>
-<option>Secretary</option>
-</select>
-</td>
-<td class="py-3 px-3">
-<span class="bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded text-[11px] font-semibold inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[12px]">star</span>
-<span>Legacy (Pre-2020)</span>
-</span>
-</td>
-<td class="py-3 px-3 text-right">
-<button class="text-primary hover:text-on-primary-fixed-variant text-xs font-semibold px-2 py-1">Edit</button>
-</td>
-</tr>
-<!-- User 3 -->
-<tr class="hover:bg-surface transition-colors">
-<td class="py-3 px-3">
-<div class="font-mono font-semibold text-primary">EPF 11489</div>
-<div class="text-caption font-caption text-on-surface-variant">NIC: 962018491V</div>
-</td>
-<td class="py-3 px-3">
-<div class="font-medium text-on-surface">Kaveesha Rathnayake</div>
-<div class="text-caption font-caption text-on-surface-variant">kaveesha.r@airport.lk</div>
-</td>
-<td class="py-3 px-3 text-on-surface-variant">Aviation Security</td>
-<td class="py-3 px-3">
-<select class="h-8 px-2 text-xs bg-surface-container-lowest border border-outline-variant rounded text-on-surface focus:border-primary">
-<option selected="">Member</option>
-<option>Super Admin</option>
-<option>Treasurer</option>
-<option>Secretary</option>
-</select>
-</td>
-<td class="py-3 px-3">
-<span class="bg-surface-container text-on-surface border border-outline-variant px-2 py-0.5 rounded text-[11px]">Regular Member</span>
-</td>
-<td class="py-3 px-3 text-right">
-<button class="text-primary hover:text-on-primary-fixed-variant text-xs font-semibold px-2 py-1">Edit</button>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-<!-- TAB 5: WELFARE CLAIMS & ANNOUNCEMENTS -->
-<div class="tab-content hidden" id="welfare-claims">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md">
-<!-- Left: Bereavement & Aid Claims Queue -->
-<div class="lg:col-span-7 bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Bereavement &amp; Aid Claims Queue</h2>
-<p class="font-caption text-caption text-on-surface-variant">මරණාධාර සහ සුබසාධන හිමිකම් පෑම • Statutory Death Grant Ceiling: LKR 100,000.00</p>
-</div>
-<span class="bg-tertiary/10 text-tertiary px-2 py-1 rounded text-caption font-caption font-semibold">1 Active Claim</span>
-</div>
-<!-- Claim Card -->
-<div class="border border-outline-variant rounded p-space-sm bg-surface-container-lowest space-y-space-xs">
-<div class="flex items-center justify-between">
-<div>
-<span class="font-mono text-primary font-bold text-xs">#CLM-2025-012</span>
-<span class="ml-2 font-semibold text-on-surface">Immediate Death Benefit Claim</span>
-</div>
-<span class="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded text-caption font-caption font-medium">Under Statutory Review</span>
-</div>
-<div class="grid grid-cols-2 gap-2 text-xs text-on-surface-variant pt-1">
-<div>
-<span class="block text-outline">Applicant Member:</span>
-<span class="font-medium text-on-surface">EPF 08912 - R. M. Rajapakse</span>
-</div>
-<div>
-<span class="block text-outline">Deceased Relation:</span>
-<span class="font-medium text-on-surface">Mother (Certified Dependent)</span>
-</div>
-<div>
-<span class="block text-outline">Claimed Ceiling:</span>
-<span class="font-bold text-tertiary">LKR 100,000.00</span>
-</div>
-<div>
-<span class="block text-outline">Verified Proofs:</span>
-<span class="text-primary font-medium flex items-center gap-1 cursor-pointer hover:underline">
-<span class="material-symbols-outlined text-[14px]">attachment</span> Death Cert #DC-8491.pdf
-                </span>
-</div>
-</div>
-<div class="border-t border-outline-variant pt-2 flex items-center justify-between">
-<span class="text-caption font-caption text-emerald-700 font-medium">Rule VII Validated: Zero Dues Arrears</span>
-<div class="flex items-center gap-2">
-<button class="border border-outline-variant hover:bg-surface-container px-2.5 py-1 rounded text-xs text-on-surface" onclick="alert('Claim put on audit hold pending Executive Council quorum.')">Audit Hold</button>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-3 py-1 rounded text-xs font-semibold" onclick="alert('Disbursement Approved: LKR 100,000.00 will be remitted to beneficiary bank account.')">Approve &amp; Disburse</button>
-</div>
-</div>
-</div>
-<div class="mt-space-sm p-3 bg-surface-container-low border border-outline-variant rounded text-xs text-on-surface-variant flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-[18px]">info</span>
-<span>Historical Claims: 42 disbursed in FY 2024/2025 totalling LKR 3,850,000.00.</span>
-</div>
-</div>
-<!-- Right: Secretariat Announcement Publisher -->
-<div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Announcement Publisher</h2>
-<p class="font-caption text-caption text-on-surface-variant">නිවේදන නිකුත් කිරීම • Broadcast to Member Portal</p>
-</div>
-<span class="material-symbols-outlined text-primary text-[24px]">campaign</span>
-</div>
-<form class="space-y-space-xs" onsubmit="event.preventDefault(); alert('Announcement Published Successfully to PWA &amp; Member Portal!');">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Headline (English)</label>
-<input class="w-full h-[38px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" type="text" value="Annual General Meeting 2025 - Hall B Mattala Airport"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Headline (Sinhala - සිංහල)</label>
-<input class="w-full h-[38px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" type="text" value="2025 වාර්ෂික මහා සභා රැස්වීම - ශාලාව B මත්තල ගුවන්තොටුපළ"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Notice Priority &amp; Targeting</label>
-<select class="w-full h-[38px] px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface">
-<option>Normal Association Circular</option>
-<option selected="">Urgent High-Priority Constitutional Notice</option>
-<option>Financial Cutoff Warning</option>
-</select>
-</div>
-<div class="flex items-center gap-2 pt-1">
-<input checked="" class="rounded border-outline-variant text-primary focus:ring-primary" id="pinPwa" type="checkbox"/>
-<label class="text-caption font-caption text-on-surface" for="pinPwa">Pin to top of Member Dashboard &amp; PWA Offline Cache</label>
-</div>
-<div class="pt-2">
-<button class="w-full bg-primary hover:bg-on-primary-fixed-variant text-white h-[40px] rounded font-label-md text-label-md font-semibold transition-colors flex items-center justify-center gap-1" type="submit">
-<span class="material-symbols-outlined text-[18px]">send</span>
-<span>Publish Announcement</span>
-</button>
-</div>
-</form>
-</div>
-</div>
-</div>
-<!-- TAB 6: BANK QR & SYSTEM CONFIGURATION -->
-<div class="tab-content hidden" id="qr-uploader">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md">
-<!-- Left: Current LankaQR Spec -->
-<div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Official LankaQR Specification</h2>
-<p class="font-caption text-caption text-on-surface-variant">බැංකු QR කේත කළමනාකරණය</p>
-</div>
-<span class="material-symbols-outlined text-primary text-[24px]">qr_code_scanner</span>
-</div>
-<div class="flex flex-col items-center p-space-sm border border-outline-variant rounded bg-surface">
-<!-- Embedded Official BOC LankaQR Image -->
-<img alt="BOC Official LankaQR Code for MRIA Welfare Association" class="w-48 h-48 object-contain rounded bg-white p-2 border border-outline-variant shadow-sm" src="https://lh3.googleusercontent.com/aida/ALJJyrBtEElTBI2S7O4kihn21BIMhALhv5jjLmG9EYJ_lKKpq5fgmroBEqbRPaKoRX8pCeyIeNHwjDSZIz8A7ge81q0sEUANeZFCmKhuxdqDvl2C3xdbd8rnJpAeO-hsUzx_Q9el1iuRWxAIbiNPUHc8LpZu8hdORiiibm-aN0rEemNWrYc3fFoqr2umtvHG2Bg_T1gZT15WC2iy8UslX1TSWE_PRnCVqCzXsnJunap1MCRKwCwKvz_Xvb_q1w"/>
-<div class="w-full mt-space-sm space-y-1 text-xs">
-<div class="flex justify-between py-1 border-b border-outline-variant">
-<span class="text-outline">Issuing Institution:</span>
-<span class="font-semibold text-on-surface">Bank of Ceylon (BOC)</span>
-</div>
-<div class="flex justify-between py-1 border-b border-outline-variant">
-<span class="text-outline">Account Name:</span>
-<span class="font-semibold text-on-surface">MRIA Management Welfare Assoc</span>
-</div>
-<div class="flex justify-between py-1 border-b border-outline-variant">
-<span class="text-outline">Account Number:</span>
-<span class="font-mono font-bold text-primary">8201948201</span>
-</div>
-<div class="flex justify-between py-1">
-<span class="text-outline">Branch:</span>
-<span class="font-semibold text-on-surface">Mattala Airport Branch (742)</span>
-</div>
-</div>
-</div>
-<!-- Replace QR Dropzone -->
-<div class="mt-space-sm border-2 border-dashed border-outline-variant hover:border-primary rounded p-space-sm text-center cursor-pointer transition-colors bg-surface-container-lowest">
-<span class="material-symbols-outlined text-outline text-[28px]">cloud_upload</span>
-<div class="font-label-md text-label-md font-medium text-on-surface mt-1">Upload New LankaQR Replacement</div>
-<div class="text-caption font-caption text-on-surface-variant">Accepts PNG, JPG (Must meet Central Bank LankaQR Standards)</div>
-</div>
-</div>
-<!-- Right: Financial Parameters & Constitution Thresholds -->
-<div class="lg:col-span-7 bg-surface-container-lowest border border-outline-variant rounded p-space-md">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h2 class="text-headline-md font-headline-md text-on-surface">Financial Parameters &amp; Limits</h2>
-<p class="font-caption text-caption text-on-surface-variant">ව්‍යවස්ථාපිත පරාමිතීන් • Constitutionally mandated association limits</p>
-</div>
-<span class="material-symbols-outlined text-primary text-[24px]">tune</span>
-</div>
-<form class="space-y-space-sm" onsubmit="event.preventDefault(); alert('Financial parameters updated in global registry.');">
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Monthly Membership Dues (LKR)</label>
-<div class="relative">
-<span class="absolute left-3 top-2.5 font-bold text-xs text-outline">LKR</span>
-<input class="w-full h-[40px] pl-12 pr-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm font-semibold text-on-surface focus:border-primary" type="number" value="1000"/>
-</div>
-<span class="text-caption font-caption text-on-surface-variant">Default monthly staff contribution</span>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Admission / Joining Fee (LKR)</label>
-<div class="relative">
-<span class="absolute left-3 top-2.5 font-bold text-xs text-outline">LKR</span>
-<input class="w-full h-[40px] pl-12 pr-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm font-semibold text-on-surface focus:border-primary" type="number" value="2500"/>
-</div>
-<span class="text-caption font-caption text-on-surface-variant">One-time charter induction fee</span>
-</div>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Bereavement Aid Ceiling (LKR)</label>
-<div class="relative">
-<span class="absolute left-3 top-2.5 font-bold text-xs text-outline">LKR</span>
-<input class="w-full h-[40px] pl-12 pr-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm font-semibold text-on-surface focus:border-primary" type="number" value="100000"/>
-</div>
-<span class="text-caption font-caption text-on-surface-variant">Maximum per claim payout</span>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Arrears Grace Period (Days)</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm font-semibold text-on-surface focus:border-primary" type="number" value="60"/>
-<span class="text-caption font-caption text-on-surface-variant">Threshold before benefit suspension (Rule VII)</span>
-</div>
-</div>
-<div class="p-space-sm bg-surface-container-low border border-outline-variant rounded space-y-1">
-<div class="font-label-md text-label-md font-semibold text-on-surface flex items-center gap-1">
-<span class="material-symbols-outlined text-primary text-[18px]">verified</span>
-<span>Constitution Revision Lock</span>
-</div>
-<p class="text-caption font-caption text-on-surface-variant">
-                Modifications to dues and aid ceiling require 2/3 Executive Council quorum approval and digital counter-signature by President and Treasurer.
-              </p>
-</div>
-<div class="pt-2 flex justify-end">
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-space-md h-[40px] rounded font-label-md text-label-md font-semibold transition-colors flex items-center gap-1" type="submit">
-<span class="material-symbols-outlined text-[18px]">save</span>
-<span>Save Global Parameters</span>
-</button>
-</div>
-</form>
-</div>
-</div>
-</div>
-</main>
-<!-- MODAL: REVIEW SLIP MODAL -->
-<div class="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" id="slipModal">
-<div class="bg-surface-container-lowest border border-outline-variant rounded max-w-lg w-full p-space-md shadow-xl">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h3 class="text-headline-sm font-headline-sm text-on-surface">Review Deposit Slip</h3>
-<span class="font-caption text-caption text-on-surface-variant">High-Resolution Audit Review</span>
-</div>
-<button class="text-outline hover:text-on-surface" onclick="closeModal('slipModal')">
-<span class="material-symbols-outlined text-[24px]">close</span>
-</button>
-</div>
-<div class="bg-surface border border-outline-variant rounded p-3 text-center mb-space-sm">
-<img id="modalSlipImg" class="max-h-64 mx-auto object-contain rounded my-2" src="" alt="Deposit Slip Preview" />
-<div class="text-caption font-caption text-outline">Terminal CDM Transaction • Authenticated Bank Ref</div>
-</div>
-<div class="space-y-1 text-xs mb-space-md">
-<div class="flex justify-between py-1 border-b border-outline-variant">
-<span class="text-outline">Claimed Member:</span>
-<span class="font-semibold text-on-surface" id="modalMember">Chaminda Silva</span>
-</div>
-<div class="flex justify-between py-1 border-b border-outline-variant">
-<span class="text-outline">Submitted Amount:</span>
-<span class="font-bold text-primary" id="modalAmount">LKR 1,000.00</span>
-</div>
-<div class="flex justify-between py-1">
-<span class="text-outline">Recorded Timestamp:</span>
-<span class="text-on-surface-variant" id="modalTime">2025-05-24 09:12 AM</span>
-</div>
-</div>
-<div class="flex items-center justify-end gap-space-xs pt-space-xs border-t border-outline-variant">
-<button class="border border-outline-variant px-3 py-1.5 rounded text-xs text-on-surface" onclick="closeModal('slipModal')">Close Preview</button>
-<button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1" onclick="alert('FIFO Settlement Executed.'); closeModal('slipModal');">
-<span class="material-symbols-outlined text-[14px]">check</span>
-<span>Approve Slip</span>
-</button>
-</div>
-</div>
-</div>
-<!-- MODAL: ONBOARD NEW MEMBER -->
-<div class="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" id="onboardModal">
-<div class="bg-surface-container-lowest border border-outline-variant rounded max-w-xl w-full p-space-md shadow-xl">
-<div class="flex items-center justify-between pb-space-sm border-b border-outline-variant mb-space-sm">
-<div>
-<h3 class="text-headline-sm font-headline-sm text-on-surface">Register New Welfare Member</h3>
-<span class="font-caption text-caption text-on-surface-variant">නව සාමාජිකයෙකු ලියාපදිංචි කිරීම</span>
-</div>
-<button class="text-outline hover:text-on-surface" onclick="closeModal('onboardModal')">
-<span class="material-symbols-outlined text-[24px]">close</span>
-</button>
-</div>
-<form class="space-y-space-sm" onsubmit="event.preventDefault(); alert('Member Registered Successfully with EPF verification.'); closeModal('onboardModal');">
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Staff EPF Number</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm font-mono text-on-surface focus:border-primary" placeholder="e.g. 11982" required="" type="text"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">National Identity Card (NIC)</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" placeholder="e.g. 912049182V" required="" type="text"/>
-</div>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Full Name (As per Airport Payroll)</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" placeholder="e.g. Sunil Shantha Jayawardena" required="" type="text"/>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Airport Official Gmail / Email</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" placeholder="sunil.j@airport.lk" required="" type="email"/>
-</div>
-<div>
-<label class="block font-label-md text-label-md text-on-surface mb-1">Mobile / WhatsApp Number</label>
-<input class="w-full h-[40px] px-3 bg-surface-container-lowest border border-outline-variant rounded text-body-sm text-on-surface focus:border-primary" placeholder="077XXXXXXX" required="" type="tel"/>
-</div>
-</div>
-<div class="flex items-center gap-2 pt-1">
-<input class="rounded border-outline-variant text-primary focus:ring-primary" id="legacyCheck" type="checkbox"/>
-<label class="text-caption font-caption text-on-surface" for="legacyCheck">Designate as Legacy Member (Charter Pre-2020 Mattala Induction)</label>
-</div>
-<div class="flex items-center justify-end gap-space-xs pt-space-xs border-t border-outline-variant">
-<button class="border border-outline-variant px-3 py-1.5 rounded text-xs text-on-surface" onclick="closeModal('onboardModal')" type="button">Cancel</button>
-<button class="bg-primary hover:bg-on-primary-fixed-variant text-white px-4 py-1.5 rounded text-xs font-semibold" type="submit">Confirm Registration</button>
-</div>
-</form>
-</div>
-</div>
-<!-- FOOTER -->
-<footer class="bg-surface border-t border-outline-variant mt-space-xl">
-<div class="w-full max-w-7xl mx-auto px-gutter py-space-xl flex flex-col md:flex-row items-center justify-between gap-space-md">
-<div class="flex flex-col text-left">
-<span class="text-label-md font-label-md text-on-surface uppercase tracking-wider font-semibold">MRIA Management Welfare Association</span>
-<span class="text-caption font-caption text-on-surface-variant mt-1">
-          © MRIA Management Welfare Association (MRIA සුබසාධක කළමනාකරණ සංගමය). Contact: 0759555924.
-        </span>
-</div>
-<div class="flex flex-wrap items-center gap-space-md text-body-sm font-body-sm text-on-surface-variant">
-<a class="hover:text-primary transition-colors duration-150 cursor-pointer" href="#constitution">Constitution</a>
-<a class="hover:text-primary transition-colors duration-150 cursor-pointer" href="#privacy">Privacy Policy</a>
-<a class="hover:text-primary transition-colors duration-150 cursor-pointer" href="#security">Security Terms</a>
-<a class="hover:text-primary transition-colors duration-150 cursor-pointer" href="tel:0759555924">Contact: 0759555924</a>
-</div>
-</div>
-</footer>
-<!-- Management Console Modular Controller -->
-<script type="module" src="/js/page-admin.js"></script>
-</body></html>
+
+        <!-- Dashboard Link -->
+        <a href="/dashboard.html" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-outline-variant hover:border-primary text-xs font-bold text-on-surface hover:text-primary transition-colors shadow-sm">
+          <span class="material-symbols-outlined text-[16px]">dashboard</span>
+          <span data-i18n="my_dashboard">My Dashboard</span>
+        </a>
+
+        <!-- Language Switcher -->
+        <button id="langToggleBtn" class="lang-toggle-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-outline-variant hover:border-primary text-xs font-semibold bg-white transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[16px] text-primary">translate</span>
+          <span>EN | සිං</span>
+        </button>
+
+        <!-- Sign Out -->
+        <button data-action="signout" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-semibold transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[16px]">logout</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- OFFLINE BANNER -->
+  <div id="offlineBanner" class="hidden bg-amber-500 text-white px-4 py-2 text-center text-xs font-semibold shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-[18px]">wifi_off</span>
+      <span data-i18n="offline_alert">You are currently offline. Financial mutations are paused until connection is restored.</span>
+    </div>
+  </div>
+
+  <!-- MAIN ADMIN CONSOLE -->
+  <main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- NAVIGATION TABS -->
+    <div class="bg-white border border-outline-variant rounded-2xl p-1.5 shadow-sm overflow-x-auto">
+      <nav class="flex items-center gap-1 text-xs font-bold whitespace-nowrap" id="adminTabsNav">
+        
+        <!-- Tab: Slips Queue -->
+        <button id="tab-btn-slips" onclick="switchAdminTab('slips')" class="tab-button active-tab flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all">
+          <span class="material-symbols-outlined text-[18px]">fact_check</span>
+          <span data-i18n="tab_slips">Slip Approvals</span>
+          <span id="tabSlipsCount" class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">0</span>
+        </button>
+
+        <!-- Tab: Cash Desk -->
+        <button id="tab-btn-cash" onclick="switchAdminTab('cash')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">payments</span>
+          <span data-i18n="tab_cash">Cash Collection</span>
+        </button>
+
+        <!-- Tab: Treasury Ledger & Statements -->
+        <button id="tab-btn-treasury" onclick="switchAdminTab('treasury')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">account_balance</span>
+          <span data-i18n="tab_treasury">Society Treasury</span>
+        </button>
+
+        <!-- Tab: Secretary Member Profiles -->
+        <button id="tab-btn-secretary" onclick="switchAdminTab('secretary')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">badge</span>
+          <span data-i18n="tab_secretary">Member Profiles</span>
+          <span id="tabPendingMembersCount" class="px-2 py-0.5 rounded-full bg-sky-100 text-primary text-[10px] font-bold">0</span>
+        </button>
+
+        <!-- Tab: Welfare Claims -->
+        <button id="tab-btn-claims" onclick="switchAdminTab('claims')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">volunteer_activism</span>
+          <span data-i18n="tab_claims">Benefit Grants</span>
+        </button>
+
+        <!-- Tab: Defaulters Roster -->
+        <button id="tab-btn-defaulters" onclick="switchAdminTab('defaulters')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">person_off</span>
+          <span data-i18n="tab_defaulters">Defaulters (31st)</span>
+        </button>
+
+        <!-- Tab: CMS & Constitution -->
+        <button id="tab-btn-cms" onclick="switchAdminTab('cms')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">tune</span>
+          <span data-i18n="tab_cms">Content &amp; Constitution</span>
+        </button>
+
+        <!-- Tab: Audit Logs (Admin only) -->
+        <button id="tab-btn-audit" onclick="switchAdminTab('audit')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">verified_user</span>
+          <span>Audit Trail</span>
+        </button>
+
+      </nav>
+    </div>
+
+    <!-- ================= TAB 1: SLIP APPROVALS QUEUE ================= -->
+    <div id="tab-content-slips" class="tab-content block space-y-4">
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[22px]">receipt</span>
+            <h3 class="font-bold text-base text-on-surface">Bank Deposit Slip Approval Queue</h3>
+          </div>
+          <span class="text-xs text-on-surface-variant font-medium">FIFO Reconciled into Ledger</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Date</th>
+                <th class="py-2.5 px-3">Member Details</th>
+                <th class="py-2.5 px-3">Category</th>
+                <th class="py-2.5 px-3">Amount</th>
+                <th class="py-2.5 px-3">Slip Proof</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="slipApprovalQueueBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="6" class="py-8 text-center text-on-surface-variant">Loading pending slips...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TAB 2: CASH COLLECTION DESK ================= -->
+    <div id="tab-content-cash" class="tab-content hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Cash Intake Form -->
+        <div class="lg:col-span-6 bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center gap-2 pb-3 border-b border-outline-variant">
+            <span class="material-symbols-outlined text-primary text-[22px]">payments</span>
+            <h3 class="font-bold text-base text-on-surface">Direct Cash Intake Desk</h3>
+          </div>
+
+          <form id="cashCollectionForm" class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">Select Member (EPF / Name)</label>
+              <select id="cashMemberSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" required>
+                <option value="" disabled selected>-- Select Member --</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">Payment Category</label>
+                <select id="cashCategorySelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium">
+                  <option value="monthly_due">Monthly Due</option>
+                  <option value="admission_fee">Admission Fee</option>
+                  <option value="donation">Donation / Aid</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">Amount (LKR)</label>
+                <input type="number" id="cashAmountInput" value="1000" min="50" step="50" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold" required />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">Collection Date</label>
+              <input type="date" id="cashDateInput" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">Notes / Remarks</label>
+              <input type="text" id="cashNotesInput" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" placeholder="e.g. May contribution paid at office" />
+            </div>
+
+            <button type="submit" class="mutation-btn w-full py-2.5 px-4 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">verified</span>
+              <span>Issue Cash Receipt &amp; Settle Dues</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Generated Receipt Preview Container -->
+        <div class="lg:col-span-6 bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
+          <h4 class="font-bold text-sm text-on-surface pb-3 border-b border-outline-variant mb-4">
+            Digital Receipt Voucher Preview
+          </h4>
+          <div id="cashReceiptPreview" class="text-center py-12 text-on-surface-variant text-xs">
+            Log a cash transaction to preview and print the official voucher.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================= TAB 3: SOCIETY TREASURY & EXPORT ENGINE ================= -->
+    <div id="tab-content-treasury" class="tab-content hidden space-y-6">
+      
+      <!-- 3 Asset Segregated Accounts Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        <!-- Total Funds -->
+        <div class="bg-sky-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-200">Total Liquid Assets</span>
+          <div id="treasuryTotalFunds" class="text-2xl font-extrabold my-2">LKR 0.00</div>
+          <span class="text-[11px] text-sky-200">Across 3 Accounts</span>
+        </div>
+
+        <!-- BOC Savings -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">BOC Savings</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
+          </div>
+          <div id="balBocSavings" class="text-xl font-extrabold text-on-surface my-2">LKR 0.00</div>
+          <span class="text-[11px] text-on-surface-variant">Acc: 8201948201</span>
+        </div>
+
+        <!-- Cash in Hand -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Cash in Hand</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">payments</span>
+          </div>
+          <div id="balCashInHand" class="text-xl font-extrabold text-on-surface my-2">LKR 0.00</div>
+          <span class="text-[11px] text-on-surface-variant">Petty &amp; Desk Cash</span>
+        </div>
+
+        <!-- Fixed Deposits -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Fixed Deposits</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">lock_clock</span>
+          </div>
+          <div id="balFixedDeposits" class="text-xl font-extrabold text-on-surface my-2">LKR 0.00</div>
+          <span class="text-[11px] text-on-surface-variant">Term Deposits</span>
+        </div>
+
+      </div>
+
+      <!-- Treasury Reporting Engine & Statements -->
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-outline-variant">
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Treasury Statement &amp; Export Engine</h3>
+            <p class="text-xs text-on-surface-variant">Generate date-filtered statements in clean RFC 4180 CSV and CSS-paged printable PDF.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="setStatementPeriod('monthly')" class="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-bold hover:bg-surface">Current Month</button>
+            <button onclick="setStatementPeriod('yearly')" class="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-bold hover:bg-surface">Current Year</button>
+          </div>
+        </div>
+
+        <!-- Date Range Filter & Triggers -->
+        <div class="flex flex-col md:flex-row items-center gap-3">
+          <div class="flex items-center gap-2 w-full md:w-auto">
+            <span class="text-xs font-semibold text-on-surface">From:</span>
+            <input type="date" id="stmtStartDate" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" />
+          </div>
+          <div class="flex items-center gap-2 w-full md:w-auto">
+            <span class="text-xs font-semibold text-on-surface">To:</span>
+            <input type="date" id="stmtEndDate" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" />
+          </div>
+          <button id="btnFetchStatement" class="w-full md:w-auto px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm">
+            Fetch Statement
+          </button>
+          <div class="flex items-center gap-2 w-full md:w-auto md:ml-auto">
+            <button id="btnExportCsv" class="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 shadow-sm">
+              <span class="material-symbols-outlined text-[16px]">download</span>
+              <span>Export CSV (RFC 4180)</span>
+            </button>
+            <button id="btnPrintPdf" class="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-sky-800 text-white rounded-xl text-xs font-bold hover:bg-sky-900 shadow-sm">
+              <span class="material-symbols-outlined text-[16px]">print</span>
+              <span>Print / Save PDF</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Statement Preview Tables -->
+        <div id="statementPreviewArea" class="space-y-4 pt-2">
+          <!-- Summaries table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Asset Account</th>
+                  <th class="py-2.5 px-3 text-right">Opening Balance</th>
+                  <th class="py-2.5 px-3 text-right">Period Inflow</th>
+                  <th class="py-2.5 px-3 text-right">Period Outflow</th>
+                  <th class="py-2.5 px-3 text-right">Closing Balance</th>
+                </tr>
+              </thead>
+              <tbody id="statementSummariesBody" class="divide-y divide-outline-variant font-mono">
+                <tr><td colspan="5" class="py-6 text-center font-sans text-on-surface-variant">Select dates and click "Fetch Statement" to inspect ledger records.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Record Internal Treasury Transaction Form -->
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+        <h4 class="font-bold text-sm text-on-surface pb-3 border-b border-outline-variant">
+          Record Internal Treasury Transaction (Transfer / Adjustment)
+        </h4>
+        <form id="treasuryTxForm" class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Target Account</label>
+            <select id="txAccountSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium">
+              <option value="boc_savings">BOC Savings Account</option>
+              <option value="cash_in_hand">Cash in Hand</option>
+              <option value="fixed_deposits">Fixed Deposits</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Transaction Type</label>
+            <select id="txTypeSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium">
+              <option value="inflow">Inflow (+)</option>
+              <option value="outflow">Outflow (-)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Amount (LKR)</label>
+            <input type="number" id="txAmountInput" min="10" step="10" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-semibold" required />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Description / Ref</label>
+            <input type="text" id="txDescInput" placeholder="e.g. Bank deposit from cash box" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+          </div>
+          <div class="md:col-span-4 flex justify-end">
+            <button type="submit" class="mutation-btn px-5 py-2.5 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm">
+              Commit Treasury Transaction
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB 4: SECRETARY MEMBER PROFILES & ONBOARDING ================= -->
+    <div id="tab-content-secretary" class="tab-content hidden space-y-6">
+      
+      <!-- Member Profiles Directory -->
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-outline-variant gap-3">
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Member Records &amp; Directory</h3>
+            <p class="text-xs text-on-surface-variant">Secretary profile management (CRUD on Name, EPF, Designation, Phone).</p>
+          </div>
+          <button onclick="openModal('addMemberModal')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm">
+            <span class="material-symbols-outlined text-[16px]">person_add</span>
+            <span>Add Pre-Registered Member</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">EPF No</th>
+                <th class="py-2.5 px-3">Full Name</th>
+                <th class="py-2.5 px-3">Designation</th>
+                <th class="py-2.5 px-3">Email &amp; Phone</th>
+                <th class="py-2.5 px-3">Role</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="memberDirectoryBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="7" class="py-8 text-center text-on-surface-variant">Loading member directory...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB 5: WELFARE BENEFIT CLAIMS ================= -->
+    <div id="tab-content-claims" class="tab-content hidden space-y-4">
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Welfare Benefit Grants Review</h3>
+            <p class="text-xs text-on-surface-variant">Committee application evaluations and treasury disbursements.</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Date</th>
+                <th class="py-2.5 px-3">Applicant (EPF)</th>
+                <th class="py-2.5 px-3">Benefit Type</th>
+                <th class="py-2.5 px-3">Requested</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="benefitClaimsQueueBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="6" class="py-8 text-center text-on-surface-variant">Loading welfare claims...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TAB 6: DEFAULTERS ROSTER ================= -->
+    <div id="tab-content-defaulters" class="tab-content hidden space-y-4">
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Defaulters Roster (31st Rule Invariant)</h3>
+            <p class="text-xs text-on-surface-variant">Members with overdue dues past the 31st settlement deadline.</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">EPF No</th>
+                <th class="py-2.5 px-3">Member Name</th>
+                <th class="py-2.5 px-3">Billing Month</th>
+                <th class="py-2.5 px-3">Arrears Amount</th>
+                <th class="py-2.5 px-3">Due Date</th>
+              </tr>
+            </thead>
+            <tbody id="defaultersTableBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="5" class="py-8 text-center text-on-surface-variant">Loading defaulters roster...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TAB 7: CMS & CONSTITUTION ================= -->
+    <div id="tab-content-cms" class="tab-content hidden space-y-6">
+      
+      <!-- Constitution Dual-Slot CMS -->
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+        <h4 class="font-bold text-sm text-on-surface pb-3 border-b border-outline-variant">
+          Constitution PDF Management (Dual-Slot Sinhala &amp; English)
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          
+          <div class="p-4 border border-outline-variant rounded-xl bg-surface space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-sm text-on-surface">Sinhala Constitution (ව්‍යවස්ථාව)</span>
+              <span class="px-2 py-0.5 rounded bg-sky-100 text-primary font-bold">constitution_si.pdf</span>
+            </div>
+            <p class="text-on-surface-variant">Active file served to members when Sinhala language is toggled.</p>
+            <div class="flex items-center gap-2">
+              <button onclick="window.open('/assets/docs/constitution_si.pdf', '_blank')" class="px-3 py-1.5 rounded-lg border border-outline-variant bg-white font-bold hover:border-primary">
+                Preview File
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 border border-outline-variant rounded-xl bg-surface space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-sm text-on-surface">English Constitution</span>
+              <span class="px-2 py-0.5 rounded bg-sky-100 text-primary font-bold">constitution_en.pdf</span>
+            </div>
+            <p class="text-on-surface-variant">Active file served to members when English language is toggled.</p>
+            <div class="flex items-center gap-2">
+              <button onclick="window.open('/assets/docs/constitution_en.pdf', '_blank')" class="px-3 py-1.5 rounded-lg border border-outline-variant bg-white font-bold hover:border-primary">
+                Preview File
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB 8: IMMUTABLE AUDIT TRAIL ================= -->
+    <div id="tab-content-audit" class="tab-content hidden space-y-4">
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Immutable System Audit Trail</h3>
+            <p class="text-xs text-on-surface-variant">PostgreSQL append-only cryptographic change ledger.</p>
+          </div>
+          <span class="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200">
+            Protected by Triggers
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Timestamp</th>
+                <th class="py-2.5 px-3">Actor (EPF / Email)</th>
+                <th class="py-2.5 px-3">Action</th>
+                <th class="py-2.5 px-3">Target Table</th>
+                <th class="py-2.5 px-3">Changes (Diff)</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsBody" class="divide-y divide-outline-variant font-mono">
+              <tr><td colspan="5" class="py-8 text-center font-sans text-on-surface-variant">Loading immutable audit logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- EDIT MEMBER PROFILE MODAL (SECRETARY) -->
+  <div id="editMemberModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <h4 class="font-bold text-sm text-on-surface">Edit Member Demographic Profile</h4>
+        <button onclick="closeModal('editMemberModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form id="editMemberForm" class="space-y-3 text-xs">
+        <input type="hidden" id="editMemberId" />
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Full Name</label>
+          <input type="text" id="editMemberFullName" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">EPF Number</label>
+            <input type="text" id="editMemberEpf" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Designation</label>
+            <input type="text" id="editMemberDesignation" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Phone</label>
+            <input type="tel" id="editMemberPhone" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">NIC</label>
+            <input type="text" id="editMemberNic" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('editMemberModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold">Cancel</button>
+          <button type="submit" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm">Save Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD PRE-REGISTERED MEMBER MODAL -->
+  <div id="addMemberModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <h4 class="font-bold text-sm text-on-surface">Add Pre-Registered Member</h4>
+        <button onclick="closeModal('addMemberModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form id="addMemberForm" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Google Email Address</label>
+          <input type="email" id="addMemberEmail" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+        </div>
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Full Name</label>
+          <input type="text" id="addMemberFullName" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">EPF Number</label>
+            <input type="text" id="addMemberEpf" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Designation</label>
+            <input type="text" id="addMemberDesignation" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" required />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Role</label>
+            <select id="addMemberRole" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium">
+              <option value="member">Member</option>
+              <option value="committee_member">Committee Member</option>
+              <option value="treasurer">Treasurer</option>
+              <option value="secretary">Secretary</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Phone</label>
+            <input type="tel" id="addMemberPhone" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('addMemberModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold">Cancel</button>
+          <button type="submit" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm">Create Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- VIEW SLIP MODAL -->
+  <div id="viewSlipModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-2xl w-full p-5 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-3">
+        <h4 class="font-bold text-sm text-on-surface">Deposit Slip Preview</h4>
+        <button onclick="closeModal('viewSlipModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="slipViewerContent" class="min-h-[300px] flex items-center justify-center">
+        <!-- Rendered image / pdf embed -->
+      </div>
+    </div>
+  </div>
+
+  <!-- UNIFIED FOOTER -->
+  <footer class="bg-white border-t border-outline-variant w-full py-6 mt-12">
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-on-surface-variant">
+      <div class="font-semibold text-on-surface" data-i18n="footer_text">
+        © MRIA කළමනාකාර සුබසාධක සංගමය
+      </div>
+      <div>
+        <span>Mattala Rajapaksa International Airport</span>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/js/page-admin.js"></script>
+</body>
+</html>

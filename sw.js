@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mria-welfare-v2';
+const CACHE_NAME = 'mria-welfare-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -10,6 +10,8 @@ const STATIC_ASSETS = [
   '/assets/default-bank-qr.svg',
   '/assets/icon-192.png',
   '/assets/icon-512.png',
+  '/assets/docs/constitution_si.pdf',
+  '/assets/docs/constitution_en.pdf',
   '/js/config.js',
   '/js/i18n.js',
   '/js/auth.js',
@@ -17,6 +19,7 @@ const STATIC_ASSETS = [
   '/js/storage.js',
   '/js/receipt.js',
   '/js/ui.js',
+  '/js/treasury-export.js',
   '/js/page-index.js',
   '/js/page-dashboard.js',
   '/js/page-admin.js',
@@ -52,11 +55,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first strategy for navigation requests and Supabase REST reads, falling back to cache
+  // Cache-First for web fonts and static images
+  if (
+    url.hostname.includes('fonts.googleapis.com') ||
+    url.hostname.includes('fonts.gstatic.com') ||
+    url.pathname.startsWith('/assets/')
+  ) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return networkResponse;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-First for HTML navigations and scripts
   event.respondWith(
     fetch(request)
       .then((networkResponse) => {
-        // Cache successful responses for local static files
         if (
           networkResponse &&
           networkResponse.status === 200 &&
@@ -74,7 +97,6 @@ self.addEventListener('fetch', (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If HTML navigation fails offline, fallback to cached dashboard or index
           if (request.headers.get('accept')?.includes('text/html')) {
             return caches.match('/dashboard.html') || caches.match('/index.html');
           }

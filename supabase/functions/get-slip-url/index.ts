@@ -2,14 +2,18 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient } from "@supabase/supabase-js";
-import { corsHeaders } from "../_shared/cors.ts";
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
 
-const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID") || "";
-const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID") || "";
-const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") || "";
+const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID") || "2d2c1e1d9771b3617b5649eafa1e1885";
+const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID") || "c85474fe67c365c981fc37de64eb9931";
+const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") || "438ff1d076a0b53aa4f8781f504b7c5d2d8350c9e185423881f35f3d19a94866";
 const R2_BUCKET_NAME = Deno.env.get("R2_BUCKET_NAME") || "mria-slips-private";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://aqbpanrsotkpnqxhlces.supabase.co";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 serve(async (req) => {
@@ -66,7 +70,7 @@ serve(async (req) => {
       });
     }
 
-    const isStaff = ["admin", "manager", "official", "treasurer"].includes(member.role);
+    const isStaff = ["admin", "manager", "secretary", "treasurer", "committee_member", "official"].includes(member.role);
 
     if (!isStaff) {
       // General member can only view slips for their own payments

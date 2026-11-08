@@ -1,24 +1,50 @@
 {
-  "name": "MRIA Management Welfare Association",
+  "name": "MRIA කළමනාකාර සුබසාධක සංගමය",
   "short_name": "MRIA Welfare",
   "description": "MRIA Management Welfare Association PWA - Digital Member Portal & Welfare Ledger",
   "start_url": "/index.html",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
-  "theme_color": "#0284C7",
+  "background_color": "#f8fafc",
+  "theme_color": "#0284c7",
   "orientation": "portrait-primary",
+  "lang": "si",
+  "categories": ["finance", "productivity"],
   "icons": [
     {
-      "src": "assets/icon-192.png",
+      "src": "/assets/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "/assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Dues Ledger",
+      "short_name": "Dues Ledger",
+      "description": "View monthly dues and payment ledger",
+      "url": "/dashboard.html#dues",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Submit Bank Slip",
+      "short_name": "Upload Slip",
+      "description": "Upload a bank payment slip",
+      "url": "/dashboard.html#upload",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Treasury & Cash Desk",
+      "short_name": "Treasury",
+      "description": "Manage treasury and cash collections",
+      "url": "/admin.html#treasury",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

@@ -12,7 +12,7 @@ import {
 } from "./api.js";
 import { uploadBankSlip } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
-import { initLanguage, t } from "./i18n.js";
+import { initLanguage, t, getLanguage } from "./i18n.js";
 import {
   showToast,
   openModal,
@@ -21,10 +21,16 @@ import {
   initOfflineDetection,
   formatCurrency,
   formatDate,
+  openContactModal,
+  openDuesBreakdownModal,
+  downloadConstitutionPdf,
 } from "./ui.js";
 
 let currentMember = null;
-let currentBenefitTypes = [];
+let currentDues = [];
+let currentPayments = [];
+let currentClaims = [];
+let currentBalanceInfo = {};
 
 document.addEventListener("DOMContentLoaded", async () => {
   initLanguage();
@@ -38,50 +44,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { user, member } = authState;
   currentMember = member;
 
-  // 2. Render user identity
+  // 2. Render user identity in header
   renderUserIdentity(member);
 
   // 3. Load all dashboard metrics and datasets
   await refreshDashboardData();
 
-  // 4. Attach event listeners for Modals & Actions
+  // 4. Attach event listeners
   setupActionListeners();
 });
 
 function renderUserIdentity(member) {
-  const nameDisplays = document.querySelectorAll("[data-member-name], #memberNameDisplay");
-  nameDisplays.forEach((el) => (el.textContent = member.full_name || member.email));
+  const nameEl = document.getElementById("memberFullNameDisplay");
+  if (nameEl) nameEl.textContent = member.full_name || member.email;
 
-  const roleDisplays = document.querySelectorAll("[data-member-role], #memberRoleDisplay");
-  roleDisplays.forEach((el) => {
-    el.textContent = t(`role_${member.role}`) || member.role.toUpperCase();
-  });
+  const epfEl = document.getElementById("memberEpfDisplay");
+  if (epfEl) epfEl.textContent = member.epf_number || "Pending";
 
-  // If user has administrative privileges, display Admin link
-  const staffRoles = ["admin", "manager", "official", "treasurer"];
+  const desigEl = document.getElementById("memberDesignationDisplay");
+  if (desigEl) desigEl.textContent = member.designation || "Staff Member";
+
+  // Check administrative roles for Admin Console visibility
+  const staffRoles = ["admin", "manager", "secretary", "treasurer", "committee_member"];
   if (staffRoles.includes(member.role)) {
-    const adminLinkContainer = document.getElementById("adminPortalLinkContainer");
-    if (adminLinkContainer) {
-      adminLinkContainer.classList.remove("hidden");
-    } else {
-      // Append an Admin Console button in the top navbar if not present
-      const navRight = document.querySelector("header nav, nav .flex.items-center");
-      if (navRight && !document.getElementById("adminConsoleBtn")) {
-        const adminBtn = document.createElement("a");
-        adminBtn.id = "adminConsoleBtn";
-        adminBtn.href = "/admin.html";
-        adminBtn.className = "flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors";
-        adminBtn.innerHTML = `
-          <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
-          <span>Admin Console</span>
-        `;
-        navRight.prepend(adminBtn);
-      }
-    }
+    const adminLink = document.getElementById("adminPortalLinkContainer");
+    if (adminLink) adminLink.classList.remove("hidden");
   }
 
   // Wire Sign Out buttons
-  document.querySelectorAll("[data-action='signout'], #signOutBtn").forEach((btn) => {
+  document.querySelectorAll("[data-action='signout']").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.preventDefault();
       await signOut();
@@ -93,9 +84,9 @@ async function refreshDashboardData() {
   if (!currentMember) return;
 
   try {
-    // A. Announcements
+    // A. Announcements & Notification Center
     const announcements = await getAnnouncements();
-    renderAnnouncements(announcements);
+    renderNotificationsCenter(announcements);
 
     // B. Bank QR Code
     const bankQrSetting = await getSystemSetting("bank_qr");
@@ -104,91 +95,156 @@ async function refreshDashboardData() {
       if (qrImg) qrImg.src = bankQrSetting.url;
     }
 
-    // C. Financial Metrics & Dues Balance
-    const balanceInfo = await calculateMemberBalance(currentMember);
-    renderMetrics(balanceInfo);
+    // C. Dues & Balance Info
+    currentDues = await getMemberDues(currentMember.id);
+    currentBalanceInfo = await calculateMemberBalance(currentMember);
+    renderMetrics(currentBalanceInfo, currentDues);
+    renderDuesLedger(currentDues);
 
-    // D. Monthly Dues Ledger Table
-    const dues = await getMemberDues(currentMember.id);
-    renderDuesLedger(dues);
+    // D. Payment History
+    currentPayments = await getMemberPayments(currentMember.id);
+    renderPaymentHistory(currentPayments);
 
-    // E. Payments & Slips List
-    const payments = await getMemberPayments(currentMember.id);
-    renderPaymentHistory(payments);
-
-    // F. Welfare Benefit Claims & Modal options
-    currentBenefitTypes = await getBenefitTypes();
-    populateBenefitTypesDropdown(currentBenefitTypes);
-    const claims = await getMemberClaims(currentMember.id);
-    renderClaimsSummary(claims);
+    // E. Welfare Benefit Claims
+    const benefitTypes = await getBenefitTypes();
+    populateBenefitTypesDropdown(benefitTypes);
+    currentClaims = await getMemberClaims(currentMember.id);
+    renderClaimsSummary(currentClaims);
 
   } catch (err) {
     console.error("Failed to refresh dashboard data:", err);
-    showToast("Error loading financial data.", "error");
+    showToast("Error loading financial ledger data.", "error");
   }
 }
 
-function renderAnnouncements(announcements) {
-  const container = document.getElementById("announcementsBanner") || document.getElementById("announcementsContainer");
+/**
+ * Top 3 Dismissible Dashboard Notification Center
+ */
+function renderNotificationsCenter(announcements) {
+  const container = document.getElementById("dashboardNotificationCenter");
   if (!container) return;
 
-  if (!announcements || announcements.length === 0) {
-    container.classList.add("hidden");
-    return;
+  let dismissed = [];
+  try {
+    dismissed = JSON.parse(localStorage.getItem("mria_dismissed_announcements") || "[]");
+  } catch (e) {
+    dismissed = [];
   }
 
-  const pinned = announcements.find((a) => a.is_pinned) || announcements[0];
-  const lang = localStorage.getItem("mria_lang") || "en";
-  const title = lang === "si" ? pinned.title_si : pinned.title_en;
-  const content = lang === "si" ? pinned.content_si : pinned.content_en;
+  const items = [];
 
-  container.classList.remove("hidden");
-  container.innerHTML = `
-    <div class="flex items-start gap-3 p-3 bg-sky-50/80 border border-sky-100 rounded-lg text-slate-800">
-      <span class="material-symbols-outlined text-sky-600 mt-0.5 text-xl">campaign</span>
-      <div class="flex-1 text-sm">
-        <div class="flex items-center gap-2">
-          <span class="font-semibold text-slate-900">${title}</span>
-          ${pinned.priority === "urgent" ? '<span class="px-1.5 py-0.2 text-[10px] font-bold bg-rose-100 text-rose-700 rounded">URGENT</span>' : ''}
-        </div>
-        <p class="text-slate-600 text-xs mt-0.5 leading-relaxed">${content}</p>
-      </div>
-    </div>
-  `;
-}
+  // 1. Pending dues alert if balance > 0
+  if (currentBalanceInfo.totalPending > 0 && !dismissed.includes("alert_dues_overdue")) {
+    items.push({
+      id: "alert_dues_overdue",
+      isAlert: true,
+      title: t("outstanding_dues"),
+      content: t("alert_dues_overdue") + ` (${formatCurrency(currentBalanceInfo.totalPending)})`,
+      priority: "urgent",
+    });
+  }
 
-function renderMetrics(balanceInfo) {
-  // 1. Outstanding Pending Dues
-  const duesDisplay = document.querySelector("[data-metric='outstanding-dues'], #outstandingDuesDisplay");
-  if (duesDisplay) {
-    duesDisplay.textContent = formatCurrency(balanceInfo.totalPending);
-    if (balanceInfo.totalPending > 0) {
-      duesDisplay.classList.add("text-rose-600");
-      duesDisplay.classList.remove("text-slate-900", "text-emerald-600");
-    } else {
-      duesDisplay.classList.add("text-emerald-600");
-      duesDisplay.classList.remove("text-rose-600", "text-slate-900");
+  // 2. Announcements
+  const isSi = getLanguage() === "si";
+  for (const ann of announcements) {
+    if (!dismissed.includes(ann.id)) {
+      items.push({
+        id: ann.id,
+        isAlert: false,
+        title: isSi ? ann.title_si : ann.title_en,
+        content: isSi ? ann.content_si : ann.content_en,
+        priority: ann.priority || "normal",
+      });
     }
   }
 
-  // 2. Current Month Status
-  const currentMonthStr = new Date().toISOString().slice(0, 7) + "-01";
-  const currentMonthDue = balanceInfo.pendingDues.find((d) => d.billing_month === currentMonthStr);
-  const monthStatusTag = document.querySelector("[data-metric='month-status'], #monthStatusTag");
+  // Slice top 3
+  const top3 = items.slice(0, 3);
 
-  if (monthStatusTag) {
-    if (!currentMonthDue) {
-      monthStatusTag.innerHTML = `
-        <span class="inline-flex items-center gap-1 text-emerald-600 font-medium">
-          <span class="material-symbols-outlined text-sm">check_circle</span> Settled
+  if (top3.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = top3.map((item) => `
+    <div id="notify-${item.id}" class="flex items-start justify-between gap-3 p-3.5 bg-white border ${item.priority === "urgent" ? "border-rose-200 bg-rose-50/40" : "border-sky-200 bg-sky-50/40"} rounded-xl shadow-sm">
+      <div class="flex items-start gap-2.5">
+        <span class="material-symbols-outlined text-[20px] ${item.priority === "urgent" ? "text-rose-600" : "text-sky-600"} mt-0.5">
+          ${item.priority === "urgent" ? "warning" : "campaign"}
         </span>
-      `;
+        <div class="text-xs">
+          <div class="font-bold text-on-surface flex items-center gap-2">
+            <span>${item.title}</span>
+            ${item.priority === "urgent" ? '<span class="px-1.5 py-0.2 text-[9px] font-bold bg-rose-100 text-rose-800 rounded">URGENT</span>' : ''}
+          </div>
+          <p class="text-on-surface-variant mt-0.5 leading-relaxed">${item.content}</p>
+        </div>
+      </div>
+      <button onclick="dismissNotification('${item.id}')" class="text-on-surface-variant hover:text-on-surface p-1 text-xs font-semibold" title="${t("dismiss")}">
+        <span class="material-symbols-outlined text-[16px]">close</span>
+      </button>
+    </div>
+  `).join("");
+}
+
+export function dismissNotification(id) {
+  try {
+    let dismissed = JSON.parse(localStorage.getItem("mria_dismissed_announcements") || "[]");
+    if (!dismissed.includes(id)) {
+      dismissed.push(id);
+      localStorage.setItem("mria_dismissed_announcements", JSON.stringify(dismissed));
+    }
+    const el = document.getElementById(`notify-${id}`);
+    if (el) el.remove();
+  } catch (e) {
+    console.warn("Dismiss save error:", e);
+  }
+}
+window.dismissNotification = dismissNotification;
+
+function renderMetrics(balanceInfo, dues) {
+  // Outstanding Dues
+  const duesDisplay = document.getElementById("outstandingDuesDisplay");
+  const duesBadge = document.getElementById("duesBadge");
+
+  if (duesDisplay) {
+    duesDisplay.textContent = formatCurrency(balanceInfo.totalPending || 0);
+    if (balanceInfo.totalPending > 0) {
+      duesDisplay.classList.add("text-rose-600");
+      duesDisplay.classList.remove("text-on-surface");
+      if (duesBadge) {
+        duesBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-700";
+        duesBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">warning</span><span>${t("pending")}</span>`;
+      }
     } else {
-      monthStatusTag.innerHTML = `
-        <span class="inline-flex items-center gap-1 text-rose-600 font-medium">
-          <span class="material-symbols-outlined text-sm">schedule</span> Due by 31st
-        </span>
-      `;
+      duesDisplay.classList.remove("text-rose-600");
+      duesDisplay.classList.add("text-on-surface");
+      if (duesBadge) {
+        duesBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
+        duesBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">check_circle</span><span>${t("paid")}</span>`;
+      }
+    }
+  }
+
+  // Current Month Due Card
+  const currentMonthDue = dues.find((d) => d.status === "pending");
+  const monthStatusBadge = document.getElementById("currentMonthStatusBadge");
+  const lastPaymentDateDisplay = document.getElementById("lastPaymentDateDisplay");
+
+  if (currentPayments.length > 0) {
+    const lastPayment = currentPayments[0];
+    if (lastPaymentDateDisplay) {
+      lastPaymentDateDisplay.textContent = `Last: ${formatDate(lastPayment.verified_at || lastPayment.created_at)}`;
+    }
+  }
+
+  if (monthStatusBadge) {
+    if (!currentMonthDue) {
+      monthStatusBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
+      monthStatusBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">verified</span><span>${t("paid")}</span>`;
+    } else {
+      monthStatusBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-700";
+      monthStatusBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">schedule</span><span>${t("pending")}</span>`;
     }
   }
 }
@@ -198,136 +254,103 @@ function renderClaimsSummary(claims) {
     .filter((c) => c.status === "disbursed" || c.status === "approved")
     .reduce((sum, c) => sum + Number(c.disbursed_amount || c.claim_amount || 0), 0);
 
-  const display = document.querySelector("[data-metric='benefits-claimed'], #benefitsClaimedDisplay");
+  const display = document.getElementById("benefitsClaimedDisplay");
   if (display) {
     display.textContent = formatCurrency(totalClaimed);
+  }
+
+  const lastClaimDateDisplay = document.getElementById("lastClaimDateDisplay");
+  if (lastClaimDateDisplay && claims.length > 0) {
+    lastClaimDateDisplay.textContent = `Last: ${formatDate(claims[0].created_at)}`;
   }
 }
 
 function renderDuesLedger(dues) {
-  const tbody = document.getElementById("duesTableBody") || document.querySelector("#duesTable tbody");
+  const tbody = document.getElementById("duesTableBody");
   if (!tbody) return;
 
   if (dues.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="4" class="px-4 py-6 text-center text-xs text-slate-400">No monthly dues records found.</td>
-      </tr>
-    `;
+    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-on-surface-variant">${t("no_records")}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = dues
-    .map((due) => {
-      const monthDate = new Date(due.billing_month);
-      const monthLabel = monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-      const isPaid = due.status === "paid";
-      const statusBadge = isPaid
-        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Paid</span>'
-        : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">Pending</span>';
-
-      return `
-        <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-          <td class="px-4 py-3 text-sm font-medium text-slate-800">${monthLabel}</td>
-          <td class="px-4 py-3 text-sm font-mono text-slate-700">${formatCurrency(due.amount)}</td>
-          <td class="px-4 py-3 text-sm">${statusBadge}</td>
-          <td class="px-4 py-3 text-xs text-slate-400">${formatDate(due.updated_at || due.created_at)}</td>
-        </tr>
-      `;
-    })
-    .join("");
+  tbody.innerHTML = dues.map((due) => {
+    const isPaid = due.status === "paid";
+    return `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-semibold text-on-surface">${due.billing_month}</td>
+        <td class="py-2.5 px-3 font-mono font-bold">${formatCurrency(due.amount)}</td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPaid ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}">
+            <span class="material-symbols-outlined text-[13px]">${isPaid ? "check_circle" : "schedule"}</span>
+            ${isPaid ? t("paid") : t("pending")}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right text-on-surface-variant font-mono">${formatDate(due.updated_at || due.created_at)}</td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderPaymentHistory(payments) {
-  const tbody = document.getElementById("paymentsTableBody") || document.querySelector("#paymentsTable tbody");
+  const tbody = document.getElementById("paymentsTableBody");
   if (!tbody) return;
 
   if (payments.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" class="px-4 py-6 text-center text-xs text-slate-400">No payment slips or transactions recorded yet.</td>
-      </tr>
-    `;
+    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">${t("no_records")}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = payments
-    .map((p) => {
-      const statusMap = {
-        pending_approval: '<span class="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">Pending Approval</span>',
-        verified: '<span class="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Verified</span>',
-        rejected: '<span class="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">Rejected</span>',
-      };
+  tbody.innerHTML = payments.map((p) => {
+    const isVerified = p.status === "verified";
+    const statusClass = isVerified
+      ? "bg-emerald-50 text-emerald-700"
+      : p.status === "rejected"
+      ? "bg-rose-50 text-rose-700"
+      : "bg-amber-50 text-amber-700";
 
-      const typeLabels = {
-        monthly_due: "Monthly Due",
-        admission_fee: "Admission Fee",
-        donation: "Donation",
-      };
+    const voucherAction = isVerified
+      ? `<button onclick="window.viewReceipt('${p.id}')" class="inline-flex items-center gap-1 text-primary hover:underline font-bold">
+           <span class="material-symbols-outlined text-[15px]">receipt_long</span>
+           <span>${t("view_receipt")}</span>
+         </button>`
+      : `<span class="text-on-surface-variant text-[11px]">-</span>`;
 
-      const receiptBtn = p.status === "verified"
-        ? `<button data-receipt-id="${p.id}" class="view-receipt-btn text-xs text-sky-600 hover:text-sky-800 font-semibold flex items-center gap-1">
-             <span class="material-symbols-outlined text-sm">receipt_long</span> Receipt
-           </button>`
-        : '<span class="text-xs text-slate-400">-</span>';
-
-      return `
-        <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-          <td class="px-4 py-3 text-xs text-slate-500 font-mono">${formatDate(p.created_at)}</td>
-          <td class="px-4 py-3 text-sm font-medium text-slate-800">${typeLabels[p.payment_type] || p.payment_type}</td>
-          <td class="px-4 py-3 text-sm font-mono font-semibold text-slate-900">${formatCurrency(p.amount)}</td>
-          <td class="px-4 py-3 text-sm">${statusMap[p.status] || p.status}</td>
-          <td class="px-4 py-3 text-sm">${receiptBtn}</td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  // Attach receipt button click handlers
-  document.querySelectorAll(".view-receipt-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const paymentId = btn.getAttribute("data-receipt-id");
-      const payment = payments.find((item) => item.id === paymentId);
-      if (payment) openReceiptModal(payment);
-    });
-  });
+    return `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-mono">${formatDate(p.created_at)}</td>
+        <td class="py-2.5 px-3 font-medium capitalize">${(p.payment_type || "").replace(/_/g, " ")}</td>
+        <td class="py-2.5 px-3 font-mono font-bold">${formatCurrency(p.amount)}</td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusClass}">
+            ${t(`status_${p.status}`) || p.status}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right">${voucherAction}</td>
+      </tr>
+    `;
+  }).join("");
 }
 
-function openReceiptModal(payment) {
-  const container = document.getElementById("receiptModalContent") || document.querySelector("#receiptModal .modal-body");
+window.viewReceipt = function (paymentId) {
+  const p = currentPayments.find((item) => item.id === paymentId);
+  if (!p) return;
+  const container = document.getElementById("receiptModalContent");
   if (container) {
-    const memberName = currentMember ? (currentMember.full_name || currentMember.email) : "Association Member";
-    container.innerHTML = renderReceiptHtml(payment, memberName);
+    container.innerHTML = renderReceiptHtml(p, currentMember?.full_name);
+    openModal("receiptModal");
   }
-  openModal("receiptModal");
-}
+};
 
-if (typeof window !== "undefined") {
-  window.openReceiptModal = function (param1, amount, recRef, date) {
-    if (typeof param1 === "object" && param1 !== null) {
-      return openReceiptModal(param1);
-    }
-    const mockPayment = {
-      id: (recRef || "REC000").replace(/[^a-zA-Z0-9]/g, ""),
-      amount: parseFloat((amount || "1000").replace(/,/g, "")) || 1000,
-      payment_type: "monthly_due",
-      payment_method: "bank_transfer",
-      status: "verified",
-      paid_at: date || new Date().toISOString(),
-    };
-    openReceiptModal(mockPayment);
-  };
-}
-
-function populateBenefitTypesDropdown(benefitTypes) {
-  const select = document.getElementById("benefitTypeSelect") || document.querySelector("#claimForm select[name='benefit_type']");
+function populateBenefitTypesDropdown(types) {
+  const select = document.getElementById("benefitTypeSelect");
   if (!select) return;
 
-  const lang = localStorage.getItem("mria_lang") || "en";
-  select.innerHTML = '<option value="" disabled selected>-- Select Welfare Benefit --</option>';
+  const isSi = getLanguage() === "si";
+  select.innerHTML = '<option value="" disabled selected>-- Select Benefit --</option>';
 
-  benefitTypes.forEach((b) => {
-    const title = lang === "si" ? b.title_si : b.title_en;
+  types.forEach((b) => {
+    const title = isSi ? b.title_si : b.title_en;
     const opt = document.createElement("option");
     opt.value = b.id;
     opt.textContent = `${title} (Max: ${formatCurrency(b.max_amount)})`;
@@ -336,107 +359,103 @@ function populateBenefitTypesDropdown(benefitTypes) {
 }
 
 function setupActionListeners() {
-  // Modal Triggers
-  document.querySelectorAll("[data-open-modal]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const modalId = btn.getAttribute("data-open-modal");
-      openModal(modalId);
+  // Outstanding dues card click opens breakdown popup
+  const duesCard = document.getElementById("outstandingDuesCard");
+  if (duesCard) {
+    duesCard.addEventListener("click", () => {
+      openDuesBreakdownModal(currentDues, currentBalanceInfo);
     });
-  });
+  }
 
-  // Slip File Input preview
-  const slipInput = document.getElementById("slipFileInput");
-  const fileChosenLabel = document.getElementById("fileChosenLabel");
-  if (slipInput && fileChosenLabel) {
-    slipInput.addEventListener("change", () => {
-      if (slipInput.files && slipInput.files[0]) {
-        fileChosenLabel.textContent = `Selected: ${slipInput.files[0].name} (${(slipInput.files[0].size / 1024 / 1024).toFixed(2)} MB)`;
-        fileChosenLabel.classList.add("text-sky-700");
+  // File chosen preview for slip upload
+  const fileInput = document.getElementById("slipFileInput");
+  const fileLabel = document.getElementById("fileChosenLabel");
+  if (fileInput && fileLabel) {
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files && fileInput.files[0]) {
+        fileLabel.textContent = `Selected: ${fileInput.files[0].name} (${(fileInput.files[0].size / 1024 / 1024).toFixed(2)} MB)`;
+        fileLabel.classList.add("text-primary", "font-bold");
       }
     });
   }
 
-  // Slip Upload Form Submit
+  // Slip form submission
   const slipForm = document.getElementById("slipForm");
   if (slipForm) {
     slipForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!slipInput || !slipInput.files || !slipInput.files[0]) {
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
         showToast("Please choose a bank slip file to upload.", "warning");
         return;
       }
 
-      const file = slipInput.files[0];
-      const categorySelect = slipForm.querySelector("select[name='payment_category']") || document.getElementById("slipCategorySelect");
-      const amountInput = slipForm.querySelector("input[name='amount']") || document.getElementById("slipAmountInput");
-      const submitBtn = slipForm.querySelector("button[type='submit']");
-
-      const paymentType = categorySelect ? categorySelect.value : "monthly_due";
-      const amount = amountInput ? Number(amountInput.value) : 500;
+      const file = fileInput.files[0];
+      const category = document.getElementById("slipCategorySelect").value;
+      const amount = Number(document.getElementById("slipAmountInput").value);
 
       if (!amount || amount <= 0) {
-        showToast("Please enter a valid payment amount.", "warning");
+        showToast("Please enter a valid amount.", "warning");
         return;
       }
 
+      const submitBtn = slipForm.querySelector("button[type='submit']");
       try {
         if (submitBtn) {
           submitBtn.disabled = true;
           submitBtn.textContent = "Uploading & Submitting...";
         }
 
-        // 1. Upload file binary via S3 presigned URL
+        // Upload to Cloudflare R2
         const slipKey = await uploadBankSlip(file);
 
-        // 2. Insert payment record into database
+        // Record payment in Supabase
         await submitPayment({
           memberId: currentMember.id,
           amount,
-          paymentType,
+          paymentType: category,
           paymentMethod: "bank_transfer",
           slipKey,
         });
 
-        showToast("Bank slip submitted successfully for treasurer verification!", "success");
+        showToast("Bank slip uploaded successfully for treasurer verification!", "success");
         closeModal("slip-upload-modal");
         slipForm.reset();
-        if (fileChosenLabel) fileChosenLabel.textContent = "Drag and drop deposit receipt here, or browse files";
+        if (fileLabel) fileLabel.textContent = t("drop_file_here");
 
-        // Refresh data
         await refreshDashboardData();
       } catch (err) {
-        console.error("Slip upload error:", err);
+        console.error("Slip submission error:", err);
         showToast(err.message || "Failed to submit bank slip.", "error");
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit Payment Slip";
+          submitBtn.textContent = t("submit_slip");
         }
       }
     });
   }
 
-  // Welfare Claim Form Submit
+  // Claim form submission
   const claimForm = document.getElementById("claimForm");
   if (claimForm) {
     claimForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const select = claimForm.querySelector("select") || document.getElementById("benefitTypeSelect");
-      const amountInput = claimForm.querySelector("input[type='number']") || document.getElementById("claimAmountInput");
-      const notesInput = claimForm.querySelector("textarea") || document.getElementById("claimNotesInput");
-      const submitBtn = claimForm.querySelector("button[type='submit']");
+      const benefitTypeSelect = document.getElementById("benefitTypeSelect");
+      const amountInput = document.getElementById("claimAmountInput");
+      const notesInput = document.getElementById("claimNotesInput");
 
-      if (!select || !select.value) {
-        showToast("Please select a welfare benefit type.", "warning");
+      if (!benefitTypeSelect.value) {
+        showToast("Please select a welfare benefit category.", "warning");
         return;
       }
 
-      const claimAmount = Number(amountInput ? amountInput.value : 0);
+      const claimAmount = Number(amountInput.value);
       if (!claimAmount || claimAmount <= 0) {
         showToast("Please enter a valid claim amount.", "warning");
         return;
       }
 
+      const submitBtn = claimForm.querySelector("button[type='submit']");
       try {
         if (submitBtn) {
           submitBtn.disabled = true;
@@ -445,23 +464,23 @@ function setupActionListeners() {
 
         await submitBenefitClaim({
           memberId: currentMember.id,
-          benefitTypeId: select.value,
+          benefitTypeId: benefitTypeSelect.value,
           claimAmount,
           notes: notesInput ? notesInput.value : null,
         });
 
-        showToast("Welfare benefit application submitted successfully for review!", "success");
+        showToast(t("claim_submitted_success"), "success");
         closeModal("claim-modal");
         claimForm.reset();
 
         await refreshDashboardData();
       } catch (err) {
-        console.error("Claim submit error:", err);
-        showToast(err.message || "Failed to submit welfare claim.", "error");
+        console.error("Claim submission error:", err);
+        showToast(err.message || "Failed to submit claim.", "error");
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit Application";
+          submitBtn.textContent = t("submit_claim");
         }
       }
     });
