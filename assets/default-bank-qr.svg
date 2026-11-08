@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none">
+  <rect width="240" height="240" rx="16" fill="#FFFFFF"/>
+  <rect x="16" y="16" width="208" height="208" rx="12" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <!-- Top Left Finder -->
+  <rect x="36" y="36" width="48" height="48" rx="8" fill="#0284C7"/>
+  <rect x="44" y="44" width="32" height="32" rx="4" fill="#FFFFFF"/>
+  <rect x="52" y="52" width="16" height="16" rx="2" fill="#0284C7"/>
+  <!-- Top Right Finder -->
+  <rect x="156" y="36" width="48" height="48" rx="8" fill="#0284C7"/>
+  <rect x="164" y="44" width="32" height="32" rx="4" fill="#FFFFFF"/>
+  <rect x="172" y="52" width="16" height="16" rx="2" fill="#0284C7"/>
+  <!-- Bottom Left Finder -->
+  <rect x="36" y="156" width="48" height="48" rx="8" fill="#0284C7"/>
+  <rect x="44" y="164" width="32" height="32" rx="4" fill="#FFFFFF"/>
+  <rect x="52" y="172" width="16" height="16" rx="2" fill="#0284C7"/>
+  <!-- QR Data modules mock -->
+  <rect x="96" y="36" width="12" height="12" fill="#0F172A"/>
+  <rect x="116" y="36" width="24" height="12" fill="#0F172A"/>
+  <rect x="96" y="56" width="24" height="12" fill="#0F172A"/>
+  <rect x="128" y="56" width="12" height="24" fill="#0F172A"/>
+  <rect x="96" y="76" width="12" height="12" fill="#0F172A"/>
+  <rect x="116" y="76" width="12" height="12" fill="#0F172A"/>
+  <rect x="36" y="96" width="12" height="24" fill="#0F172A"/>
+  <rect x="56" y="108" width="28" height="12" fill="#0F172A"/>
+  <rect x="96" y="96" width="48" height="48" rx="6" fill="#0284C7"/>
+  <!-- BOC Center Emblem inside QR -->
+  <circle cx="120" cy="120" r="16" fill="#FFFFFF"/>
+  <text x="120" y="125" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="12" fill="#0284C7">BOC</text>
+  <rect x="156" y="96" width="24" height="12" fill="#0F172A"/>
+  <rect x="192" y="108" width="12" height="24" fill="#0F172A"/>
+  <rect x="168" y="120" width="12" height="24" fill="#0F172A"/>
+  <rect x="96" y="156" width="24" height="12" fill="#0F172A"/>
+  <rect x="128" y="156" width="12" height="36" fill="#0F172A"/>
+  <rect x="108" y="180" width="12" height="24" fill="#0F172A"/>
+  <rect x="156" y="156" width="48" height="12" fill="#0F172A"/>
+  <rect x="156" y="180" width="24" height="24" fill="#0F172A"/>
+  <rect x="192" y="180" width="12" height="12" fill="#0F172A"/>
+  <!-- LANKAQR Label badge -->
+  <rect x="76" y="210" width="88" height="18" rx="4" fill="#0284C7"/>
+  <text x="120" y="223" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="10" fill="#FFFFFF" letter-spacing="1">LANKA QR</text>
+</svg>
