@@ -1,68 +1,42 @@
-# Comprehension Test Report
+## Feature Range Paraphrase
+The Mattala Rajapaksa International Airport (MRIA) Management Welfare Association Progressive Web Application (PWA) is being overhauled to replace an informal digital prototype with a formal, auditable, and offline-capable self-service platform for airport staff. The system exists to eliminate governance risks, mixed-language clutter, exposure of private executive contacts, and unsegregated treasury accounting. It introduces strict single-language localization (Sinhala and English), a 6-tier Role-Based Access Control (RBAC) matrix, statutory airport employee identification, asynchronous email alerts for welfare aid claims via Resend, an immutable PostgreSQL audit trail, a 3-account segregated treasury ledger with CSV/PDF reporting, and a dual-slot bilingual constitution document repository.
 
-**Target:** `docs/designs/mria_management_welfare_association_pwa.md` (Lines 1..582)
-**Reviewer:** `egm-comprehension` (Naive Reader)
+## Detailed Implementation Range Paraphrase
+The overhaul is executed across six sequential phases utilizing vanilla HTML5/ES6 JavaScript modules, Tailwind CSS, Supabase (PostgreSQL 17), a Deno TypeScript Edge Function, and Cloudflare R2 private object storage. Phase 1 runs a comprehensive database migration to update role enums, augment the member schema, create immutable audit triggers, establish treasury transaction tables, and enforce Row Level Security (RLS) policies. Phase 2 deploys the asynchronous `send-claim-notification` Edge Function integrating with the Resend API, while Phase 3 updates core client modules for i18n dictionary switching, API coordination, service worker caching (Cache-First for fonts/QR media), and statement exports. Phases 4 through 6 implement the user-facing views—adding self-service onboarding to the unauthorized landing page, dues breakdowns and claim submissions to the member dashboard, and role-gated management consoles for the Secretary and Treasurer on the administrative portal.
 
----
+## Comprehension Findings & Ambiguities
 
-## Paraphrase
+### 1. Cloudflare R2 Presigned URL Generation Architecture
+* **Severity**: Blocker
+* **Affected Scope**: Technical Plan Sections 1 & 2.E (Lines 133–136, 150, 281–282); Detailed Implementation Manifest & Steps (Lines 422, 440–459, 472–476, 502)
+* **Discrepancy Description & Rationale**: The document establishes that transfer slips and bilingual constitution files (`constitution_si.pdf` / `constitution_en.pdf`) reside in a "Private S3 Bucket" on Cloudflare R2 and access occurs via "S3 Presigned URLs" (Line 150). However, the implementation manifest and execution steps define only one backend Edge Function (`send-claim-notification`). There is no Edge Function, backend microservice, or Supabase Storage gateway specified to generate S3 presigned upload or download URLs. Because private Cloudflare R2 credentials (access key ID and secret) cannot be stored in client-side JavaScript (`js/page-admin.js` or `js/api.js`), a developer has no architectural mechanism to securely upload or retrieve private files from R2.
 
-### What this proposes
-The document proposes a lightweight, bilingual (Sinhala and English) Progressive Web Application (PWA) for the MRIA Management Welfare Association, built with Vanilla HTML5/ES6 modules, Tailwind CSS, Supabase (PostgreSQL 17), and private Cloudflare R2 storage. The system automates monthly dues generation on the 1st of every month, allows members to upload bank transfer slips via 15-minute presigned URLs, supports on-the-spot cash receipt logging by treasurers, and tracks bereavement welfare claims. Access is guarded by Google OAuth whitelisting where unregistered users are blocked with a localized WhatsApp referral, and overdue dues past the month-end calendar boundary are restricted to administrative defaulter rosters.
+### 2. Missing Definitions for Statutory Acronyms (`EPF` and `NIC`)
+* **Severity**: Major
+* **Affected Scope**: The Problem #3 (Line 24); Goals (Line 36); CUJ 1 (Line 66); Schema Section 2.B (Lines 178, 181); Manifest (Lines 442, 453)
+* **Discrepancy Description & Rationale**: The document elevates "EPF Number" (`epf_number`) to a mandatory, unique statutory identifier across member profiles, onboarding flows, and administrative rosters, and adds `nic VARCHAR(20)` to `public.members`. However, neither acronym is defined inline, expanded in a glossary, or accompanied by an explanatory link. For a reader without specific familiarity with Sri Lankan administrative frameworks, "EPF" (Employees' Provident Fund) and "NIC" (National Identity Card) are unexplained jargon.
 
-### How the existing system works, per this document
-The association currently depends on manual, informal processes, tracking monthly contributions across paper logs or spreadsheets without a centralized ledger. Members deposit money through Cash Deposit Machines (CDMs) or mobile bank transfers and send payment screenshots over WhatsApp, leading to untracked transactions, lost slips, and lack of an audit trail. Overdue accounts are reconciled manually without automated defaulter tracking, risking public friction if debts are exposed, and urgent welfare aid claims (such as bereavement assistance) require manual verification of member standing and past records.
+### 3. Unspecified FIFO Settlement Engine Mechanism
+* **Severity**: Major
+* **Affected Scope**: CUJ 3 (Line 86); System Architecture Diagram (Line 129); Implementation Step 1 (Lines 465–471)
+* **Discrepancy Description & Rationale**: CUJ 3 states that upon cash intake, "The FIFO settlement engine marks the member's oldest pending monthly due in `member_dues` as `paid`" (Line 86), and the high-level architecture diagram illustrates "SECURITY DEFINER Audit & FIFO Triggers" (Line 129). However, no FIFO settlement logic, PL/pgSQL trigger function, or client-side dues allocation algorithm is detailed in the schema migration (Lines 157–286) or the file manifest (Lines 441–459). It is unclear whether this is an existing database trigger being preserved, a new trigger required in migration `20261108000004_comprehensive_overhaul.sql`, or application code in `js/api.js`.
 
----
+### 4. Self-Service Registration RLS & Routing Mechanics
+* **Severity**: Major
+* **Affected Scope**: CUJ 1 (Lines 61–70); RLS Policy Matrix (Lines 293–295); Implementation Phase 4 (Lines 453–454, 488–489)
+* **Discrepancy Description & Rationale**: CUJ 1 describes a workflow where an unrecognized airport employee authenticates via Google OAuth, gets redirected to `unauthorized.html`, and submits their EPF and designation into `public.members` with `is_approved = false`. However, in the RLS Matrix (Line 295), the `member` role only has "Own Profile (R/W)" permissions. An unrecognized user who does not yet have a record in `public.members` will evaluate to `anon` or null in `get_current_user_role()`, which lacks INSERT permissions. The design does not specify an explicit RLS policy permitting authenticated users without member records to insert their initial pending registration. Furthermore, the routing logic that detects an unapproved or missing profile and redirects the browser to `unauthorized.html` is not attributed to any specific module or auth listener.
 
-## Findings
+### 5. Undefined Data Sourcing for the Notification Center
+* **Severity**: Major
+* **Affected Scope**: Detailed Implementation Phase 3, 5 & Step 5 (Lines 448, 455, 492)
+* **Discrepancy Description & Rationale**: The implementation plan requires a "top-3 dismissible Notification Center" on `dashboard.html` with dismissal persistence in `localStorage` (`mria_dismissed_announcements`). However, neither the schema section nor the API manifest defines where these announcements originate, how administrators publish them, or what database table/endpoint serves them. A new developer cannot determine if announcements are static HTML banners, stored in `cms_documents`, or fetched from an existing unmentioned table.
 
-### 1. Undefined Member Onboarding and Whitelist Population Workflow
-* **Severity**: 🟡 Major
-* **Affected Scope**: CUJ 1 (Lines 46–50), Section 5.A (Lines 311–345), Section Detailed Implementation Plan 4.3 (`admin.html`, Line 508)
-* **Description & Rationale**: The security model requires users to exist in `public.members` with their Google email prior to signing in; otherwise, they are redirected to `unauthorized.html` and instructed to message the association's WhatsApp line. However, the document never specifies how an administrator registers or approves a new member in `public.members` after receiving their WhatsApp message. The feature list for `admin.html` mentions slip review, cash logging, defaulter viewing, role allocation, and Bank QR management, but omits a member directory or registration/creation interface. An engineer cannot tell whether member creation is an admin UI capability, a seed script task, or an external process.
+### 6. Edge Function Authentication and Member Status Filtering
+* **Severity**: Nit
+* **Affected Scope**: Section 4 (Lines 308–312); Detailed Implementation Phase 2 (Line 443)
+* **Discrepancy Description & Rationale**: Section 4 indicates the client triggers the Edge Function via a simple `fetch('/functions/v1/send-claim-notification', ...)` without clarifying whether the request requires an `Authorization: Bearer <token>` header to prevent unauthorized callers from triggering bulk committee emails. Additionally, Line 310 states the function queries "all active members", but the `public.members` schema includes `is_approved` and not an `is_active` flag (unlike `public.treasury_accounts`), leaving the exact SQL filter slightly ambiguous.
 
-### 2. Missing Dues Reconciliation Trigger and Payment Allocation Logic
-* **Severity**: 🟡 Major
-* **Affected Scope**: Sequence Diagram B (Lines 161–163), Schema Table 6 (`payment_dues_reconciliation`, Lines 230–237), Section 5 (Lines 307–370), Migration Plan (Line 478)
-* **Description & Rationale**: Sequence Diagram B specifies that when a treasurer marks a payment as `verified`, a database trigger automatically reconciles `member_dues` to `paid`. Table 6 also introduces a junction table `payment_dues_reconciliation (payment_id, due_id, allocated_amount)`. However, Section 5 (Database Triggers & Stored Functions) and the migration file descriptions only implement `handle_auth_user_created` and `generate_monthly_dues_for_period`. The trigger or business logic that maps a verified payment to specific due records (e.g., handling lump-sum payments covering multiple months, partial payments, or FIFO settlement of overdue dues) is completely missing.
-
-### 3. Dual Role Architecture Discrepancy (`members.role` vs. `user_roles`)
-* **Severity**: 🟡 Major
-* **Affected Scope**: Database Schema Tables 2 & 3 (Lines 178–201), RLS Matrix (Lines 290–305), Edge Functions (Line 384)
-* **Description & Rationale**: The schema defines a `role app_role` column directly on `public.members` (defaulting to `'member'`), while also defining a separate junction table `public.user_roles (user_id, role)`. Throughout the rest of the document (the RLS policy matrix, the auth linker trigger, and the Edge Function access checks), role verification is performed solely against `members.role`. The document does not define why `user_roles` exists, whether the application supports multiple concurrent roles per user, or how `user_roles` is kept in sync with `members.role`.
-
-### 4. Ambiguous "Defaulter" Mechanism: Account Flag vs. Dynamic Query
-* **Severity**: 🟡 Major
-* **Affected Scope**: Goals (Line 25), CUJ 5 (Lines 66–70), Schema (Lines 178–214), Verification Plan (Line 567)
-* **Description & Rationale**: Goal 1 and CUJ 5 state that at 00:00:00 on the 1st of each month, "the system flags the account as a defaulter", and the Design System specifies an "Overdue / Defaulter State". However, neither `members` nor `member_dues` possesses a defaulter status column (`member_dues.status` only allows `'pending'`, `'paid'`, `'waived'`). Verification Plan 2 reveals that defaulters are identified dynamically at query time (`status = 'pending' AND billing_month < current_month`). Describing this as "the system flags the account" misleadingly implies a scheduled background mutation or dedicated column rather than a computed view.
-
-### 5. Undefined Project Concept: Legacy Member (`is_legacy_member`)
-* **Severity**: 🟡 Major
-* **Affected Scope**: Schema Table 2 (Line 186), Alternative 1 (Line 414)
-* **Description & Rationale**: The column `is_legacy_member BOOLEAN NOT NULL DEFAULT false` is added to `members`, and Alternative 1 references `(admission_fee IF !is_legacy)`. However, the concept of a "legacy member" is never defined in the Overview, Problem statement, or User Journeys. A new reader has no context for what criteria define a legacy member, how they bypass admission fees, or who sets this attribute.
-
-### 6. Admission Fee Invoicing and Tracking Omission
-* **Severity**: 🟢 Nit
-* **Affected Scope**: Schema Table 4 & 5 (Lines 204–228), Open Question 1 (Line 41), Seed Data (Line 482)
-* **Description & Rationale**: `payment_category` defines `'admission_fee'`, and seed settings specify `admission_fee_amount = 1000`. However, the dues ledger (`member_dues`) requires `billing_month DATE NOT NULL` (stored as `YYYY-MM-01`). The document does not clarify whether admission fees are billed as records in `member_dues` or recorded standalone in `payments`, nor how an unapproved member's admission fee settlement is tracked before account activation.
-
-### 7. Undefined Tooling Reference: "Stitch MCP Scaffolded"
-* **Severity**: 🟢 Nit
-* **Affected Scope**: Detailed Implementation Plan, Section 4.3 (Lines 499, 502, 505, 508)
-* **Description & Rationale**: The HTML views (`index.html`, `unauthorized.html`, `dashboard.html`, `admin.html`) are annotated with `(Stitch MCP Scaffolded)`. For a team member without external context, "Stitch MCP" is an undefined acronym and tool with no documentation link or explanation of how or when scaffolding is performed.
-
-### 8. Undefined Association Roles (`manager` vs. `official` vs. `treasurer`)
-* **Severity**: 🟢 Nit
-* **Affected Scope**: Schema Table 1 (Line 171), RLS Policy Matrix (Lines 290–305)
-* **Description & Rationale**: The `app_role` enum includes `admin`, `manager`, `official`, `treasurer`, and `member`. While the responsibilities of administrators and treasurers are described in the CUJs, the document does not define the real-world responsibilities or permission boundaries distinguishing a `manager` from an `official`.
-
-### 9. Column Identity Discrepancy in Verification Plan 1
-* **Severity**: 🟢 Nit
-* **Affected Scope**: Verification Plan, Section 1 (Line 561)
-* **Discrepancy Description & Rationale**: The RLS test states: "assert that only records where `member_id = auth.uid()` are returned." In the schema, `member_dues.member_id` is a foreign key to `public.members(id)` (an internal UUID), whereas `auth.uid()` references `auth.users(id)`. The correct relationship is `member_id = (SELECT id FROM members WHERE user_id = auth.uid())`, which is accurately specified in the RLS matrix (Line 296) but misstated in the verification instructions.
-
-### 10. Undefined Closing Acronym ("EGM")
-* **Severity**: 🟢 Nit
-* **Affected Scope**: Line 582
-* **Description & Rationale**: The document concludes with `*Drafted with EGM*`. "EGM" is an undefined abbreviation within the document.
+### 7. Discrepancy in Institutional Routing Channels
+* **Severity**: Nit
+* **Affected Scope**: The Problem #1 (Line 20) vs. Implementation Phase 3 & 4 (Lines 444, 452)
+* **Discrepancy Description & Rationale**: Problem #1 identifies the public exposure of private executive telephone numbers as a major flaw and mandates routing via "institutional routing channels." However, the solution configured in `js/config.js` and `js/page-index.js` routes contact requests to a personal Google account (`krishaja@gmail.com`) rather than an official association or airport domain email (e.g., `@mria.lk` or `@airport.lk`).

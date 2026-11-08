@@ -1,239 +1,191 @@
 # Goldfish Annotated Review Report
 
-**Target:** `docs/designs/mria_management_welfare_association_pwa.md` (Lines 1..582)  
-**Status:** Resolved (Option A Accepted)  
-
----
-
-## Escalated Decisions (User Confirmed)
-
-### [ESCALATE-01] Storage Engine: Cloudflare R2 vs. Native Supabase Storage
-* **Decision:** Option A Accepted (Retain Cloudflare R2 with hardened HeadObject validation, MIME validation, 5MB limit, and CORS preflight).
-* **Affected Scope:** Lines 96–98, 372–387, 419–425, 486–491
-* **Discrepancy Description:** The design introduces a secondary cloud infrastructure provider (Cloudflare R2) and serverless Edge Functions (`upload-slip`, `get-slip-url`) wrapping AWS S3 SDK v3 presigners.
-* **Reviewer Critique (`egm-zoom-out`):** The reviewer flagged this as a Blocker (Finding 1), arguing that for a local community association of a few hundred members uploading ~500 slips/month, native Supabase Storage provides private buckets with Row-Level Security and built-in 15-minute presigned URLs (`supabase.storage.from('slips').createSignedUrl(path, 900)`) in zero extra lines of code, well within the free tier. Introducing R2 creates multi-cloud vendor management, S3 access keys, CORS configuration, and two custom Deno Edge Functions.
-* **Context:** The user explicitly requested Cloudflare R2 during the brainstorm phase.
-* ***AI Suggestion:*** `ESCALATE`
-* ***Justification:*** This represents an intentional user architectural constraint versus a pure simplicity critique. 
-  * **Option A (Retain Cloudflare R2):** Retain R2 as requested by the user, but harden it with `HeadObject` validation, CORS handling, and upload constraints.
-  * **Option B (Switch to Supabase Storage):** Eliminate Cloudflare R2 and Deno functions, managing slip uploads and signed URLs natively in Supabase Storage with zero external dependencies.
-
----
+**Target:** `docs/designs/mria_management_welfare_association_pwa.md` (`full file`)
+**Status:** Resolved (All 17 findings accepted and applied to design document)
 
 ## Prioritized Findings & AI Suggestions
 
-### 1. Blockers (🔴)
-
-#### [BLK-01] RLS Policy Infinite Recursion [`egm-design`]
-* **Affected Scope:** [Lines 188, 193–201, 291–306](docs/designs/mria_management_welfare_association_pwa.md#L188) (Database Schema & RLS Matrix)
-* **Discrepancy Description:** Subquery on `public.members` inside policies protecting `public.members` triggers PostgreSQL `54001: stack depth limit exceeded`.
-* **Rationale:** Direct recursive self-references in RLS crash all member and admin queries.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Valid PostgreSQL bug. Creating a `SECURITY DEFINER` function with `SET search_path = public` executes role lookups with bypass permissions, eliminating recursion.
-* ***Proposed Edit:***
-  * Location: Section 5 (Database Triggers & Stored Functions)
-  * Change: Add `public.get_current_user_role() RETURNS app_role` as `SECURITY DEFINER` and update RLS policies to call `public.get_current_user_role() = 'admin'`.
-
-#### [BLK-02] Missing Payment Reconciliation Logic [`egm-design`, `egm-comprehension`, `egm-implementation-readiness`]
-* **Affected Scope:** [Lines 161–163, 216–237, 307–371](docs/designs/mria_management_welfare_association_pwa.md#L161)
-* **Discrepancy Description:** Sequence Diagram B mandates an automatic trigger reconciling dues to paid upon payment verification, but the trigger and allocation rules (FIFO, partial payments) are missing from the schema.
-* **Rationale:** Implementers have no specification for allocating funds across overdue months.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** The allocation algorithm must be formally defined to ensure financial consistency.
-* ***Proposed Edit:***
-  * Location: Section 5 (Database Triggers & Stored Functions)
-  * Change: Define `public.reconcile_verified_payment(payment_uuid UUID)` which applies verified payment funds to unpaid `member_dues` in chronological order (FIFO), inserting audit records into `payment_dues_reconciliation` and updating `member_dues.status = 'paid'`.
-
-#### [BLK-03] Client-Side Whitelist Security Bypass [`egm-design`]
-* **Affected Scope:** [Lines 46–50, 115–135, 291–306](docs/designs/mria_management_welfare_association_pwa.md#L46)
-* **Discrepancy Description:** Unregistered users are only redirected client-side; public tables grant `SELECT` to `authenticated`, allowing unapproved Google users to query data via API.
-* **Rationale:** Client-side JavaScript redirects can be bypassed in DevTools.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Security boundaries must be enforced at the database layer.
-* ***Proposed Edit:***
-  * Location: Section 4 (RLS Policy Matrix)
-  * Change: Update policies for `announcements`, `benefit_types`, and `system_settings` to require: `EXISTS (SELECT 1 FROM public.members WHERE user_id = auth.uid() AND is_approved = true)`.
-
-#### [BLK-04] Bare Module Specifier `@supabase/supabase-js` [`egm-implementation-readiness`, `egm-codebase-details`]
-* **Affected Scope:** [Lines 461, 522–524](docs/designs/mria_management_welfare_association_pwa.md#L461)
-* **Discrepancy Description:** Vanilla ES6 modules in browser without a bundler cannot resolve bare `@supabase/supabase-js`, throwing fatal runtime errors.
-* **Rationale:** Native browser ES6 requires relative paths or an Import Map.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Adding an `<script type="importmap">` resolves bare imports cleanly while preserving zero-bundler simplicity.
-* ***Proposed Edit:***
-  * Location: Section 3 & 4 (PWA Views & ES6 Modules)
-  * Change: Specify `<script type="importmap">` in all HTML templates mapping `@supabase/supabase-js` to `https://esm.sh/@supabase/supabase-js@2.46.1`.
-
-#### [BLK-05] Missing PWA Shell Assets Breaking Service Worker [`egm-implementation-readiness`, `egm-codebase-details`]
-* **Affected Scope:** [Lines 510–516](docs/designs/mria_management_welfare_association_pwa.md#L510)
-* **Discrepancy Description:** `manifest.json` and `sw.js` reference icons and Bank QR images, but these files are omitted from target files; `cache.addAll()` fails with 404, breaking PWA installation.
-* **Rationale:** Missing pre-cached assets cause Service Worker registration rejection.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Required static shell assets must be cataloged in the manifest.
-* ***Proposed Edit:***
-  * Location: Detailed Implementation Plan, Section 4.3 & 4.5
-  * Change: Add `./assets/icon-192.png`, `./assets/icon-512.png`, and `./assets/default-bank-qr.png` to Target Files.
-
-#### [BLK-06] Schema Foreign Key Contradiction in Verification Plan [`egm-codebase-details`, `egm-comprehension`]
-* **Affected Scope:** [Line 561](docs/designs/mria_management_welfare_association_pwa.md#L561)
-* **Discrepancy Description:** Verification Plan 1 asserts `member_id = auth.uid()`, but `member_dues.member_id` is an internal UUID referencing `public.members.id`, not `auth.users.id`.
-* **Rationale:** Asserting against the wrong foreign key will cause automated tests to fail.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Fix relational expression in verification instructions.
-* ***Proposed Edit:***
-  * Location: Verification Plan, Section 1
-  * Change: Update assertion to: `member_id = (SELECT id FROM public.members WHERE user_id = auth.uid())`.
-
-#### [BLK-07] Inconsistent Defaulter Roster RBAC Permissions [`egm-style`]
-* **Affected Scope:** [Lines 29, 69, 297, 453](docs/designs/mria_management_welfare_association_pwa.md#L29)
-* **Discrepancy Description:** Goals and CUJ 5 omit `treasurer` from viewing defaulters, while RLS matrix and security NFR include `treasurer`.
-* **Rationale:** Inconsistent authorization specifications invite implementation bugs.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** The treasurer manages dues and collections and must have access to overdue rosters.
-* ***Proposed Edit:***
-  * Location: Goals (Line 29) and CUJ 5 (Line 69)
-  * Change: Harmonize text to explicitly state `admin, manager, official, and treasurer`.
+### Issue 1: Pre-Seeding Schema PK Regression on `public.members` [`egm-zoom-out` / `egm-design`] - Severity: Blocker
+* **Affected Scope:** Lines 175, 36, 61-69 (Section 2.B, Goals, CUJ 1)
+* **Discrepancy Description:** Declaring `id UUID PRIMARY KEY REFERENCES auth.users(id)` breaks the existing database schema, destroys the Secretary's ability to pre-seed employees before they log in via Google OAuth, and invalidates all existing foreign keys across payments, dues, and claims.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Retaining `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` with a nullable `user_id UUID UNIQUE REFERENCES auth.users(id)` preserves the existing working pattern from Migration 1 & 3, allowing pre-seeding and automatic OAuth binding upon first login.
+* **Proposed Edit:**
+  * Location: Section 2.B (Line 175)
+  * Change: Retain `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` and `user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL`.
 
 ---
 
-### 2. Majors (🟡)
-
-#### [MAJ-01] Dual Role Architecture Discrepancy [`egm-zoom-out`, `egm-comprehension`, `egm-style`]
-* **Affected Scope:** Lines 178–202
-* **Discrepancy Description:** Schema has both `members.role` column and `public.user_roles` join table.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** For single-role membership, maintaining `members.role app_role NOT NULL DEFAULT 'member'` is sufficient and eliminates table joins.
-* ***Proposed Edit:*** Drop `public.user_roles` table from schema and RLS matrix.
-
-#### [MAJ-02] Time-Zone Limbo (UTC vs. Asia/Colombo UTC+05:30) [`egm-design`]
-* **Affected Scope:** Lines 25, 66–70, 353, 492–495
-* **Discrepancy Description:** Cron at 00:00:00 UTC triggers at 05:30 AM Sri Lanka time, causing a 5.5-hour month-end date skew.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Sri Lanka operates at UTC+05:30 with no daylight saving time.
-* ***Proposed Edit:*** Anchor calendar boundaries to `TIMEZONE('Asia/Colombo', now())` and schedule cron at `30 18 * * *` UTC.
-
-#### [MAJ-03] Hardcoded Personal Email in DDL Triggers [`egm-zoom-out`, `egm-design`]
-* **Affected Scope:** Lines 318, 332–336, 386
-* **Discrepancy Description:** `krishaja@gmail.com` and `0759555924` hardcoded in DDL trigger and edge functions.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** DDL must not contain personal PII. Seeding belongs in `seed.sql`.
-* ***Proposed Edit:*** Move root admin bootstrap into `supabase/seed.sql` and read contact phone from `system_settings`.
-
-#### [MAJ-04] Missing Defaulter State Machine / View [`egm-zoom-out`, `egm-design`, `egm-comprehension`]
-* **Affected Scope:** Lines 25, 66–70, 204–213, 567
-* **Discrepancy Description:** Defaulters are described as an altered state, but neither `members` nor `member_dues` has a defaulter status column.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Defaulter status is a computed query, not a mutation.
-* ***Proposed Edit:*** Define explicit PostgreSQL view:
-  ```sql
-  CREATE VIEW public.defaulters_roster AS
-  SELECT m.id, m.full_name, m.phone, d.billing_month, d.amount
-  FROM public.members m
-  JOIN public.member_dues d ON d.member_id = m.id
-  WHERE d.status = 'pending' AND d.billing_month < date_trunc('month', TIMEZONE('Asia/Colombo', now()))::DATE;
-  ```
-
-#### [MAJ-05] Cron Architecture Contradiction [`egm-zoom-out`, `egm-implementation-readiness`]
-* **Affected Scope:** Lines 93, 479, 492–495
-* **Discrepancy Description:** Diagram specifies `pg_cron`, while implementation plan introduces an Edge Function `monthly-dues-cron`.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Native `pg_cron` inside PostgreSQL eliminates network hops and cold starts.
-* ***Proposed Edit:*** Schedule dues generation via `cron.schedule()` in migration scripts; remove Edge Function `monthly-dues-cron`.
-
-#### [MAJ-06] Contradictory Offline Balance Caching [`egm-design`]
-* **Affected Scope:** Lines 30, 438, 458–459, 576
-* **Discrepancy Description:** Goals state balances are viewable offline, but NFR specifies `Network-Only`.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Balance caching allows members to see their last verified standing offline.
-* ***Proposed Edit:*** Standardize on `Network-First` with fallback to cached balance and a prominent "Offline as of [Date]" badge.
-
-#### [MAJ-07] Omission of `supabase/config.toml` & Deno Config [`egm-codebase-details`]
-* **Affected Scope:** Lines 471–483, 555–558
-* **Discrepancy Description:** Missing project configuration breaks `supabase db reset`.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Supabase CLI requires `config.toml`.
-* ***Proposed Edit:*** Add `./supabase/config.toml` to Target Files.
-
-#### [MAJ-08] Missing CORS Preflight Handling [`egm-codebase-details`]
-* **Affected Scope:** Lines 486–491
-* **Discrepancy Description:** Cross-origin browser fetch requests fail without CORS `OPTIONS` handling.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Required for web fetch requests.
-* ***Proposed Edit:*** Add `./supabase/functions/_shared/cors.ts` to Target Files.
-
-#### [MAJ-09] Undefined Tailwind CSS Pipeline [`egm-codebase-details`]
-* **Affected Scope:** Lines 80, 457, 496–516
-* **Discrepancy Description:** Plan refers to "compiled Tailwind" without stylesheet paths or build steps.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Offline PWA requires a standalone cached CSS file.
-* ***Proposed Edit:*** Catalog `./css/style.css` (compiled Tailwind) and document Tailwind standalone CLI compilation.
-
-#### [MAJ-10] Client-Side Environment Variable Distribution [`egm-codebase-details`]
-* **Affected Scope:** Lines 519–521, 543–545
-* **Discrepancy Description:** Browser ES6 cannot parse `.env` directly.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** `js/config.js` should declare public configuration constants directly.
-* ***Proposed Edit:*** Document that `js/config.js` contains client-safe public keys (`SUPABASE_URL`, `SUPABASE_ANON_KEY`).
-
-#### [MAJ-11] Absence of Local Development Server Instructions [`egm-codebase-details`]
-* **Affected Scope:** Lines 574–579
-* **Discrepancy Description:** Service Workers will not register over `file://`.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Developers need a local HTTP serving command.
-* ***Proposed Edit:*** Add `python3 -m http.server 8080` to setup instructions.
-
-#### [MAJ-12] Unresolved Bereavement Aid Workflow & Eligibility Gating [`egm-zoom-out`, `egm-design`]
-* **Affected Scope:** Lines 42–43, 253–265, 301–302
-* **Discrepancy Description:** Open Question 2 remains unanswered; defaulting members could claim aid.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Define workflow: Manager approves claim, Treasurer logs disbursement; members with overdue balances cannot claim bereavement aid without board waiver.
-* ***Proposed Edit:*** Add state transitions and eligibility gating to `benefit_claims` in Section 3 and CUJs.
-
-#### [MAJ-13] Undefined Member Onboarding Workflow in `admin.html` [`egm-comprehension`]
-* **Affected Scope:** Lines 46–50, 508
-* **Discrepancy Description:** Whitelist requires pre-existing `members` row, but `admin.html` omits a member creation/approval view.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Administrators need an interface to approve members who contact via WhatsApp.
-* ***Proposed Edit:*** Add Member Directory & Onboarding management table to `admin.html`.
-
-#### [MAJ-14] Undefined Concept of "Legacy Member" [`egm-comprehension`]
-* **Affected Scope:** Lines 186, 414
-* **Discrepancy Description:** `is_legacy_member` is used in schema, but never defined in problem statement or overview.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Domain terms must be defined for fresh readers.
-* ***Proposed Edit:*** Add definition in Overview: members enrolled prior to system deployment are "legacy members" exempt from the one-time admission fee.
-
-#### [MAJ-15] Missing "Risks & Mitigations" Section [`egm-structural`]
-* **Affected Scope:** Lines 447–464
-* **Discrepancy Description:** Mandated section missing from specification.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Document must analyze failure modes.
-* ***Proposed Edit:*** Add `## Risks & Mitigations` section mapping failure modes to defensive strategies.
-
-#### [MAJ-16] Missing "Rollout & Rollback" Template Requirement [`egm-structural`]
-* **Affected Scope:** Lines 449–464
-* **Discrepancy Description:** Non-Functional Requirements omits deployment sequencing and rollback commands.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** Standard requirement for database migrations.
-* ***Proposed Edit:*** Add `### 4. Rollout & Rollback` to Non-Functional Requirements.
-
-#### [MAJ-17] Structural Asymmetry between Schema and RLS Matrix [`egm-structural`]
-* **Affected Scope:** Lines 165–288 vs Lines 290–306
-* **Discrepancy Description:** Schema declared `user_roles` and `payment_dues_reconciliation`, but RLS policy matrix omitted them.
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Justification:** All declared tables must have defined RLS policies.
-* ***Proposed Edit:*** Add RLS policy for `payment_dues_reconciliation` (and drop redundant `user_roles`).
+### Issue 2: PostgreSQL Transactional Migration Failure on Enum Mutation (`app_role`) [`egm-implementation-readiness` / `egm-design`] - Severity: Blocker
+* **Affected Scope:** Lines 161-171, 442, 465-466 (Section 2.A, Implementation Step 1)
+* **Discrepancy Description:** `ALTER TYPE app_role ADD VALUE ...` cannot be referenced in subsequent DML statements (`UPDATE members SET role = 'committee_member'`) within the same PostgreSQL transaction block.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Splitting into two discrete migration files satisfies PostgreSQL transactional isolation rules.
+* **Proposed Edit:**
+  * Location: Section 2.A & Implementation Manifest
+  * Change: Specify `20261108000004_add_app_roles.sql` for DDL enum expansion, followed by `20261108000005_comprehensive_overhaul.sql` for data migration, tables, triggers, and RLS.
 
 ---
 
-### 3. Nits (🟢)
+### Issue 3: Member Self-Privilege Escalation Vulnerability [`egm-zoom-out` / `egm-design`] - Severity: Blocker
+* **Affected Scope:** Lines 295, 35 (Section 3 RLS Matrix)
+* **Discrepancy Description:** An open `R/W` policy on `public.members` for authenticated members allows clients to issue REST `PATCH` requests setting `role = 'admin'` and `is_approved = true`.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Restrict `members` to SELECT-only for regular members, with contact updates mediated by a strict `BEFORE UPDATE` trigger function (`fn_protect_member_sensitive_columns()`) that raises an exception if `role`, `is_approved`, or `epf_number` change.
+* **Proposed Edit:**
+  * Location: Section 2.B, Section 3 RLS Matrix
+  * Change: Specify `fn_protect_member_sensitive_columns()` trigger blocking non-admin mutations to sensitive columns.
 
-#### [NIT-01..14] Code Quality, Style & Formatting Fixes
-* **Affected Scope:** Multiple lines across document
-* ***AI Suggestion:*** `PROPOSE FIX`
-* ***Proposed Edits:***
-  * Normalize design token typography and spacing to clean numbers (`10px`, `16px`, `26px`, `42px`, `68px`).
-  * Remove emotional and promotional buzzwords ("chaotic", "tedious", "instant").
-  * Fix Markdown linting: add blank lines before fenced code blocks (MD022/MD031), consolidate consecutive blank lines (MD012), use alphabetic alternative headers (`Alternative A`).
-  * Add standard DOM element IDs (`#slip-file-input`, `#cash-collection-form`) for Stitch UI wiring.
-  * Add automated test files (`supabase/tests/database.test.sql`) to Target Files manifest.
+---
+
+### Issue 4: Immutability Trigger Bypassed by `TRUNCATE` [`egm-structural` / `egm-design`] - Severity: Blocker
+* **Affected Scope:** Lines 203-214 (Section 2.C)
+* **Discrepancy Description:** The row-level trigger on `audit_logs` does not fire on `TRUNCATE`, leaving the audit table vulnerable to total deletion.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** A statement-level trigger `BEFORE TRUNCATE ON public.audit_logs` closes this security loophole.
+* **Proposed Edit:**
+  * Location: Section 2.C (Line 214)
+  * Change: Add `CREATE TRIGGER trg_audit_logs_prevent_truncate BEFORE TRUNCATE ON public.audit_logs FOR EACH STATEMENT EXECUTE FUNCTION public.fn_prevent_audit_tampering();`.
+
+---
+
+### Issue 5: Unhandled `NOT NULL` Constraint on Pre-Existing Member Table Records [`egm-implementation-readiness`] - Severity: Blocker
+* **Affected Scope:** Lines 178-179, 442, 467 (Section 2.B, Implementation Step 1)
+* **Discrepancy Description:** Adding `epf_number UNIQUE NOT NULL` and `designation NOT NULL` directly aborts on non-empty tables because existing admin/seed records contain null values.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Adding columns as nullable, backfilling existing admin records, and then applying `NOT NULL` guarantees zero-downtime execution.
+* **Proposed Edit:**
+  * Location: Section 2.B & Implementation Step 1
+  * Change: Specify phased migration: add columns as nullable -> backfill `krishaja@gmail.com` with `EPF-0001` / `System Administrator` -> set `NOT NULL` and `UNIQUE`.
+
+---
+
+### Issue 6: Self-Service Registration Blocked by Existing RLS Policies [`egm-implementation-readiness` / `egm-comprehension`] - Severity: Blocker
+* **Affected Scope:** Lines 442, 454, 488 (Phase 4, Step 4.3)
+* **Discrepancy Description:** Newly authenticated Google OAuth users without a member record cannot insert into `public.members` because existing RLS policies require `admin` or `manager` roles.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** A scoped RLS policy `members_self_registration_insert` permits inserting an unapproved `role = 'member'` row where `auth.uid() = user_id`.
+* **Proposed Edit:**
+  * Location: Section 3 & Implementation Step 1
+  * Change: Add `CREATE POLICY members_self_registration_insert ON public.members FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id AND role = 'member'::app_role AND is_approved = false AND is_legacy_member = false);`.
+
+---
+
+### Issue 7: Service Worker `localStorage` Architectural Impossibility [`egm-codebase-details`] - Severity: Blocker
+* **Affected Scope:** Lines 329, 449, 482 (Section 5.B, Manifest Line 449, Step 3.5)
+* **Discrepancy Description:** Service Workers have no access to `window.localStorage`; referencing it crashes the service worker.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Clarify that `sw.js` uses Cache Storage API (`v3-runtime-cache`), while client-side fallback to `mria_cached_member` is executed in `js/auth.js`.
+* **Proposed Edit:**
+  * Location: Section 5.B & Implementation Step 3.5
+  * Change: Replace `localStorage` reference with Cache Storage API.
+
+---
+
+### Issue 8: Disconnected Treasury Dual-Bookkeeping & Lack of Automation [`egm-zoom-out` / `egm-design`] - Severity: Blocker
+* **Affected Scope:** Lines 237-270, 81-90, 446, 500 (Section 2.D, CUJ 3, Implementation Step 6)
+* **Discrepancy Description:** Client-side JavaScript is tasked with performing uncoordinated writes to `payments` and `treasury_transactions`. Bank slip verifications don't automate treasury entries, causing ledger drift.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Inflows must be trigger-generated upon `payments.status = 'verified'`, outflows upon `benefit_claims.status = 'disbursed'`. Add foreign keys `payment_id` and `claim_id` to `treasury_transactions`.
+* **Proposed Edit:**
+  * Location: Section 2.D, CUJ 3, Implementation Step 1 & 6
+  * Change: Add automated PostgreSQL triggers syncing verified payments and disbursed claims into `treasury_transactions`, with `payment_id` and `claim_id` foreign keys.
+
+---
+
+### Issue 9: YAGNI Over-Engineering: Private R2 and Custom CMS for Constitution [`egm-zoom-out`] - Severity: Major
+* **Affected Scope:** Lines 273-286, 41, 442, 458 (Section 2.E, Goals, Manifest)
+* **Discrepancy Description:** Building a custom database CMS table and private R2 presigned URL pipeline for two static Constitution PDFs that change once every few years is excessive accidental complexity.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Store `constitution_si.pdf` and `constitution_en.pdf` as static assets in `/assets/docs/` or a public Supabase Storage bucket (`mria-documents`), eliminating the `cms_documents` table and dedicated Edge Function.
+* **Proposed Edit:**
+  * Location: Section 2.E, Goals, File Manifest
+  * Change: Simplify Constitution document hosting to public storage or `/assets/docs/`.
+
+---
+
+### Issue 10: Cash Payment FIFO Reconciliation Trigger Disconnect [`egm-implementation-readiness`] - Severity: Major
+* **Affected Scope:** Lines 446, 470, 500 (Step 1, Step 6.3)
+* **Discrepancy Description:** Trigger `on_payment_verified_reconcile` only fires on `UPDATE`. Direct cash payments are inserted with `status = 'verified'`, so FIFO dues reconciliation never executes.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Update trigger to fire on `AFTER INSERT OR UPDATE ON public.payments`.
+* **Proposed Edit:**
+  * Location: Implementation Step 1
+  * Change: Update trigger `on_payment_verified_reconcile` to fire on `AFTER INSERT OR UPDATE`.
+
+---
+
+### Issue 11: Audit Trigger Blocking Automated Monthly Dues Cron Job [`egm-zoom-out` / `egm-implementation-readiness`] - Severity: Major
+* **Affected Scope:** Lines 194, 470 (Section 2.C, Step 1)
+* **Discrepancy Description:** `audit_logs.user_email` is `NOT NULL`. During pg_cron monthly dues generation, `auth.jwt()` is null, causing the trigger to throw an exception and abort dues generation.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Declare `user_email DEFAULT 'SYSTEM'` and resolve actor with `COALESCE(auth.jwt() ->> 'email', 'SYSTEM')`.
+* **Proposed Edit:**
+  * Location: Section 2.C & Implementation Step 1
+  * Change: Add safe system actor fallback in `audit_logs` schema and trigger function.
+
+---
+
+### Issue 12: Edge Function Invocations: Relative Path, Secrets, and CORS [`egm-implementation-readiness`] - Severity: Major
+* **Affected Scope:** Lines 308, 443, 473-476 (Section 4, Step 2)
+* **Discrepancy Description:** Relative `/functions/v1/...` URL 404s on static hosting, `SUPABASE_SERVICE_ROLE_KEY` is omitted from secrets, and CORS handling is unspecified.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Use `${CONFIG.FUNCTIONS_URL}/send-claim-notification`, add service role key, validate JWT Bearer token, and handle CORS `OPTIONS`.
+* **Proposed Edit:**
+  * Location: Section 4 & Implementation Step 2
+  * Change: Add exact URL, service role secret, caller JWT verification, and CORS preflight headers.
+
+---
+
+### Issue 13: Opening Balance Computation Gap for Date-Filtered Statements [`egm-implementation-readiness`] - Severity: Major
+* **Affected Scope:** Lines 447, 481, 501 (Step 3.4, Step 6.4)
+* **Discrepancy Description:** The `treasury_account_balances` view only returns all-time totals; date-filtered exports cannot determine opening balances prior to `start_date`.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Add stored procedure or API query `get_treasury_statement(start_date, end_date)` calculating opening balance for prior periods.
+* **Proposed Edit:**
+  * Location: Section 2.D, Step 1 & Step 3.3
+  * Change: Add `get_treasury_statement(start_date, end_date)` specification.
+
+---
+
+### Issue 14: Admin RBAC Route Guard Lock-Out in `js/page-admin.js` [`egm-implementation-readiness`] - Severity: Major
+* **Affected Scope:** Lines 457-458, 498-499 (Step 6)
+* **Discrepancy Description:** `js/page-admin.js` hardcodes `staffRoles = ["admin", "manager", "official", "treasurer"]`, locking out newly introduced `secretary` and `committee_member` roles.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Update `allowedRoles` to include `secretary` and `committee_member`.
+* **Proposed Edit:**
+  * Location: Implementation Step 6.1
+  * Change: Update `allowedRoles` to `['admin', 'manager', 'secretary', 'treasurer', 'committee_member']`.
+
+---
+
+### Issue 15: Omission of `/js/treasury-export.js` in `sw.js` Pre-Cache [`egm-codebase-details`] - Severity: Major
+* **Affected Scope:** Lines 447, 449, 482 (Step 3.5)
+* **Discrepancy Description:** Newly created `treasury-export.js` is omitted from `STATIC_ASSETS`, failing offline execution.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Include `/js/treasury-export.js` in `STATIC_ASSETS` in `sw.js`.
+* **Proposed Edit:**
+  * Location: Implementation Step 3.5
+  * Change: Add `/js/treasury-export.js` to `STATIC_ASSETS`.
+
+---
+
+### Issue 16: Statutory Acronym Glossary & Institutional Routing Clarification [`egm-comprehension` / `egm-style`] - Severity: Nit
+* **Affected Scope:** Lines 20, 24, 36, 178 (Section 2.B, Goals, The Problem)
+* **Discrepancy Description:** Acronyms `EPF` and `NIC` lack inline expansion; personal liaison Gmail `krishaja@gmail.com` needs clear contextualization.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Add glossary expansions and clarify initial liaison routing.
+* **Proposed Edit:**
+  * Location: Goals & Section 2.B
+  * Change: Define `EPF` (Employees' Provident Fund) and `NIC` (National Identity Card); label `krishaja@gmail.com` as liaison administrator.
+
+---
+
+### Issue 17: Systematic Template Dual-Language Purge [`egm-style`] - Severity: Nit
+* **Affected Scope:** Lines 445, 486, 491, 498 (Steps 4, 5, 6)
+* **Discrepancy Description:** Steps focus on `index.html`; `dashboard.html`, `admin.html`, and `unauthorized.html` still contain hardcoded mixed strings.
+* **AI Suggestion:** PROPOSE FIX
+* **Justification:** Explicitly instruct replacing all hardcoded bilingual strings with single `data-i18n` anchors across all HTML templates.
+* **Proposed Edit:**
+  * Location: Implementation Steps 4, 5, 6
+  * Change: Add instruction to sweep all HTML files for dual-language text nodes and replace with `<span data-i18n="...">`.
