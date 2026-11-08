@@ -138,10 +138,10 @@
           <span data-i18n="tab_defaulters">Defaulters (31st)</span>
         </button>
 
-        <!-- Tab: CMS & Constitution -->
+        <!-- Tab: CMS & Settings -->
         <button id="tab-btn-cms" onclick="switchAdminTab('cms')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
           <span class="material-symbols-outlined text-[18px]">tune</span>
-          <span data-i18n="tab_cms">Content &amp; Constitution</span>
+          <span data-i18n="tab_cms">Content &amp; Settings</span>
         </button>
 
         <!-- Tab: Audit Logs (Admin only) -->
@@ -302,6 +302,10 @@
             <p class="text-xs text-on-surface-variant">Generate date-filtered statements in clean RFC 4180 CSV and CSS-paged printable PDF.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button onclick="switchAdminTab('cms'); document.getElementById('bankSettingsCard')?.scrollIntoView({ behavior: 'smooth' });" class="px-3 py-1.5 rounded-lg border border-primary/30 bg-sky-50 text-primary text-xs font-bold hover:bg-sky-100 flex items-center gap-1.5 transition-colors">
+              <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
+              <span>Edit Bank &amp; QR</span>
+            </button>
             <button onclick="setStatementPeriod('monthly')" class="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-bold hover:bg-surface">Current Month</button>
             <button onclick="setStatementPeriod('yearly')" class="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-bold hover:bg-surface">Current Year</button>
           </div>
@@ -493,6 +497,100 @@
     <!-- ================= TAB 7: CMS & CONSTITUTION ================= -->
     <div id="tab-content-cms" class="tab-content hidden space-y-6">
       
+      <!-- Official Bank Coordinates & LankaQR Configuration -->
+      <div id="bankSettingsCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-4 border-b border-outline-variant">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[24px]">account_balance</span>
+            <div>
+              <h4 class="font-bold text-sm sm:text-base text-on-surface" data-i18n="bank_settings_title">
+                Official Bank Coordinates &amp; LankaQR Code
+              </h4>
+              <p class="text-xs text-on-surface-variant" data-i18n="bank_settings_desc">
+                Configure the official association bank account and LankaQR payment code shown on member dashboards.
+              </p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
+            <span class="material-symbols-outlined text-[14px]">sync</span>
+            <span>Live Sync</span>
+          </span>
+        </div>
+
+        <form id="bankSettingsForm" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- Left: QR Code Preview & Upload (5 Cols) -->
+          <div class="lg:col-span-5 flex flex-col items-center justify-center p-5 border border-outline-variant rounded-2xl bg-surface/50 space-y-4 text-center">
+            <div class="text-xs font-bold text-on-surface flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-primary text-[18px]">qr_code_2</span>
+              <span>LankaQR Payment Code</span>
+            </div>
+            
+            <div class="p-3 bg-white border border-outline-variant rounded-2xl shadow-sm">
+              <img id="adminBankQrPreview" alt="Bank QR Code" class="w-44 h-44 object-contain rounded-lg" src="/assets/default-bank-qr.svg" />
+            </div>
+
+            <p class="text-[11px] text-on-surface-variant max-w-xs">
+              Supports PNG, JPEG, SVG, or WebP. Displayed directly to members for one-tap LankaQR app scanning.
+            </p>
+
+            <div class="flex flex-wrap items-center justify-center gap-2 w-full pt-1">
+              <label for="adminQrFileInput" class="cursor-pointer px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover transition-colors shadow-sm inline-flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">upload</span>
+                <span data-i18n="upload_qr">Upload New QR</span>
+              </label>
+              <input type="file" id="adminQrFileInput" class="hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
+
+              <button type="button" id="resetBankQrBtn" class="px-3 py-2 bg-white border border-outline-variant text-on-surface rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+                <span data-i18n="reset_qr">Reset Default</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Bank Coordinates Form (7 Cols) -->
+          <div class="lg:col-span-7 space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">
+                Bank Name
+              </label>
+              <input type="text" id="settingBankName" required placeholder="e.g., Bank of Ceylon (BOC)" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">
+                  Branch Name &amp; Code
+                </label>
+                <input type="text" id="settingBankBranch" required placeholder="e.g., Mattala Airport Branch (742)" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">
+                  Account Number
+                </label>
+                <input type="text" id="settingAccountNumber" required placeholder="e.g., 8201948201" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-mono font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">
+                Account Name / Beneficiary
+              </label>
+              <input type="text" id="settingAccountName" required placeholder="e.g., MRIA Management Welfare Association" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            </div>
+
+            <div class="pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-outline-variant">
+              <span id="bankSettingsStatus" class="text-xs text-on-surface-variant italic"></span>
+              <button type="submit" id="saveBankSettingsBtn" class="px-5 py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-colors shadow-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                <span data-i18n="save_bank_details">Save Bank Coordinates</span>
+              </button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+
       <!-- Constitution Dual-Slot CMS -->
       <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
         <h4 class="font-bold text-sm text-on-surface pb-3 border-b border-outline-variant">

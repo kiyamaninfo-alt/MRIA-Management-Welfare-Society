@@ -144,7 +144,13 @@ export const translations = {
     tab_secretary: "Member Profiles",
     tab_claims: "Benefit Grants",
     tab_defaulters: "Defaulters (31st)",
-    tab_cms: "Content & Constitution",
+    tab_cms: "Content & Settings",
+    bank_settings_title: "Official Bank Coordinates & LankaQR",
+    bank_settings_desc: "Configure the official association bank account and LankaQR payment code shown on member dashboards.",
+    upload_qr: "Upload New QR",
+    reset_qr: "Reset Default",
+    save_bank_details: "Save Bank Coordinates",
+    bank_settings_saved: "Bank coordinates & QR code saved successfully!",
 
     // Treasury Module
     treasury_title: "Society Treasury & Financial Ledger",
@@ -320,7 +326,13 @@ export const translations = {
     tab_secretary: "සාමාජික තොරතුරු",
     tab_claims: "සුබසාධන ආධාර",
     tab_defaulters: "හිඟ මුදල් ලේඛනය (31 නීතිය)",
-    tab_cms: "ව්‍යවස්ථාව සහ අන්තර්ගතය",
+    tab_cms: "අන්තර්ගතය සහ සැකසුම්",
+    bank_settings_title: "නිල බැංකු තොරතුරු සහ LankaQR කේතය",
+    bank_settings_desc: "සාමාජිකයින්ට මුදල් තැන්පත් කිරීම සඳහා පෙන්වන නිල බැංකු ගිණුම් විස්තර සහ LankaQR කේතය මෙතැනින් සංස්කරණය කරන්න.",
+    upload_qr: "නව QR එක් කරන්න",
+    reset_qr: "මුල් QR යොදන්න",
+    save_bank_details: "බැංකු තොරතුරු සුරකින්න",
+    bank_settings_saved: "බැංකු විස්තර සහ QR කේතය සාර්ථකව සුරකින ලදී!",
 
     // Treasury Module
     treasury_title: "සංගමයේ භාණ්ඩාගාරය සහ මූල්‍ය ලෙජරය",

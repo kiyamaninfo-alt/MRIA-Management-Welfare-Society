@@ -248,10 +248,19 @@ export async function getSystemSetting(key) {
 /**
  * Updates a system setting.
  */
-export async function updateSystemSetting(key, value) {
+export async function updateSystemSetting(key, value, updatedBy = null) {
+  const payload = {
+    key,
+    value,
+    updated_at: new Date().toISOString(),
+  };
+  if (updatedBy) {
+    payload.updated_by = updatedBy;
+  }
+
   const { data, error } = await supabase
     .from("system_settings")
-    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .upsert(payload)
     .select()
     .single();
 

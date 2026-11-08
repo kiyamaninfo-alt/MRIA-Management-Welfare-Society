@@ -16,6 +16,8 @@ import {
   recordTreasuryTransaction,
   getTreasuryStatement,
   getAuditLogs,
+  getSystemSetting,
+  updateSystemSetting,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
@@ -35,12 +37,13 @@ let currentStaff = null;
 let allMembers = [];
 let pendingPayments = [];
 let currentStatementData = null;
+let currentQrDataUrl = "/assets/default-bank-qr.svg";
 
 // Role-based Module Permissions Matrix
 const ROLE_TABS = {
   admin: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
-  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters"],
-  treasurer: ["treasury", "slips", "cash", "defaulters"],
+  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms"],
+  treasurer: ["treasury", "slips", "cash", "defaulters", "cms"],
   secretary: ["secretary", "claims", "defaulters", "cms"],
   committee_member: ["claims", "defaulters"],
 };
@@ -140,6 +143,7 @@ export function switchAdminTab(targetTab) {
   if (targetTab === "secretary") loadSecretaryData();
   if (targetTab === "claims") loadClaimsData();
   if (targetTab === "defaulters") loadDefaultersData();
+  if (targetTab === "cms") loadBankSettings();
   if (targetTab === "audit") loadAuditLogsData();
 }
 window.switchAdminTab = switchAdminTab;
@@ -437,6 +441,9 @@ function setupAdminForms() {
       }
     });
   }
+
+  // Bank Coordinates & QR Code Form
+  setupBankSettingsHandlers();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -752,5 +759,139 @@ async function loadAuditLogsData() {
     `).join("");
   } catch (err) {
     console.error("Audit log error:", err);
+  }
+}
+
+// ================= TAB 7: BANK COORDINATES & LANKAQR SETTINGS =================
+
+export async function loadBankSettings() {
+  try {
+    const bankSetting = await getSystemSetting("bank_qr");
+    const data = bankSetting || {
+      bank_name: "Bank of Ceylon (BOC)",
+      branch: "Mattala Airport Branch (742)",
+      account_name: "MRIA Management Welfare Association",
+      account_number: "8201948201",
+      url: "/assets/default-bank-qr.svg",
+    };
+
+    const nameInput = document.getElementById("settingBankName");
+    const branchInput = document.getElementById("settingBankBranch");
+    const accNumInput = document.getElementById("settingAccountNumber");
+    const accNameInput = document.getElementById("settingAccountName");
+    const qrPreview = document.getElementById("adminBankQrPreview");
+
+    if (nameInput) nameInput.value = data.bank_name || "";
+    if (branchInput) branchInput.value = data.branch || "";
+    if (accNumInput) accNumInput.value = data.account_number || "";
+    if (accNameInput) accNameInput.value = data.account_name || "";
+
+    currentQrDataUrl = data.url || "/assets/default-bank-qr.svg";
+    if (qrPreview) qrPreview.src = currentQrDataUrl;
+
+    const statusEl = document.getElementById("bankSettingsStatus");
+    if (statusEl) {
+      statusEl.textContent = "Current bank coordinates loaded.";
+    }
+  } catch (err) {
+    console.error("Failed to load bank settings:", err);
+    showToast("Could not load current bank coordinates.", "error");
+  }
+}
+window.loadBankSettings = loadBankSettings;
+
+function setupBankSettingsHandlers() {
+  const fileInput = document.getElementById("adminQrFileInput");
+  const qrPreview = document.getElementById("adminBankQrPreview");
+  const resetBtn = document.getElementById("resetBankQrBtn");
+  const form = document.getElementById("bankSettingsForm");
+  const saveBtn = document.getElementById("saveBankSettingsBtn");
+  const statusEl = document.getElementById("bankSettingsStatus");
+
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const allowedTypes = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        showToast("Please upload a valid image (PNG, JPEG, SVG, WebP).", "warning");
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        showToast("QR image size must be under 2 MB.", "warning");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentQrDataUrl = event.target.result;
+        if (qrPreview) qrPreview.src = currentQrDataUrl;
+        if (statusEl) {
+          statusEl.textContent = `Selected: ${file.name} (${Math.round(file.size / 1024)} KB) - click Save to apply.`;
+        }
+        showToast("New QR code selected. Click 'Save Bank Coordinates' to apply.", "info");
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      currentQrDataUrl = "/assets/default-bank-qr.svg";
+      if (qrPreview) qrPreview.src = currentQrDataUrl;
+      if (fileInput) fileInput.value = "";
+      if (statusEl) {
+        statusEl.textContent = "Default QR code restored - click Save to apply.";
+      }
+      showToast("Reset to default BOC QR image. Click Save to apply.", "info");
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const bankName = document.getElementById("settingBankName")?.value.trim();
+      const branch = document.getElementById("settingBankBranch")?.value.trim();
+      const accountNumber = document.getElementById("settingAccountNumber")?.value.trim();
+      const accountName = document.getElementById("settingAccountName")?.value.trim();
+
+      if (!bankName || !branch || !accountNumber || !accountName) {
+        showToast("Please fill in all bank coordinate fields.", "warning");
+        return;
+      }
+
+      try {
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">sync</span> Saving...';
+        }
+
+        const newSettings = {
+          bank_name: bankName,
+          branch,
+          account_number: accountNumber,
+          account_name: accountName,
+          url: currentQrDataUrl,
+        };
+
+        await updateSystemSetting("bank_qr", newSettings, currentStaff?.id);
+
+        if (statusEl) {
+          statusEl.textContent = `Saved at ${new Date().toLocaleTimeString()} by ${currentStaff?.full_name || "Staff"}`;
+        }
+        showToast(t("bank_settings_saved") || "Bank coordinates & QR code saved successfully!", "success");
+      } catch (err) {
+        console.error("Failed to save bank settings:", err);
+        showToast(err.message || "Failed to update bank coordinates.", "error");
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">save</span> <span>Save Bank Coordinates</span>';
+        }
+      }
+    });
   }
 }

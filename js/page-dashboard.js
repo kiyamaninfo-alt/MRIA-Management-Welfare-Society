@@ -88,11 +88,37 @@ async function refreshDashboardData() {
     const announcements = await getAnnouncements();
     renderNotificationsCenter(announcements);
 
-    // B. Bank QR Code
+    // B. Bank Coordinates & QR Code
     const bankQrSetting = await getSystemSetting("bank_qr");
-    if (bankQrSetting && bankQrSetting.url) {
-      const qrImg = document.getElementById("bankQrImg");
-      if (qrImg) qrImg.src = bankQrSetting.url;
+    if (bankQrSetting) {
+      if (bankQrSetting.url) {
+        const qrImg = document.getElementById("bankQrImg");
+        if (qrImg) qrImg.src = bankQrSetting.url;
+      }
+      if (bankQrSetting.bank_name) {
+        const bankNameEl = document.getElementById("displayBankName");
+        if (bankNameEl) bankNameEl.textContent = bankQrSetting.bank_name;
+      }
+      if (bankQrSetting.branch) {
+        const branchEl = document.getElementById("displayBankBranch");
+        if (branchEl) branchEl.textContent = bankQrSetting.branch;
+      }
+      if (bankQrSetting.account_name) {
+        const accNameEl = document.getElementById("displayAccountName");
+        if (accNameEl) accNameEl.textContent = bankQrSetting.account_name;
+      }
+      if (bankQrSetting.account_number) {
+        const accNumEl = document.getElementById("displayAccountNumber");
+        if (accNumEl) accNumEl.textContent = bankQrSetting.account_number;
+      }
+      if (bankQrSetting.bank_name) {
+        const badgeEl = document.getElementById("displayBankBadge");
+        if (badgeEl) {
+          const bankPrefix = bankQrSetting.bank_name.includes("Ceylon") ? "BOC" : bankQrSetting.bank_name.split(" ")[0];
+          const branchPrefix = bankQrSetting.branch ? bankQrSetting.branch.split(" ")[0] : "";
+          badgeEl.textContent = branchPrefix ? `${bankPrefix} ${branchPrefix}` : bankPrefix;
+        }
+      }
     }
 
     // C. Dues & Balance Info
