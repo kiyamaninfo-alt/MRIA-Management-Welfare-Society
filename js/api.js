@@ -182,21 +182,31 @@ export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount,
 /**
  * Self-registration submission for unlisted users on unauthorized page.
  */
-export async function submitRegistrationRequest({ email, fullName, epfNumber, designation, phone }) {
+export async function submitRegistrationRequest({ userId, email, fullName, epfNumber, designation, phone }) {
+  let uid = userId;
+  if (!uid) {
+    const { data: { user } } = await supabase.auth.getUser();
+    uid = user?.id;
+  }
+
+  const payload = {
+    email: email.trim().toLowerCase(),
+    full_name: fullName.trim(),
+    epf_number: epfNumber.trim(),
+    designation: designation.trim(),
+    phone: phone && phone.trim() ? phone.trim() : "",
+    role: "member",
+    is_approved: false,
+    is_legacy_member: false,
+  };
+
+  if (uid) {
+    payload.user_id = uid;
+  }
+
   const { data, error } = await supabase
     .from("members")
-    .insert([
-      {
-        email: email.trim().toLowerCase(),
-        full_name: fullName.trim(),
-        epf_number: epfNumber.trim(),
-        designation: designation.trim(),
-        phone: phone ? phone.trim() : null,
-        role: "member",
-        is_approved: false,
-        is_legacy_member: false,
-      },
-    ])
+    .insert([payload])
     .select()
     .single();
 

@@ -27,16 +27,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     userEmailDisplay.textContent = `Google Account: ${user.email}`;
   }
 
+  // Wire registration form elements
+  const regForm = document.getElementById("registrationForm");
+  const submitBtn = document.getElementById("submitRegBtn");
+  const successNotice = document.getElementById("regSuccessNotice");
+
+  // If user already applied and is pending approval, hide form and show pending message
+  if (member && !member.is_approved) {
+    if (regForm) regForm.classList.add("hidden");
+    if (successNotice) {
+      successNotice.classList.remove("hidden");
+    }
+  }
+
   // Prefill Full Name if available in user metadata
   const regFullName = document.getElementById("regFullName");
   if (regFullName && user.user_metadata?.full_name) {
     regFullName.value = user.user_metadata.full_name;
   }
-
-  // Wire registration form
-  const regForm = document.getElementById("registrationForm");
-  const submitBtn = document.getElementById("submitRegBtn");
-  const successNotice = document.getElementById("regSuccessNotice");
 
   if (regForm) {
     regForm.addEventListener("submit", async (e) => {
@@ -59,6 +67,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         await submitRegistrationRequest({
+          userId: user.id,
           email: user.email,
           fullName,
           epfNumber,
@@ -73,7 +82,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast(t("registration_submitted"), "success");
       } catch (err) {
         console.error("Registration error:", err);
-        showToast(err.message || "Failed to submit registration request.", "error");
+        let msg = err.message || "Failed to submit registration request.";
+        if (err.code === "23505" || msg.includes("unique")) {
+          msg = "This EPF Number or Email is already registered with an existing account.";
+        }
+        showToast(msg, "error");
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.textContent = t("submit_registration");
