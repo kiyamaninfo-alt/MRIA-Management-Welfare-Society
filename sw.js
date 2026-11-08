@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mria-welfare-v3';
+const CACHE_NAME = 'mria-welfare-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -6,6 +6,7 @@ const STATIC_ASSETS = [
   '/dashboard.html',
   '/admin.html',
   '/manifest.json',
+  '/favicon.ico',
   '/assets/mria-logo.svg',
   '/assets/default-bank-qr.svg',
   '/assets/icon-192.png',
