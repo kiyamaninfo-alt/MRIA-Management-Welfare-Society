@@ -6,7 +6,7 @@
 **Review Pipeline:** Uninterrupted Full Flow across all EGM Goldfish lenses:
 * Stage 5: Initial Zoom-Out (`egm-zoom-out`)
 * Stage 6: Comprehension Test (`egm-comprehension`)
-* Stage 7: Critic Review (`egm-design`, `egm-style`)
+* Stage 7: Critic Review (`egm-design`, `egm-structural`, `egm-style`)
 * Stage 8: Intermediate Zoom-Out (`egm-zoom-out`)
 * Stage 9: Implementation Readiness (`egm-implementation-readiness`, `egm-codebase-details`)
 
@@ -14,13 +14,14 @@
 
 ## 1. Executive Summary & Verdict
 
-The architectural specification provides a strong, user-centric foundation tailored to the local operational needs of the MRIA Welfare Association. However, the comprehensive review across all six auditing lenses identified **8 Blocker severity issues** and **14 Major severity issues** that would cause runtime failures, security bypasses, or implementation deadlocks if execution began immediately.
+The architectural specification provides a strong, user-centric foundation tailored to the local operational needs of the MRIA Welfare Association. However, the comprehensive review across all seven auditing perspectives identified **8 Blocker severity issues**, **17 Major severity issues**, and **14 Nit severity issues** that would cause runtime failures, security bypasses, or implementation deadlocks if execution began immediately.
 
 **Key Structural Themes:**
 1. **Database & Authorization Defects:** Recursive RLS evaluation, client-side whitelist bypasses, and an unmapped payment reconciliation trigger.
-2. **Architectural Over-Engineering:** Secondary cloud provider (Cloudflare R2) and serverless function layers where native Supabase features (`storage.objects` and `pg_cron`) eliminate 50% of the external moving parts.
+2. **Architectural Over-Engineering:** Secondary cloud provider (Cloudflare R2) and serverless function layers where native Supabase features (`storage.objects` and `pg_cron`) eliminate 50% of external moving parts.
 3. **Browser ES6 & Asset Omissions:** Unresolvable bare specifiers (`@supabase/supabase-js`) in pure Vanilla JS and missing static assets causing Service Worker installation failure.
 4. **Timezone & Defaulter Mechanics:** 5.5-hour UTC vs. Sri Lanka (UTC+05:30) date skew, and treating computed read-views as active state mutations.
+5. **Template & Risk Completeness:** Missing mandatory "Risks & Mitigations" and "Rollout & Rollback" operational specifications.
 
 ---
 
@@ -59,6 +60,9 @@ The architectural specification provides a strong, user-centric foundation tailo
 | **MAJ-12** | **Unresolved Bereavement Aid Workflow & Eligibility Gating** | Open Question 2 remains unanswered; no validation prevents members in default from claiming aid. | Formally define the approval lifecycle and gate claim submissions to members in good financial standing. |
 | **MAJ-13** | **Undefined Member Onboarding Workflow in `admin.html`** | Whitelist requires pre-existing `members` row, but `admin.html` omits a member creation/approval view. | Add a member registration and whitelist management table to `admin.html`. |
 | **MAJ-14** | **Undefined Concept of "Legacy Member"** | `is_legacy_member` is used in schema, but never defined in problem statement or overview. | Define legacy member criteria and admission fee exemption rules in Overview. |
+| **MAJ-15** | **Missing Required Section: "Risks & Mitigations"** | Document lacks failure mode analysis for Edge Function timeouts, upload drops, and network flutter. | Add a dedicated `## Risks & Mitigations` section mapping failure modes to defensive strategies. |
+| **MAJ-16** | **Missing Template Requirement: "Rollout & Rollback"** | Non-Functional Requirements omits migration deployment ordering, backward compatibility, and rollback commands. | Add `### 4. Rollout & Rollback` with sequential migration steps and rollback procedures. |
+| **MAJ-17** | **Structural Asymmetry between Schema and RLS Matrix** | Schema defines `public.user_roles` and `public.payment_dues_reconciliation`, but RLS policy matrix omits them. | Explicitly define RLS policies for all declared tables or eliminate unneeded entities. |
 
 ---
 
@@ -74,6 +78,12 @@ The architectural specification provides a strong, user-centric foundation tailo
 | **NIT-06** | Missing local Edge Function secrets template. | Add `./supabase/.env.local.example`. |
 | **NIT-07** | Undefined association roles (`manager` vs `official`). | Document real-world operational boundaries for each role. |
 | **NIT-08** | Undefined acronyms ("EGM", "Stitch MCP"). | Provide inline definition or documentation links. |
+| **NIT-09** | Missing blank lines before fenced code blocks (MD022 / MD031). | Add standard blank line separation between headers and code blocks. |
+| **NIT-10** | Multiple consecutive blank lines (MD012). | Consolidate consecutive blank lines before major headers. |
+| **NIT-11** | Heading indexing divergence in Alternatives (`### Alternative 1` vs `### Alternative A`). | Align with alphabetic ordering convention (`Alternative A`). |
+| **NIT-12** | Typographical punctuation asymmetry in bold tags (`**Given**:` vs `**Given:**`). | Normalize bold punctuation tags uniformly across document. |
+| **NIT-13** | Backtick nesting inside strong emphasis tags (`* **`code`:**`). | Disentangle nested backtick tags (`* \`code\` (description):`). |
+| **NIT-14** | Plaintext inline code for external URL & workspace file references. | Convert to functional Markdown links (`[WhatsApp Link](https://wa.me/...)`). |
 
 ---
 
@@ -103,20 +113,23 @@ The architectural specification provides a strong, user-centric foundation tailo
 | **MAJ-12** | `egm-zoom-out`, `egm-design` | `zoom_out_report.md` §6, `critic_report.md` §2.6 | Welfare Benefits Subsystem |
 | **MAJ-13** | `egm-comprehension` | `comprehension_report.md` §1 | Member Onboarding UX |
 | **MAJ-14** | `egm-comprehension` | `comprehension_report.md` §5 | Business Domain Terminology |
-| **NIT-01..08** | `egm-style`, `egm-structural`, `egm-implementation-readiness` | `critic_report.md` §2.7, §3.1–3.4; `implementation_readiness_report.md` §3.1–3.4 | Code Quality, Style, & Ergonomics |
+| **MAJ-15** | `egm-structural` | `critic_report.md` §4.1 | Risk Engineering & Boundaries |
+| **MAJ-16** | `egm-structural` | `critic_report.md` §4.2 | Operations & Deployability |
+| **MAJ-17** | `egm-structural` | `critic_report.md` §4.3 | Security & Policy Completeness |
+| **NIT-01..14** | `egm-style`, `egm-structural`, `egm-implementation-readiness` | `critic_report.md` §2.7, §3.1–3.4, §4.4; `implementation_readiness_report.md` §3.1–3.4 | Code Quality, Style, & Formatting |
 
 ---
 
 ## 4. Next Step Recommendation
 
-All raw stage review files have been preserved:
+All raw stage review files have been preserved and updated:
 * [zoom_out_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/zoom_out_report.md)
 * [comprehension_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/comprehension_report.md)
 * [critic_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/critic_report.md)
 * [intermediate_zoom_out_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/intermediate_zoom_out_report.md)
 * [implementation_readiness_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/implementation_readiness_report.md)
 
-To resolve these findings and bring [mria_management_welfare_association_pwa.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/mria_management_welfare_association_pwa.md) to an implementation-ready state, run:
+To resolve these findings and apply automated remediations directly to [mria_management_welfare_association_pwa.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/mria_management_welfare_association_pwa.md), run:
 
 ```bash
 egm-resolve docs/designs/mria_management_welfare_association_pwa.md

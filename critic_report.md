@@ -111,3 +111,32 @@
 ### 3.4 Promotional Buzzwords & Conversational Fillers
 * **Reviewer:** `egm-style`
 * **Affected Scope:** Lines 11, 15, 17, 64, 416, 431
+
+
+---
+
+## 4. Structural Layout & Document Architecture (`egm-structural`)
+
+### 4.1 Missing Required Section: "Risks & Mitigations"
+* **Severity:** 🟡 Major
+* **Affected Scope:** Lines 447–464
+* **Description & Rationale:** `resources/document_standards/feature-spec-standard.md` mandates a structured failure mode analysis under "Risks & Mitigations". While `Non-Functional Requirements` touches on security and performance, the document lacks explicit failure analysis for Edge Function timeouts, Cloudflare R2 upload drops, network flutter, and service worker cache staleness.
+* **Remediation:** Add a dedicated `## Risks & Mitigations` section mapping failure modes to defensive strategies.
+
+### 4.2 Missing Template Requirement: "Rollout & Rollback"
+* **Severity:** 🟡 Major
+* **Affected Scope:** Lines 449–464
+* **Description & Rationale:** `references/design_doc.md` requires a "Rollout & Rollback" sub-section under Non-Functional Requirements specifying migration deployment ordering, backward compatibility, and rollback commands for PostgreSQL 17 DDL and Cloudflare R2 configurations.
+* **Remediation:** Add `### 4. Rollout & Rollback` to Non-Functional Requirements with forward migration steps and rollback procedures.
+
+### 4.3 Structural Asymmetry: Omission of Tables from RLS Matrix
+* **Severity:** 🟡 Major
+* **Affected Scope:** Lines 165–288 vs. Lines 290–306
+* **Description & Rationale:** Section 3 defines 10 database entities, but Section 4's RLS Policy Matrix omits policies for `public.user_roles` (lines 194–201) and `public.payment_dues_reconciliation` (lines 231–237). Under Supabase default-deny RLS semantics, omitting these tables leaves authorization undefined.
+* **Remediation:** Explicitly include all declared tables in the RLS Policy Matrix or remove unneeded tables.
+
+### 4.4 Structural Formatting Nits
+* **Severity:** 🟢 Nit
+* **Affected Scope:** Lines 47–49, 70–71, 114–115, 376, 412–440
+* **Description & Rationale:** Missing blank lines before fenced code blocks (MD022/MD031), multiple consecutive blank lines (MD012), numeric vs. alphabetic alternative headers (`### Alternative 1` vs `### Alternative A`), and backticks nested inside bold tags (`**`code`:**`).
+* **Remediation:** Apply clean Markdown linting conventions.
