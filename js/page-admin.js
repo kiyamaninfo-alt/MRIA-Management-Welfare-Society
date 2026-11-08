@@ -206,7 +206,11 @@ async function loadSlipApprovalQueue() {
             <div class="font-bold text-on-surface">${memberName}</div>
             <div class="text-[11px] text-on-surface-variant">EPF: ${memberEpf} • ${memberDesig}</div>
           </td>
-          <td class="py-2.5 px-3 font-medium capitalize">${(p.payment_type || "").replace(/_/g, " ")}</td>
+          <td class="py-2.5 px-3">
+            <div class="font-medium text-on-surface capitalize">${(p.payment_type || "").replace(/_/g, " ")}</div>
+            ${p.payment_method ? `<div class="text-[10px] text-sky-700 font-mono capitalize">${p.payment_method.replace(/_/g, " ")}</div>` : ""}
+            ${p.notes ? `<div class="text-[11px] text-on-surface-variant italic max-w-[200px] truncate" title="${p.notes}">${p.notes}</div>` : ""}
+          </td>
           <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(p.amount)}</td>
           <td class="py-2.5 px-3">${slipBtn}</td>
           <td class="py-2.5 px-3 text-right">

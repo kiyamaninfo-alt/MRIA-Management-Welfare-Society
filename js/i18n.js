@@ -92,13 +92,23 @@ export const translations = {
     category_monthly_due: "Monthly Due",
     category_admission_fee: "Admission Fee",
     category_donation: "Donation",
-    method_bank_transfer: "Bank Transfer",
+    category_other: "Other Welfare Contribution",
+    method_bank_transfer: "Bank Deposit / Transfer",
+    method_qr_payment: "LankaQR App Payment",
     method_cash: "Direct Cash",
     status_pending_approval: "Pending Approval",
     status_verified: "Verified",
     status_rejected: "Rejected",
 
-    // Upload Slip Modal
+    // Payment Modal
+    make_payment_btn: "Make a Payment",
+    make_payment_modal_title: "Make a Welfare Payment",
+    payment_reason_label: "Reason for Payment",
+    paying_month_label: "Select Billing Month",
+    payment_method_label: "Payment Method",
+    remarks_label: "Remarks / Reference (Optional)",
+    cash_payment_note: "Please hand over the physical cash to the Association Treasurer or desk collector. A digital receipt will be issued once received.",
+    payment_submitted_success: "Payment submitted successfully for verification!",
     upload_slip_modal_title: "Upload Bank Payment Slip",
     select_category: "Select Payment Category",
     enter_amount: "Payment Amount (LKR)",
@@ -107,7 +117,7 @@ export const translations = {
     take_photo_btn: "Open Camera",
     browse_file_btn: "Choose File",
     slip_file_label: "Bank Slip File (JPEG, PNG, or PDF max 5MB)",
-    submit_slip: "Submit Payment Slip",
+    submit_slip: "Submit Payment",
     submitting: "Submitting...",
 
     // Welfare Claim Modal
@@ -277,13 +287,23 @@ export const translations = {
     category_monthly_due: "මාසික දායක මුදල",
     category_admission_fee: "ඇතුල්වීමේ ගාස්තුව",
     category_donation: "ආධාර / පරිත්‍යාග",
-    method_bank_transfer: "බැංකු තැන්පතු",
+    category_other: "වෙනත් සුබසාධන දායකත්වය",
+    method_bank_transfer: "බැංකු තැන්පතු / පැවරුම්",
+    method_qr_payment: "LankaQR ගෙවීම්",
     method_cash: "අතින් දුන් මුදල්",
     status_pending_approval: "අනුමැතිය අපේක්ෂාවෙන්",
     status_verified: "තහවුරු කර ඇත",
     status_rejected: "ප්‍රතික්ෂේප විය",
 
-    // Upload Slip Modal
+    // Payment Modal
+    make_payment_btn: "මුදල් ගෙවීමක් සිදු කරන්න",
+    make_payment_modal_title: "සුබසාධක ගෙවීමක් සිදු කරන්න",
+    payment_reason_label: "ගෙවීමේ හේතුව",
+    paying_month_label: "අදාළ වන මාසය තෝරන්න",
+    payment_method_label: "ගෙවීමේ ක්‍රමය",
+    remarks_label: "විස්තරය / විශේෂ සටහන් (විකල්ප)",
+    cash_payment_note: "කරුණාකර අදාළ මුදල භාණ්ඩාගාරික වෙත හෝ කාර්යාලයට භාර දෙන්න. මුදල් ලැබුණු පසු ඩිජිටල් රිසිට්පතක් නිකුත් කෙරේ.",
+    payment_submitted_success: "ගෙවීම් තොරතුරු සාර්ථකව යොමු කරන ලදී!",
     upload_slip_modal_title: "බැංකු ගෙවීම් රිසිට්පත යොමු කිරීම",
     select_category: "ගෙවීම් කාණ්ඩය තෝරන්න",
     enter_amount: "ගෙවූ මුදල (රු.)",
@@ -292,7 +312,7 @@ export const translations = {
     take_photo_btn: "කැමරාව විවෘත කරන්න",
     browse_file_btn: "ගොනුවක් තෝරන්න",
     slip_file_label: "බැංකු රිසිට්පත් ඡායාරූපය හෝ PDF ගොනුව (උපරිම 5MB)",
-    submit_slip: "රිසිට්පත ඉදිරිපත් කරන්න",
+    submit_slip: "ගෙවීම තහවුරු කරන්න",
     submitting: "ඉදිරිපත් වෙමින් පවතී...",
 
     // Welfare Claim Modal

@@ -345,7 +345,11 @@ function renderPaymentHistory(payments) {
     return `
       <tr class="hover:bg-sky-50/30 transition-colors">
         <td class="py-2.5 px-3 font-mono">${formatDate(p.created_at)}</td>
-        <td class="py-2.5 px-3 font-medium capitalize">${(p.payment_type || "").replace(/_/g, " ")}</td>
+        <td class="py-2.5 px-3">
+          <div class="font-medium text-on-surface capitalize">${(p.payment_type || "").replace(/_/g, " ")}</div>
+          ${p.payment_method ? `<div class="text-[10px] text-on-surface-variant font-mono capitalize">${p.payment_method.replace(/_/g, " ")}</div>` : ""}
+          ${p.notes ? `<div class="text-[10px] text-primary italic max-w-xs truncate" title="${p.notes}">${p.notes}</div>` : ""}
+        </td>
         <td class="py-2.5 px-3 font-mono font-bold">${formatCurrency(p.amount)}</td>
         <td class="py-2.5 px-3">
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusClass}">
@@ -383,6 +387,79 @@ function populateBenefitTypesDropdown(types) {
     select.appendChild(opt);
   });
 }
+
+function populatePaymentMonths() {
+  const select = document.getElementById("paymentMonthSelect");
+  if (!select) return;
+  select.innerHTML = "";
+
+  const pendingMonths = (currentDues || []).filter((d) => d.status === "pending");
+  if (pendingMonths.length > 0) {
+    pendingMonths.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d.billing_month;
+      opt.textContent = `${d.billing_month.slice(0, 7)} (Unpaid Dues: ${formatCurrency(d.amount)})`;
+      select.appendChild(opt);
+    });
+  }
+
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  if (!pendingMonths.some((d) => d.billing_month === currentMonthStr)) {
+    const opt = document.createElement("option");
+    opt.value = currentMonthStr;
+    opt.textContent = `${currentMonthStr.slice(0, 7)} (Current Month)`;
+    select.appendChild(opt);
+  }
+
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
+  const nextOpt = document.createElement("option");
+  nextOpt.value = nextMonthStr;
+  nextOpt.textContent = `${nextMonthStr.slice(0, 7)} (Advance Contribution)`;
+  select.appendChild(nextOpt);
+}
+
+function openPaymentModal() {
+  const now = new Date();
+  const dateEl = document.getElementById("paymentAutoDate");
+  const timeEl = document.getElementById("paymentAutoTime");
+  const nameEl = document.getElementById("paymentAutoName");
+  const epfEl = document.getElementById("paymentAutoEpf");
+
+  if (dateEl) {
+    dateEl.textContent = now.toISOString().slice(0, 10);
+  }
+  if (timeEl) {
+    timeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  if (nameEl) {
+    nameEl.textContent = currentMember?.full_name || currentMember?.email || "Member";
+    nameEl.title = nameEl.textContent;
+  }
+  if (epfEl) {
+    epfEl.textContent = currentMember?.epf_number || "PENDING";
+  }
+
+  populatePaymentMonths();
+
+  const categorySelect = document.getElementById("paymentCategorySelect");
+  const monthContainer = document.getElementById("paymentMonthContainer");
+  if (categorySelect) categorySelect.value = "monthly_due";
+  if (monthContainer) monthContainer.classList.remove("hidden");
+
+  const methodSelect = document.getElementById("paymentMethodSelect");
+  const slipSection = document.getElementById("paymentSlipUploadSection");
+  const cashInstruction = document.getElementById("paymentCashInstruction");
+  if (methodSelect) methodSelect.value = "bank_transfer";
+  if (slipSection) slipSection.classList.remove("hidden");
+  if (cashInstruction) cashInstruction.classList.add("hidden");
+
+  openModal("payment-modal");
+}
+
+window.openPaymentModal = openPaymentModal;
+window.openUploadSlipModal = openPaymentModal;
 
 function setupActionListeners() {
   // Outstanding dues card click opens breakdown popup
@@ -510,57 +587,100 @@ function setupActionListeners() {
     });
   }
 
-  // Slip form submission
-  const slipForm = document.getElementById("slipForm");
-  if (slipForm) {
-    slipForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!selectedSlipFile) {
-        showToast("Please capture a photo with camera or choose a deposit slip file.", "warning");
-        return;
-      }
+  // Toggle dynamic month selection when payment category changes
+  const paymentCategorySelect = document.getElementById("paymentCategorySelect");
+  const paymentMonthContainer = document.getElementById("paymentMonthContainer");
+  if (paymentCategorySelect && paymentMonthContainer) {
+    paymentCategorySelect.addEventListener("change", () => {
+      paymentMonthContainer.classList.toggle("hidden", paymentCategorySelect.value !== "monthly_due");
+    });
+  }
 
-      const file = selectedSlipFile;
-      const category = document.getElementById("slipCategorySelect").value;
-      const amount = Number(document.getElementById("slipAmountInput").value);
+  // Toggle slip upload vs cash instruction when payment method changes
+  const paymentMethodSelect = document.getElementById("paymentMethodSelect");
+  const paymentSlipUploadSection = document.getElementById("paymentSlipUploadSection");
+  const paymentCashInstruction = document.getElementById("paymentCashInstruction");
+  if (paymentMethodSelect) {
+    paymentMethodSelect.addEventListener("change", () => {
+      const isCash = paymentMethodSelect.value === "cash";
+      if (paymentSlipUploadSection) {
+        paymentSlipUploadSection.classList.toggle("hidden", isCash);
+      }
+      if (paymentCashInstruction) {
+        paymentCashInstruction.classList.toggle("hidden", !isCash);
+      }
+    });
+  }
+
+  // Payment form submission
+  const paymentForm = document.getElementById("paymentForm");
+  if (paymentForm) {
+    paymentForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const category = document.getElementById("paymentCategorySelect")?.value || "monthly_due";
+      const method = document.getElementById("paymentMethodSelect")?.value || "bank_transfer";
+      const amount = Number(document.getElementById("paymentAmountInput")?.value);
+      const selectedMonth = document.getElementById("paymentMonthSelect")?.value;
+      const remarks = (document.getElementById("paymentRemarksInput")?.value || "").trim();
 
       if (!amount || amount <= 0) {
         showToast("Please enter a valid amount.", "warning");
         return;
       }
 
-      const submitBtn = slipForm.querySelector("button[type='submit']");
+      // If bank_transfer or qr_payment, slip file is required
+      if ((method === "bank_transfer" || method === "qr_payment") && !selectedSlipFile) {
+        showToast("Please capture a photo with camera or choose a deposit slip file.", "warning");
+        return;
+      }
+
+      const submitBtn = paymentForm.querySelector("button[type='submit']");
       try {
         if (submitBtn) {
           submitBtn.disabled = true;
-          submitBtn.textContent = "Uploading & Submitting...";
+          submitBtn.textContent = "Submitting Payment...";
         }
 
-        // Upload to Cloudflare R2
-        const slipKey = await uploadBankSlip(file);
+        let slipKey = null;
+        if (selectedSlipFile && (method === "bank_transfer" || method === "qr_payment")) {
+          if (submitBtn) submitBtn.textContent = "Uploading Slip File...";
+          slipKey = await uploadBankSlip(selectedSlipFile);
+        }
 
-        // Record payment in Supabase
+        let formattedNotes = "";
+        if (category === "monthly_due" && selectedMonth) {
+          formattedNotes = `[Billing Month: ${selectedMonth.slice(0, 7)}]`;
+        }
+        if (remarks) {
+          formattedNotes = formattedNotes ? `${formattedNotes} ${remarks}` : remarks;
+        }
+
         await submitPayment({
           memberId: currentMember.id,
           amount,
           paymentType: category,
-          paymentMethod: "bank_transfer",
+          paymentMethod: method,
           slipKey,
+          notes: formattedNotes || null,
         });
 
-        showToast("Bank slip uploaded successfully for treasurer verification!", "success");
-        closeModal("slip-upload-modal");
-        slipForm.reset();
+        showToast(t("payment_submitted_success") || "Payment submitted successfully for verification!", "success");
+        closeModal("payment-modal");
+        paymentForm.reset();
         resetSlipFile();
 
         await refreshDashboardData();
       } catch (err) {
-        console.error("Slip submission error:", err);
-        showToast(err.message || "Failed to submit bank slip.", "error");
+        console.error("Payment submission error:", err);
+        showToast(err.message || "Failed to submit payment.", "error");
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = t("submit_slip");
+          submitBtn.innerHTML = `
+            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+            <span>${t("submit_slip") || "Submit Payment"}</span>
+          `;
         }
       }
     });
