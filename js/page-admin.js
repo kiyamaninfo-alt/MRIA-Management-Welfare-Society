@@ -47,6 +47,7 @@ let allMembers = [];
 let allBenefitTypes = [];
 let allClaimsList = [];
 let pendingPayments = [];
+let currentApprovingSlipPayment = null;
 let currentStatementData = null;
 let currentQrDataUrl = "/assets/default-bank-qr.svg";
 
@@ -674,8 +675,9 @@ async function loadSlipApprovalQueue() {
           <td class="py-2.5 px-3">${slipBtn}</td>
           <td class="py-2.5 px-3 text-right">
             <div class="inline-flex items-center gap-2">
-              <button onclick="window.approveSlip('${p.id}')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 text-xs">
-                Approve (FIFO)
+              <button onclick="window.promptApproveSlip('${p.id}')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 text-xs inline-flex items-center gap-1 shadow-xs cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">verified</span>
+                <span>Approve &amp; Receipt</span>
               </button>
               <button onclick="window.rejectSlipPrompt('${p.id}')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg font-bold hover:bg-rose-50 text-xs">
                 Reject
@@ -707,17 +709,286 @@ window.viewSlip = async function (slipKey) {
   }
 };
 
-window.approveSlip = async function (paymentId) {
-  if (!confirm("Are you sure you want to approve this deposit slip? Dues will be reconciled via FIFO.")) return;
+window.promptApproveSlip = function (paymentId) {
+  const payment = pendingPayments.find((p) => p.id === paymentId);
+  if (!payment) {
+    showToast("Selected payment slip not found in pending queue.", "error");
+    return;
+  }
+  currentApprovingSlipPayment = payment;
+
+  const m = payment.members || {};
+  const memberName = m.full_name || m.email || "Member";
+  const memberEpf = m.epf_number ? `EPF: ${m.epf_number}` : "EPF: N/A";
+  const memberDesig = m.designation || "-";
+  const verifierName = currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer";
+  const categoryText = (payment.payment_type || "monthly_due").replace(/_/g, " ");
+
+  // Populate inspection bar
+  const nameEl = document.getElementById("approveSlipMemberName");
+  const epfEl = document.getElementById("approveSlipMemberEpf");
+  const catEl = document.getElementById("approveSlipCategory");
+  const amountEl = document.getElementById("approveSlipAmount");
+  const viewSlipBtn = document.getElementById("approveSlipQuickViewBtn");
+
+  if (nameEl) nameEl.textContent = memberName;
+  if (epfEl) epfEl.textContent = `${memberEpf} • ${memberDesig}`;
+  if (catEl) catEl.textContent = categoryText;
+  if (amountEl) amountEl.textContent = formatCurrency(payment.amount);
+
+  if (viewSlipBtn) {
+    if (payment.slip_key) {
+      viewSlipBtn.style.display = "inline-flex";
+      viewSlipBtn.onclick = () => window.viewSlip(payment.slip_key);
+    } else {
+      viewSlipBtn.style.display = "none";
+    }
+  }
+
+  // Reset modal state
+  const modalTitle = document.getElementById("approveSlipModalTitle");
+  if (modalTitle) {
+    modalTitle.textContent = "Approve Slip & Generate Official Receipt";
+  }
+  const banner = document.getElementById("approveSlipBanner");
+  if (banner) {
+    banner.className = "hidden";
+    banner.innerHTML = "";
+  }
+  const actionBox = document.getElementById("approveSlipActionBox");
+  if (actionBox) actionBox.classList.remove("hidden");
+  const doneBox = document.getElementById("approveSlipDoneBox");
+  if (doneBox) doneBox.classList.add("hidden");
+
+  const btnConfirm = document.getElementById("btnExecuteApproveSlip");
+  if (btnConfirm) {
+    btnConfirm.disabled = false;
+    btnConfirm.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Confirm Approval &amp; Issue Receipt</span>';
+  }
+
+  // Render draft voucher preview
+  const voucherContainer = document.getElementById("approveSlipVoucherContainer");
+  if (voucherContainer) {
+    const draftPayment = {
+      ...payment,
+      status: "draft",
+      payment_method: payment.payment_method || "slip",
+      paid_at: payment.paid_at || payment.created_at || new Date().toISOString(),
+    };
+    const displayName = m.full_name ? `${m.full_name} (${m.epf_number ? `EPF: ${m.epf_number}` : "Member"})` : (m.email || "Member");
+    voucherContainer.innerHTML = renderReceiptHtml(draftPayment, displayName, verifierName, true);
+  }
+
+  openModal("approveSlipModal");
+};
+
+window.executeApproveSlip = async function () {
+  if (!currentApprovingSlipPayment) {
+    showToast("No payment selected for approval.", "error");
+    return;
+  }
+
+  const payment = currentApprovingSlipPayment;
+  const btn = document.getElementById("btnExecuteApproveSlip");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span><span>Verifying &amp; Reconciling...</span>';
+  }
+
   try {
-    await verifyPayment(paymentId, currentStaff?.id || null);
-    showToast("Bank slip approved and reconciled successfully!", "success");
-    await loadSlipApprovalQueue();
-    await loadTreasuryData();
+    const verifiedPayment = await verifyPayment(payment.id, currentStaff?.id || null);
+    const m = payment.members || {};
+    const memberName = m.full_name || m.email || "Member";
+    const memberEmail = m.email || null;
+    const memberEpf = m.epf_number || "";
+    const verifierName = currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer";
+
+    const officialPayment = {
+      ...payment,
+      ...(verifiedPayment || {}),
+      status: "verified",
+      payment_method: verifiedPayment?.payment_method || payment.payment_method || "slip",
+      verified_by: currentStaff?.id || null,
+      verified_at: verifiedPayment?.verified_at || new Date().toISOString(),
+    };
+
+    const receiptNumber = officialPayment.id
+      ? `MRIA-REC-${officialPayment.id.slice(0, 8).toUpperCase()}`
+      : "MRIA-REC";
+
+    // Switch voucher view to Official Issued Receipt
+    const voucherContainer = document.getElementById("approveSlipVoucherContainer");
+    if (voucherContainer) {
+      const displayName = m.full_name ? `${m.full_name} (${m.epf_number ? `EPF: ${m.epf_number}` : "Member"})` : (m.email || "Member");
+      voucherContainer.innerHTML = renderReceiptHtml(officialPayment, displayName, verifierName, false);
+    }
+
+    // Update modal title
+    const modalTitle = document.getElementById("approveSlipModalTitle");
+    if (modalTitle) {
+      modalTitle.textContent = `Official Receipt Issued: ${receiptNumber}`;
+    }
+
+    // Hide pre-confirm actions, show done box
+    const actionBox = document.getElementById("approveSlipActionBox");
+    if (actionBox) actionBox.classList.add("hidden");
+    const doneBox = document.getElementById("approveSlipDoneBox");
+    if (doneBox) doneBox.classList.remove("hidden");
+
+    // Handle email dispatch & HTML banner
+    const banner = document.getElementById("approveSlipBanner");
+    const amount = Number(officialPayment.amount || 0);
+    const category = officialPayment.payment_type || "monthly_due";
+    const method = officialPayment.payment_method || "slip";
+    const paidAt = officialPayment.paid_at || officialPayment.created_at || new Date().toISOString();
+
+    if (memberEmail) {
+      try {
+        await sendReceiptEmail({
+          paymentId: officialPayment.id,
+          recipientEmail: memberEmail,
+          recipientName: memberName,
+          recipientEpf: memberEpf,
+          receiptNumber,
+          amount,
+          paymentType: category,
+          paymentMethod: method,
+          paidAt,
+          notes: officialPayment.notes || "Bank Deposit Slip Approved",
+          collectedByName: verifierName,
+        });
+
+        logUserActivity({
+          action: "SLIP_RECEIPT_EMAILED",
+          entityType: "PAYMENT",
+          entityId: officialPayment.id,
+          details: {
+            receiptNumber,
+            amount,
+            paymentMethod: method,
+            memberId: officialPayment.member_id,
+            recipientEmail: memberEmail,
+          },
+          actorEmail: currentStaff?.email || null,
+          actorName: currentStaff?.full_name || null,
+          epfNumber: currentStaff?.epf_number || null,
+        }).catch(() => {});
+
+        if (banner) {
+          banner.className = "block";
+          banner.innerHTML = `
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+              <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+              <div class="space-y-1">
+                <div class="font-bold flex items-center gap-1.5 text-emerald-900">
+                  <span>Official Receipt Emailed Automatically</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">රිසිට්පත සාර්ථකව ඊමේල් කරන ලදී</span>
+                </div>
+                <p class="text-[11px] text-emerald-800 leading-relaxed">
+                  A digital copy of receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+                </p>
+              </div>
+            </div>
+          `;
+        }
+
+        showToast(`Bank slip approved! Official receipt emailed to ${memberEmail}`, "success");
+      } catch (emailErr) {
+        console.error("Receipt email error:", emailErr);
+        if (banner) {
+          banner.className = "block";
+          banner.innerHTML = `
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+              <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
+              <div class="space-y-1">
+                <div class="font-bold text-emerald-900">Official Receipt Issued</div>
+                <p class="text-[11px] text-emerald-800 leading-relaxed">
+                  Receipt <strong>${receiptNumber}</strong> recorded and reconciled in ledger. Digital voucher is ready below.
+                </p>
+              </div>
+            </div>
+          `;
+        }
+        showToast("Bank slip approved! Digital voucher ready.", "success");
+      }
+    } else {
+      // Member has no registered email
+      logUserActivity({
+        action: "SLIP_RECEIPT_ISSUED_NO_EMAIL",
+        entityType: "PAYMENT",
+        entityId: officialPayment.id,
+        details: {
+          receiptNumber,
+          amount,
+          paymentMethod: method,
+          memberId: officialPayment.member_id,
+          memberName,
+          notice: "No registered email on member profile",
+        },
+        actorEmail: currentStaff?.email || null,
+        actorName: currentStaff?.full_name || null,
+        epfNumber: currentStaff?.epf_number || null,
+      }).catch(() => {});
+
+      if (banner) {
+        banner.className = "block";
+        banner.innerHTML = `
+          <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
+            <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">mail_off</span>
+            <div class="space-y-1">
+              <div class="font-bold flex items-center gap-1.5 text-amber-900">
+                <span>No Registered Email Address</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">ලියාපදිංචි විද්‍යුත් තැපෑලක් නොමැත</span>
+              </div>
+              <p class="text-[11px] text-amber-800 leading-relaxed">
+                Member <strong>${escapeHtml(memberName)}</strong>${memberEpf ? ` (EPF: ${escapeHtml(memberEpf)})` : ""} does not have an email address registered in the system. The official receipt voucher <strong>${receiptNumber}</strong> was recorded in the database, but could not be sent by email. You can download or print the official voucher below, or share it via WhatsApp.
+              </p>
+            </div>
+          </div>
+        `;
+      }
+      showToast(`Bank slip approved! (Note: No registered email address on file for ${memberName})`, "warning");
+    }
+
+    // Sync relevant locations:
+    // 1. Receipts Register
+    if (receiptsLoaded) {
+      const joinedReceipt = {
+        ...officialPayment,
+        members: m,
+        verified_by_staff: currentStaff,
+      };
+      if (!allLoadedReceipts.some((r) => r.id === joinedReceipt.id)) {
+        allLoadedReceipts.unshift(joinedReceipt);
+        receiptsTotalCount += 1;
+      }
+      if (typeof renderReceiptsTable === "function") {
+        renderReceiptsTable();
+      }
+    }
+
+    // 2. Queue table & badge, and 3. Treasury balances & ledger
+    await Promise.all([
+      loadSlipApprovalQueue(),
+      loadTreasuryData(),
+    ]);
+
+    // 4. Defaulters roster if open
+    const defaultersTab = document.getElementById("tab-content-defaulters");
+    if (defaultersTab && !defaultersTab.classList.contains("hidden")) {
+      loadDefaultersData().catch(() => {});
+    }
   } catch (err) {
+    console.error("executeApproveSlip failed:", err);
     showToast(err.message || "Approval failed.", "error");
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Confirm Approval &amp; Issue Receipt</span>';
+    }
   }
 };
+
+window.approveSlip = window.promptApproveSlip;
 
 window.rejectSlipPrompt = async function (paymentId) {
   const reason = prompt("Enter reason for rejection:");

@@ -1528,7 +1528,7 @@
   </div>
 
   <!-- VIEW SLIP MODAL -->
-  <div id="viewSlipModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="viewSlipModal" class="fixed inset-0 z-[60] hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white border border-outline-variant rounded-2xl max-w-2xl w-full p-5 shadow-2xl relative">
       <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-3">
         <h4 class="font-bold text-sm text-on-surface">Deposit Slip Preview</h4>
@@ -1539,6 +1539,89 @@
       <div id="slipViewerContent" class="min-h-[300px] flex items-center justify-center">
         <!-- Rendered image / pdf embed -->
       </div>
+    </div>
+  </div>
+
+  <!-- APPROVE SLIP & ISSUE RECEIPT MODAL -->
+  <div id="approveSlipModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto space-y-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-3 border-b border-outline-variant">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-emerald-600 text-[24px]">verified</span>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface" id="approveSlipModalTitle">Approve Slip &amp; Generate Official Receipt</h4>
+          </div>
+          <p class="text-[11px] text-on-surface-variant mt-0.5" id="approveSlipModalSubtitle">
+            බැංකු තැන්පතු පත්‍රිකාව තහවුරු කර නිල රිසිට්පත නිකුත් කිරීම
+          </p>
+        </div>
+        <button type="button" onclick="closeModal('approveSlipModal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-variant transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Quick Inspection Bar (Member, Amount, Slip Link) -->
+      <div id="approveSlipInspectionBar" class="p-3 bg-surface-variant/40 border border-outline-variant rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="min-w-0">
+          <div class="font-bold text-on-surface truncate" id="approveSlipMemberName">-</div>
+          <div class="text-[11px] text-on-surface-variant flex items-center gap-2">
+            <span id="approveSlipMemberEpf">EPF: -</span>
+            <span>•</span>
+            <span id="approveSlipCategory" class="font-medium capitalize text-sky-800">-</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="approveSlipQuickViewBtn" class="px-2.5 py-1 text-[11px] font-bold bg-white text-primary border border-primary/40 rounded-lg hover:bg-primary/5 transition-colors flex items-center gap-1 cursor-pointer">
+            <span class="material-symbols-outlined text-[14px]">visibility</span>
+            <span>View Slip</span>
+          </button>
+          <span class="font-mono font-extrabold text-sm text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200" id="approveSlipAmount">Rs. 0.00</span>
+        </div>
+      </div>
+
+      <!-- Live Receipt Voucher Container -->
+      <div id="approveSlipVoucherContainer" class="min-h-[260px]">
+        <!-- Rendered voucher html (draft preview or official receipt) -->
+      </div>
+
+      <!-- Post-issue Email Banner (shown after confirmation) -->
+      <div id="approveSlipBanner" class="hidden"></div>
+
+      <!-- Pre-confirmation Actions Box -->
+      <div id="approveSlipActionBox" class="space-y-3 pt-2 border-t border-outline-variant">
+        <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+          <span class="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">help</span>
+          <div>
+            <p class="font-bold">Are you sure you want to approve this deposit slip?</p>
+            <p class="text-amber-800 text-[10.5px] mt-0.5">
+              This will record the official receipt in the ledger, credit the Society Treasury, reconcile dues via FIFO, and automatically email the receipt voucher to the member.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('approveSlipModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-bold text-xs text-on-surface hover:bg-surface-variant transition-colors cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" id="btnExecuteApproveSlip" onclick="window.executeApproveSlip()" class="mutation-btn px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            <span>Confirm Approval &amp; Issue Receipt</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Post-confirmation Close Button Box (shown after receipt is issued) -->
+      <div id="approveSlipDoneBox" class="hidden pt-2 border-t border-outline-variant flex items-center justify-between">
+        <span class="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">task_alt</span>
+          <span>Receipt issued &amp; ledger reconciled</span>
+        </span>
+        <button type="button" onclick="closeModal('approveSlipModal')" class="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold text-xs shadow-sm transition-colors cursor-pointer">
+          Done &amp; Return to Queue
+        </button>
+      </div>
+
     </div>
   </div>
 
