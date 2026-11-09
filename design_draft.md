@@ -1,502 +1,940 @@
-# MRIA Management Welfare Association PWA: Comprehensive Redesign & Architectural Overhaul
+# MRIA Management Welfare Association PWA: Targeted Design Enhancement & Bug Remediation Cycle
 
 * **Author:** kiyamaninfo-alt
 * **Status:** Draft
-* **Date:** 2026-11-08
+* **Date:** 2026-11-09
 
 --------------------------------------------------------------------------------
 
 ## Overview
 
-The Mattala Rajapaksa International Airport (MRIA) Management Welfare Association ("MRIA කළමනාකාර සුබසාධක සංගමය") operates an internal statutory welfare society for airport management staff. This design document establishes the comprehensive architectural overhaul of the association's Progressive Web Application (PWA).
+The MRIA Management Welfare Association ("MRIA කළමනාකාර සුබසාධක සංගමය") Progressive Web Application (PWA) manages statutory membership records, monthly contributions, direct cash desk intake, bank deposit slip approvals, and welfare benefit disbursements for Mattala Rajapaksa International Airport staff. 
 
-The upgraded platform is built with Vanilla HTML5, Vanilla ES6 JavaScript modules, Tailwind CSS, Supabase (PostgreSQL 17), and Cloudflare R2 private object storage. It replaces legacy manual coordination with an automated, auditable, offline-capable member self-service and treasury management system. The overhaul encompasses six foundational pillars: statutory identity & contact CMS, strict single-language localization, multi-platform PWA installation, a 6-tier granular Role-Based Access Control (RBAC) matrix, an interactive member ledger with asynchronous welfare claim dispatch, and an immutable audit trail with an asset-segregated treasury ledger and reporting engine.
+This design specification details a comprehensive 18-item enhancement and bug remediation cycle across five operational pillars:
+1. **UI/UX Layout, Alignment & Numbers Formatting** (Items 1, 2, 5, 6, 7)
+2. **RBAC Deletions, Approvals & Immutable Audit Logging** (Items 3, 4)
+3. **Dues Logic, Dynamic Titles & Next-Month Auto-Selection** (Items 10, 11, 12, 14)
+4. **Onboarding, Locked Dashboard Preview & Internal Inquiries** (Items 8, 13, 16, 17)
+5. **Print Engine, App Installation & History Pagination** (Items 9, 15, 18)
+
+The design enforces strict double-entry ledger invariants, FIFO dues reconciliation, immutable PostgreSQL audit logging, and single-language bilingual localization (Sinhala `si` and English `en`).
+
+---
 
 ## The Problem
 
-The existing digital prototype and operational workflow suffer from critical functional, statutory, and ergonomic limitations:
+Through active operational usage, 18 specific functional defects, architectural risks, and visual misalignments have been identified across the application:
 
-1. **Brand Inconsistency & Public Exposure of Private Contacts:** 
-   The application displays conflicting nomenclature ("MRIA සුබසාධක සංගමය" vs. "MRIA සුබසාධක කළමනාකරණ සංගමය"), references outdated build tags and restrictive airport domain disclaimers, and publicly exposes private executive telephone numbers instead of institutional routing channels. Digital vouchers also contain legacy references to SMS delivery, which is unsupported.
-2. **Mixed-Language User Interface:** 
-   The interface currently displays English and Sinhala text simultaneously within identical containers, violating clean localization principles and cluttering mobile viewports.
-3. **Rigid Role-Based Access Control:** 
-   The database role matrix lacks dedicated tiers for the Secretary (`secretary` / ලේකම්) and Committee Members (`committee_member`). Member identity records lack statutory airport attributes (EPF Number and Airport Designation), preventing formal administrative roster synchronization.
-4. **Synchronous Notification Bottlenecks:** 
-   Welfare claim lodgments lack automated committee alerting. Introducing third-party notification gateways synchronously risks aborting critical bereavement claims if the external mail service suffers latency or rate-limiting.
-5. **Absence of Forensic Audit Trails:** 
-   Administrative actions (such as role modifications, slip verifications, and dues waivers) lack an immutable, append-only database audit log, creating governance and accountability risks.
-6. **Unsegregated Treasury Operations & Lack of Reporting:** 
-   The treasury lacks transactional asset segregation between Bank of Ceylon operating savings, cash held by the Treasurer awaiting deposit, and long-term Fixed Deposits. Furthermore, the Treasurer cannot generate filtered statements (monthly, yearly, or custom date range) in CSV or printable PDF formats for formal executive audit meetings.
+1. **Direct Cash Desk Export Omission (Item 1):** In `admin.html` under the Direct Cash Intake Desk (`#tab-content-cash`), the voucher preview container lacks a direct top-level download button in its card header, preventing administrators from immediately exporting receipt files.
+2. **Horizontal Toolbar Stretching (Item 2):** Under Admin > Receipts & Vouchers (`#tab-content-receipts`), a 12-column grid causes search and filter controls to stretch unnaturally across wide screens while truncating on mobile devices.
+3. **Misaligned Currency Values (Item 5):** Financial values across the Receipts Register, Slips Approval Queue, Cash Book, Defaulters Roster, and Member Directory are intermittently left-aligned or centered, preventing visual decimal scanning.
+4. **Payout Desk Baseline Distortion (Item 6):** In the Direct Benefit Payout Desk, the "Payment Method" container and "Disbursement Date & Time" container have mismatched vertical baselines due to an internal timezone badge and uneven subtext.
+5. **Inconsistent Currency Prefix Padding (Item 7):** Under Monthly Dues Settings, the "Rs." currency prefix uses `pl-3.5` with input `pl-12`, deviating from the standard `pl-3` and `pl-10` padding applied elsewhere in `admin.html`.
+6. **Unsafe Member Deletion (Item 3):** Administrators cannot delete unneeded member records. Attempting a raw `DELETE FROM members` on a member with financial records triggers foreign key violations (`ON DELETE RESTRICT`) or destroys audit trails.
+7. **Ledger Imbalance on Receipt Deletion (Item 4):** Issued receipts currently cannot be cancelled. Executing a physical SQL `DELETE FROM payments` breaks reconciled dues and leaves the treasury cash balance inflated, permanently desynchronizing physical bank funds from the digital ledger.
+8. **Static Contribution Card Label (Item 10):** Card 2 on `dashboard.html` is labeled "Current Month Due / මෙම මස දායක මුදල", which is confusing when members check annual cumulative payments or pay ahead.
+9. **Lack of Prepaid Advance Calculation (Item 11):** Card 1 displays outstanding dues as an absolute positive figure, ignoring advance prepaid contributions for upcoming months.
+10. **Inverted Payment Month Auto-Selection (Item 12):** When a member opens the payment slip upload modal, `populatePaymentMonths()` loads dues ordered `DESC`, causing the *latest* unpaid month to be pre-selected instead of the *earliest*, violating FIFO principles.
+11. **Constitutional Formula Drift (Item 14):** Formulas for end-of-month dues cutoffs (31st rule), one-time admission fees (Rs. 500/=), monthly contributions (Rs. 300/=), and asset account segregation require strict verification against the association constitution.
+12. **Absence of Admin Messaging & Header Bell (Item 8):** Administrators cannot send targeted notices or alerts, and members have no unified notification inbox or unread counter.
+13. **Missing Claim Proof Document Uploads (Item 13):** Members applying for death bereavement aid or medical aid cannot upload supporting documents (death certificates, hospital invoices) to Cloudflare R2.
+14. **Disorienting Redirect for Unapproved Sign-Ins (Item 16):** Unapproved Google OAuth applicants are bounced to `unauthorized.html` and cannot preview the dashboard features awaiting approval.
+15. **Unreliable Email Client Trigger on Contact Modal (Item 17):** In `js/ui.js`, "Contact Administration" fires a `mailto:` link, which fails on devices without configured mail clients and leaves no database audit trail.
+16. **Hidden PWA Installation (Item 9):** Mobile members navigating to `dashboard.html` have no prominent "Install App" button.
+17. **Full-Page Print Bleed on Vouchers (Item 15):** Calling `window.print()` prints the entire host webpage, capturing backgrounds, scrollbars, and navigation bars instead of an isolated voucher.
+18. **Unbounded History Table DOM Growth (Item 18):** In `dashboard.html`, payment history and claim tables render all historical records in a single DOM block, slowing render times over time.
+
+---
 
 ## Goals
 
-* **Strict Single-Language i18n:** Enforce 100% linguistic isolation so that selecting Sinhala renders zero English (except standardized technical loanwords), and selecting English renders zero Sinhala, with instant reactive DOM swapping and script-aware line-height adjustments (`.lang-si`).
-* **Granular 6-Tier RBAC:** Implement formal permissions for `admin`, `manager`, `secretary`, `treasurer`, `committee_member`, and `member` via Supabase Row Level Security (RLS) policies and dynamic UI route guards.
-* **Statutory Airport Identity & Hybrid Onboarding:** Capture and display Full Name, EPF Number, and Airport Designation across all profile headers, receipts, and admin rosters, supported by Secretary pre-seeding and an in-app registration request modal on `unauthorized.html`.
-* **Asynchronous Resend Email Notification:** Dispatch automated claim lodgment notices to all committee officials via an asynchronous Edge Function (`send-claim-notification`), ensuring claims commit to PostgreSQL unconditionally while logging delivery failures to the audit trail.
-* **Immutable Database Audit Trail:** Establish an append-only `audit_logs` table protected by a PostgreSQL `BEFORE UPDATE OR DELETE` exception trigger, capturing automated diffs across member profiles, dues, payments, and treasury movements.
-* **Asset-Segregated Treasury Ledger:** Track every inflow, outflow, and internal transfer across three distinct accounts (BOC Savings, Cash in Hand, Fixed Deposits) with real-time balance calculations.
-* **Treasury Statement Export Engine:** Enable the Treasurer to export date-filtered ledger statements (monthly, yearly, custom range) into RFC 4180 CSV and official printable PDF documents.
-* **Dual-Slot Statutory CMS:** Provide an in-app administrative CMS for uploading and downloading language-paired Constitution documents (`constitution_si.pdf` / `constitution_en.pdf`) via private Cloudflare R2 storage.
-* **True Multi-Platform PWA:** Upgrade `manifest.json` and `sw.js` (v3) to deliver installation shortcuts for Windows, Linux, Android, and iOS, with cache-first delivery for official Bank QR codes and fonts.
+* **G1 (UI & Layout):** Standardize all numerical and currency fields with `text-right font-mono tabular-nums`, fix the Direct Benefit Payout Desk and Settings baseline misalignments, add `#btnDownloadCashVoucher` to the Cash Desk, and refactor the Receipts toolbar into a compact flexbox layout.
+* **G2 (RBAC Member Management):** Implement dual-mode member removal: allow strict hard deletion for unlinked profiles (0 transactions) and guarded archival (`is_approved = false`, `role = 'archived'`) for profiles with existing transaction history, logging all events to `audit_logs`.
+* **G3 (Accounting Receipt Voiding):** Implement formal receipt cancellation via `status = 'voided'` with mandatory `void_reason`, automatically un-settling reconciled dues, injecting a compensating treasury outflow reversal, and appending immutable audit logs.
+* **G4 (Dynamic Dues & FIFO Auto-Selection):** Transform Card 2 into a dynamic "So Far Paid Accordingly / මෙතෙක් ගෙවා ඇති මුදල" tracker, calculate net arrears (negative red) vs advance balances (positive green), and enforce chronological ascending sorting in `populatePaymentMonths()` to auto-select the earliest unpaid month.
+* **G5 (Constitutional Integrity):** Verify and validate the 31st month-end cutoff rule, Rs. 500 admission fee schedule, Rs. 300 monthly rate, and asset segregation across Bank of Ceylon Savings, Physical Cash Float, and Fixed Deposits.
+* **G6 (Admin Notifications & Inquiries):** Implement `public.notifications` with a header bell icon and unread counter, replace `mailto:` links with `public.admin_inquiries` persisted in the database, and add Cloudflare R2 document attachment uploads for welfare benefit claims (`document_key`).
+* **G7 (Locked Preview & Mobile PWA):** Provide a read-only locked preview on `dashboard.html` for unapproved applicants with active Constitution PDF downloads and Sign Out, add a prominent "Install App" button, isolate voucher printing via a hidden iframe, and paginate transaction history (5 initial + "Load More (+25)").
+
+---
 
 ## Non-Goals
 
-* **Merchant Payment Gateways:** Automated integration with commercial credit/debit card merchant processors (e.g., Stripe, PayHere) is out of scope; payments remain processed via bank transfer slips and verified cash intake.
-* **Outbound SMS Gateway:** Automated SMS messaging is excluded in favor of transactional email notifications and downloadable digital PDF receipts.
-* **Direct Banking API Integrations:** Automated screen scraping or open-banking API integration with Bank of Ceylon is excluded; bank account balances are updated via slip approvals, cash receipts, and explicit transfer transactions.
-* **Petty Cash Bookkeeping:** Tracking minor daily stationery or refreshment expenses is excluded from the system ledger; petty cash is accounted for at bulk replenishment/withdrawal intervals.
+* **NG1 (No Physical Deletion of Payments):** Physical SQL `DELETE FROM payments` is strictly prohibited to preserve double-entry accounting integrity; formal voiding and compensating reversals are used instead.
+* **NG2 (No Hard Deletion of Financial Member Records):** Members with historical payment or claim records will never be hard-deleted from the database; soft archival is enforced to preserve statutory audit history.
+* **NG3 (No External Telephony/SMS Gateways):** Automated outbound SMS notifications are excluded; communications remain strictly within the PWA notification center and authenticated email.
+* **NG4 (No Direct Commercial Bank API Integrations):** Core banking integration is excluded; society funds remain verified through deposit slip proofs, cash intake, and LankaQR scan confirmations.
 
-## Open Questions
-
-*All core architectural questions raised during the brainstorming phase have been resolved:*
-* *Q1 (Email Dispatch):* Resolved. Operates via Resend API gateway through Edge Function `send-claim-notification` asynchronously without blocking database transactions.
-* *Q2 (EPF Onboarding):* Resolved. Implemented as a hybrid model: Secretary pre-seeding + self-service registration modal on `unauthorized.html`.
-* *Q3 (Treasury Accounting):* Resolved. Implemented as a full double-entry transaction ledger (`treasury_transactions`) across 3 asset accounts with CSV and CSS-paged PDF exports.
-* *Q4 (Constitution CMS):* Resolved. Implemented as a dual-slot CMS storing versioned `constitution_si.pdf` and `constitution_en.pdf` in Cloudflare R2.
+---
 
 ## Critical User Journeys (CUJs)
 
-### CUJ 1: Unregistered Airport Staff Member Onboarding & Secretary Verification
-* **Given**: A newly hired Mattala Airport staff member signs in using their personal Google account for the first time.
-* **When**: The user authenticates via Supabase OAuth and is redirected to `unauthorized.html` because their email is not yet approved.
-* **Then**: 
-  1. The user sees a clear status notice in their preferred language (Sinhala or English) and clicks "Register My Details".
-  2. A modal opens with their name and email pre-filled; the user inputs their EPF Number, Airport Designation, and Phone Number, then submits.
-  3. The record is inserted into `public.members` with `is_approved = false` and `role = 'member'`.
-  4. The Secretary navigates to the Member Administration tab on `admin.html`, reviews the pending registration, verifies the EPF Number against the official airport roster, and clicks "Approve Member".
-  5. The member record is updated to `is_approved = true`, logged to `audit_logs`, and the user is granted access to `dashboard.html` upon their next visit.
+### CUJ 1: Direct Cash Intake & Voucher Download
+* **Given**: An authenticated Treasurer at the Direct Cash Intake Desk (`#tab-content-cash`).
+* **When**: The Treasurer selects a member, enters cash contribution details, and inspects the live voucher preview.
+* **Then**: The header displays a functional "Download Voucher" button (`#btnDownloadCashVoucher`) that exports the standalone HTML/PDF receipt immediately, before or after settlement.
 
-### CUJ 2: Member Welfare Aid Claim Submission & Asynchronous Committee Alerting
-* **Given**: An active, approved member needs to request emergency bereavement aid for an immediate family member.
-* **When**: The member navigates to `dashboard.html`, clicks "Request Welfare Aid", selects the benefit type, enters the requested amount, attaches supporting documentation via Cloudflare R2 upload, and submits the form.
+### CUJ 2: Dual-Mode Member Deletion and Archival
+* **Given**: An authenticated Administrator in the Member Directory.
+* **When**: The Admin selects "Delete Member" on a member profile.
 * **Then**:
-  1. The claim record commits immediately to `public.benefit_claims` with status `submitted`.
-  2. The frontend triggers an asynchronous background request to Edge Function `send-claim-notification`.
-  3. The Edge Function dispatches an HTML notification email via the Resend API to all users with roles `admin`, `manager`, `secretary`, `treasurer`, and `committee_member`.
-  4. If the Resend API fails or is rate-limited, the claim remains safely committed in the database, and the error is appended to `public.audit_logs`.
-  5. Committee members see the new claim on their administrative console for collective review and disbursement authorization.
+  * If the member has zero payments, dues, or claims, the system prompts for EPF confirmation and permanently executes a hard delete.
+  * If the member has existing financial records, the system rejects hard deletion and prompts for guarded soft archival, marking `is_approved = false` and `role = 'archived'`.
+  * In both cases, the action is recorded in `audit_logs`.
 
-### CUJ 3: Direct Cash Intake & Real-Time Treasury Ledger Rebalancing
-* **Given**: A member pays their monthly membership dues in physical cash to the Treasurer at the airport administrative office.
-* **When**: The Treasurer logs in, opens the Cash Collection Desk on `admin.html`, selects the member, verifies the transaction date and amount, and clicks "Issue Instant Cash Receipt".
+### CUJ 3: Accounting Receipt Voiding & Ledger Reversal
+* **Given**: An authenticated Treasurer in the Receipts Register viewing an erroneously verified receipt.
+* **When**: The Treasurer clicks "Void Receipt" and provides a mandatory justification note (e.g. "Duplicate entry").
 * **Then**:
-  1. A verified payment record is created in `public.payments` (`payment_method = 'cash'`, `status = 'verified'`).
-  2. The FIFO settlement engine marks the member's oldest pending monthly due in `member_dues` as `paid`.
-  3. A corresponding treasury transaction is recorded in `treasury_transactions` (`transaction_type = 'inflow'`, `destination_account = 'cash_in_hand'`).
-  4. An instant digital cash receipt opens in a printable modal with verified security stamps.
-  5. The Treasurer's running "Cash in Hand" balance increments immediately. When the Treasurer subsequently deposits accumulated cash into the Bank of Ceylon account, they record a `transfer` transaction (`source_account = 'cash_in_hand'`, `destination_account = 'savings'`), keeping the ledger balanced.
+  * Payment status transitions to `voided`.
+  * Associated `member_dues` are reverted from `settled` back to `pending`.
+  * A compensating outflow transaction (`VOID-[id]`) is appended to `treasury_transactions`, decrementing the treasury cash balance.
+  * An immutable entry is written to `audit_logs`.
 
-### CUJ 4: Periodic Treasury Audit & Custom Date-Filtered Export
-* **Given**: The Treasurer needs to present a quarterly financial statement to the Executive Committee.
-* **When**: The Treasurer navigates to the Society Treasury module on `admin.html`, selects the "Custom Date Range" filter, enters the start and end dates, and clicks "Export Statement".
+### CUJ 4: Dynamic Dues & Earliest Unpaid Month Auto-Detection
+* **Given**: A member with 2 overdue months (e.g. September, October) and 1 current month (November).
+* **When**: The member views `dashboard.html` and clicks "Make a Payment".
 * **Then**:
-  1. The reporting engine queries `treasury_transactions` within the specified date boundaries.
-  2. The Treasurer can click "Download CSV" to receive a standardized RFC 4180 file with ISO dates and decimal figures for spreadsheet analysis.
-  3. The Treasurer can click "Print Official PDF" to open a styled print window formatted with the association crest, date boundaries, categorized inflows/outflows, opening/closing balances across Savings, Cash in Hand, and Fixed Deposits, and a formal Treasurer certification signature box.
+  * Card 1 displays overdue arrears in rose red (`-Rs. 600.00`).
+  * Card 2 displays cumulative contributions paid to date.
+  * In the payment modal, the month selector automatically sorts chronologically ascending and pre-selects the earliest unpaid month (September).
 
-### CUJ 5: Language Toggle & Dual-Slot Constitution Access
-* **Given**: A member prefers reading documents in Sinhala.
-* **When**: The member clicks the language toggle button in the navigation bar.
+### CUJ 5: Welfare Benefit Claim Attachment Upload
+* **Given**: An approved member applying for Death Donation / Bereavement Aid (Rs. 20,000/=).
+* **When**: The member selects the welfare category, fills remarks, and attaches a camera photo or PDF of the death certificate.
+* **Then**: The file is uploaded to Cloudflare R2 via presigned URL, `document_key` is stored on `benefit_claims`, and reviewing officials can inspect the document proof before approving payout.
+
+### CUJ 6: Locked Preview for Pending OAuth Applicants
+* **Given**: A new Mattala airport employee who signs in with an unlisted Google account and submits the registration form on `unauthorized.html`.
+* **When**: The applicant is redirected to `dashboard.html`.
 * **Then**:
-  1. All DOM elements with `data-i18n` update immediately to Sinhala without a page reload.
-  2. The `.lang-si` class is applied to the document body, adjusting line heights and text scaling.
-  3. When the member clicks "Download Association Constitution", the system detects the active language and downloads `constitution_si.pdf` sourced from Cloudflare R2.
+  * A prominent alert banner states: "Dashboard will become active once Secretary approves your account".
+  * Financial cards show zero-state skeletons (`Rs. 0.00`).
+  * Mutation buttons are disabled.
+  * "Sign Out", "Download Constitution PDF", and "Contact Administration" remain fully active.
 
+### CUJ 7: Isolated Receipt Printing & History Pagination
+* **Given**: A member or Treasurer viewing a digital receipt voucher or looking at past payment history.
+* **When**:
+  * The user clicks "Print / PDF" on the receipt voucher.
+  * The member scrolls down to transaction history.
+* **Then**:
+  * A hidden `<iframe>` is populated strictly with the receipt voucher, opening a clean single-page print dialog without capturing host webpage elements.
+  * The transaction history renders the first 5 records with an active "Load More (+25)" button.
 
 --------------------------------------------------------------------------------
 
 ## Technical Plan (Architecture)
 
-### 1. High-Level System Architecture
+### 1. System Architecture Overview & Component Boundaries
 
-The application implements a decoupled, offline-resilient Progressive Web App architecture backed by Supabase Managed PostgreSQL 17, Cloudflare R2 object storage, and the Resend transactional email API.
+The MRIA Management Welfare Association PWA operates as a decoupled client-server architecture:
+* **Frontend Tier:** Static HTML5 and ES6 modules (`admin.html`, `dashboard.html`, `index.html`, `unauthorized.html`) styled with Tailwind CSS, running offline-first through service worker cache strategies (`sw.js`).
+* **Data & Business Logic Tier:** Supabase PostgreSQL 17 hosting relational data, row-level security (RLS) policies, FIFO settlement triggers, and immutable audit logs.
+* **Object Storage Tier:** Cloudflare R2 private bucket accessed via signed S3 REST endpoints for deposit slips and welfare claim proof documents.
+* **Messaging Tier:** In-app notification center and Edge Function email notifications (`send-receipt-email`, `send-claim-notification`) via the Resend API gateway.
+
+```mermaid
+graph TD
+    subgraph Client Tier
+        AdminUI["Admin & Treasury Console (admin.html)"]
+        DashboardUI["Member Self-Service (dashboard.html)"]
+        PrintEngine["CSS-Isolated iframe Print Engine"]
+    end
+
+    subgraph API & Edge Tier
+        SupabaseAuth["Supabase OAuth (Google)"]
+        R2Storage["Cloudflare R2 Bucket (slips & claims)"]
+        EdgeEmail["Resend Email Dispatch Gateway"]
+    end
+
+    subgraph Database Tier - PostgreSQL 17
+        MembersTab["members (active & archived)"]
+        DuesTab["member_dues (FIFO reconciled)"]
+        PaymentsTab["payments (verified & voided)"]
+        TreasuryTab["treasury_transactions & accounts"]
+        InquiriesTab["admin_inquiries (in-app messages)"]
+        NotifTab["notifications (broadcast & user)"]
+        AuditTab["audit_logs (strictly immutable)"]
+    end
+
+    AdminUI --> SupabaseAuth
+    DashboardUI --> SupabaseAuth
+    DashboardUI --> PrintEngine
+
+    AdminUI --> PaymentsTab
+    AdminUI --> TreasuryTab
+    AdminUI --> MembersTab
+    AdminUI --> InquiriesTab
+    AdminUI --> NotifTab
+
+    DashboardUI --> DuesTab
+    DashboardUI --> InquiriesTab
+    DashboardUI --> NotifTab
+    DashboardUI --> R2Storage
+
+    PaymentsTab --> DuesTab
+    PaymentsTab --> TreasuryTab
+    PaymentsTab --> AuditTab
+    TreasuryTab --> AuditTab
+```
+
+---
+
+### 2. State Machines & Transaction Workflows
+
+#### A. Payment Receipt Lifecycle (Verification, Settlement & Void Reversal)
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending_approval: Slip Uploaded / Cash Collected
+    pending_approval --> verified: Treasurer Authorizes & Approves
+    pending_approval --> rejected: Rejected with Reason Note
+    
+    state verified {
+        [*] --> InflowTrigger: fn_sync_payment_to_treasury()
+        InflowTrigger --> DuesReconciliation: reconcile_verified_payment()
+        DuesReconciliation --> AuditLogEntry: fn_audit_payments()
+        AuditLogEntry --> EmailDispatched: sendReceiptEmail()
+    }
+
+    verified --> voided: Treasurer Voids Receipt (Mandatory Reason)
+    
+    state voided {
+        [*] --> RevertDues: Revert member_dues to 'pending'
+        RevertDues --> UnlinkReconciliation: Delete payment_dues_reconciliation
+        UnlinkReconciliation --> OutflowCompensation: Insert treasury_transactions (outflow)
+        OutflowCompensation --> DecrementBalance: Decrement treasury_accounts balance
+        DecrementBalance --> ImmutableAudit: Write RECEIPT_VOIDED to audit_logs
+    }
+
+    rejected --> [*]
+    voided --> [*]
+```
+
+#### B. Member Lifecycle & Dual-Mode Deletion Flow
 
 ```mermaid
 flowchart TD
-    subgraph Client["PWA Frontend (Vanilla ES6 + Tailwind)"]
-        UI["DOM Views (index, unauthorized, dashboard, admin)"]
-        I18N["Strict i18n Engine (data-i18n, .lang-si)"]
-        SW["Service Worker v3 (Cache-First Assets / Net-First REST)"]
-        Export["Treasury Export Engine (RFC 4180 CSV / CSS-Paged PDF)"]
-    end
-
-    subgraph Supabase["Supabase Cloud Infrastructure"]
-        Auth["Supabase Auth (Google OAuth)"]
-        Postgres[("PostgreSQL 17 Database")]
-        RLS["Row Level Security (6-Tier Matrix)"]
-        Triggers["SECURITY DEFINER Audit & FIFO Triggers"]
-        EdgeFn["Edge Function: send-claim-notification"]
-    end
-
-    subgraph Storage["Cloudflare R2 Object Storage"]
-        Slips["Private S3 Bucket: Transfer Slips"]
-        CMSFiles["Private S3 Bucket: constitution_si / constitution_en"]
-    end
-
-    subgraph EmailService["Resend Transactional API"]
-        Resend["Resend HTTPS Mail Gateway"]
-    end
-
-    UI --> Auth
-    UI -->|REST via supabase-js| RLS
-    RLS --> Postgres
-    Postgres --> Triggers
-    Triggers -->|Automated Diffs| Postgres
-    UI -->|Async Fire & Forget| EdgeFn
-    EdgeFn -->|Bearer Auth| Resend
-    EdgeFn -->|Log Failures| Postgres
-    UI -->|S3 Presigned URLs| Storage
-    SW --> UI
-    Export --> UI
+    Start["Admin Triggers Delete Member"] --> CheckRecords{"Query transaction count: payments + dues + claims"}
+    CheckRecords -- "Count == 0" --> HardDelete["Prompt EPF Confirmation -> Hard DELETE FROM members"]
+    HardDelete --> AuditHardDelete["Write MEMBER_DELETED to audit_logs"]
+    CheckRecords -- "Count > 0" --> RejectHardDelete["Block Hard Delete -> Prompt Soft Archival"]
+    RejectHardDelete --> SoftArchive["Update members: is_approved=false, role='archived'"]
+    SoftArchive --> AuditSoftArchive["Write MEMBER_ARCHIVED to audit_logs"]
+    AuditHardDelete --> RefreshRoster["Refresh Member Directory Roster"]
+    AuditSoftArchive --> RefreshRoster
 ```
 
 ---
 
-### 2. Database Schema & Data Models
+### 3. Detailed Pillar Implementations
 
-The relational schema is implemented across PostgreSQL migrations enforcing strict foreign key constraints, check invariants, and automated triggers.
+#### Pillar 1: UI/UX Layout, Alignment & Numbers Formatting
 
-#### A. Role Enumeration Migration (`app_role`)
-To ensure zero breaking changes with existing records and active policies, migration `20261108000004_comprehensive_overhaul.sql` executes:
-```sql
-ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'secretary';
-ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'committee_member';
+1. **Cash Desk Voucher Export Button (Item 1):**
+   * In `admin.html` within `#tab-content-cash`, update the card header above `#cashReceiptPreview`:
+     ```html
+     <div class="flex items-center gap-2">
+       <button type="button" id="btnDownloadCashVoucher" onclick="window.downloadReceiptFile()" class="px-3 py-1 bg-surface-variant hover:bg-outline-variant/30 text-on-surface text-xs font-bold rounded-lg border border-outline-variant inline-flex items-center gap-1.5 transition-colors cursor-pointer" title="Download Voucher HTML">
+         <span class="material-symbols-outlined text-[16px]">download</span>
+         <span>Download Voucher</span>
+       </button>
+       <span id="receiptPreviewStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+         Live Draft Preview
+       </span>
+     </div>
+     ```
+   * Wired to `window.downloadReceiptFile()`, which inspects `window.__lastReceiptData` and exports a standalone HTML document with complete styling.
 
--- Data migration: Upgrade legacy 'official' members to 'committee_member'
-UPDATE public.members 
-SET role = 'committee_member' 
-WHERE role = 'official';
-```
+2. **Receipts & Vouchers Toolbar Compacting (Item 2):**
+   * Replace the wide 12-column grid (`grid-cols-1 sm:grid-cols-12 gap-3`) in `#tab-content-receipts` with a compact, responsive flexbox toolbar:
+     ```html
+     <div class="flex flex-wrap items-center gap-2.5 pt-1">
+       <!-- Compact Search Box -->
+       <div class="relative flex-1 min-w-[200px] max-w-xs sm:max-w-sm">
+         <span class="material-symbols-outlined absolute left-2.5 top-2.5 text-on-surface-variant text-[17px]">search</span>
+         <input type="text" id="receiptsSearchInput" placeholder="Search Name, EPF, Receipt No..." class="w-full pl-8 pr-7 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+         <button type="button" id="receiptsClearSearchBtn" onclick="window.clearReceiptsSearch()" class="hidden absolute right-2 top-2 text-on-surface-variant hover:text-on-surface cursor-pointer">
+           <span class="material-symbols-outlined text-[16px]">close</span>
+         </button>
+       </div>
+       <!-- Category Filter Dropdown -->
+       <div class="w-auto min-w-[130px]">
+         <select id="receiptsCategoryFilter" onchange="window.filterReceiptsCategory(this.value)" class="w-full px-2.5 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+           <option value="all">All Categories</option>
+           <option value="monthly_due">Monthly Due</option>
+           <option value="admission_fee">Admission Fee</option>
+           <option value="donation">Donation</option>
+         </select>
+       </div>
+       <!-- Method Filter Dropdown -->
+       <div class="w-auto min-w-[120px]">
+         <select id="receiptsMethodFilter" onchange="window.filterReceiptsMethod(this.value)" class="w-full px-2.5 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+           <option value="all">All Methods</option>
+           <option value="cash">Cash Float</option>
+           <option value="bank_transfer">Bank Transfer</option>
+           <option value="qr_payment">LankaQR</option>
+           <option value="slip">Deposit Slip</option>
+         </select>
+       </div>
+       <!-- Compact Sort Dropdowns -->
+       <div class="flex items-center gap-1.5">
+         <select id="receiptsSortSelect" onchange="window.changeReceiptsSort(this.value)" class="px-2.5 py-1.5 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+           <option value="created_at">Date Created</option>
+           <option value="amount">Amount</option>
+           <option value="receipt_no">Receipt No</option>
+           <option value="member_name">Member Name</option>
+         </select>
+         <button type="button" id="receiptsSortOrderBtn" onclick="window.toggleReceiptsSortOrder()" class="p-1.5 rounded-xl border border-outline-variant bg-surface hover:bg-surface-variant text-on-surface cursor-pointer" title="Toggle Sort Order">
+           <span class="material-symbols-outlined text-[18px]" id="receiptsSortOrderIcon">arrow_downward</span>
+         </button>
+       </div>
+     </div>
+     ```
 
-#### B. Member Profiles Schema (`public.members`)
-Augments the existing profile table with official statutory airport attributes:
-* `id` UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
-* `email` VARCHAR(255) UNIQUE NOT NULL
-* `full_name` VARCHAR(255) NOT NULL
-* `epf_number` VARCHAR(50) UNIQUE NOT NULL
-* `designation` VARCHAR(150) NOT NULL
-* `phone` VARCHAR(30) NOT NULL
-* `nic` VARCHAR(20)
-* `role` public.app_role NOT NULL DEFAULT 'member'
-* `is_legacy_member` BOOLEAN NOT NULL DEFAULT FALSE
-* `is_approved` BOOLEAN NOT NULL DEFAULT FALSE
-* `created_at` TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
-* `updated_at` TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
+3. **Universal Numerical Right-Alignment (Item 5):**
+   * Standardize table definitions across `admin.html` and `dashboard.html`:
+     * Slips Approval Queue: Amount column `th` and `td` use `text-right font-mono tabular-nums font-bold text-primary`.
+     * Receipts Register: Amount column `th` and `td` use `text-right font-mono tabular-nums font-extrabold text-on-surface`.
+     * Cash Book Ledger: Amount column `th` and `td` use `text-right font-mono tabular-nums font-bold`.
+     * Defaulters Roster: Arrears amount `th` and `td` use `text-right font-mono tabular-nums font-bold text-rose-700`.
+     * Member Directory: EPF number uses `font-mono tabular-nums`.
 
-#### C. Immutable Audit Trail Schema (`public.audit_logs`)
-Stores an append-only forensic history. Direct client inserts are blocked by RLS; updates and deletions are blocked by a database trigger:
-```sql
-CREATE TABLE public.audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),
-    user_email VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255),
-    epf_number VARCHAR(50),
-    action VARCHAR(100) NOT NULL,
-    entity_type VARCHAR(100) NOT NULL,
-    entity_id VARCHAR(100) NOT NULL,
-    diff_json JSONB NOT NULL DEFAULT '{}'::jsonb
-);
+4. **Direct Benefit Payout Desk Baseline Alignment (Item 6):**
+   * In `tab-content-claims` under Direct Benefit Payout Desk, relocate the timezone tag beside the section title ("Disbursement Date & Time (Asia/Colombo)"), equalizing label heights and removing extra vertical offsets between "Payment Method" and "Disbursement Date & Time".
 
--- Database-Level Invariant: Strictly prevent modification or truncation
-CREATE OR REPLACE FUNCTION public.fn_prevent_audit_tampering()
-RETURNS TRIGGER AS $$
-BEGIN
-    RAISE EXCEPTION 'Security Violation: audit_logs records are strictly immutable and cannot be updated or deleted.';
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER trg_audit_logs_immutable
-BEFORE UPDATE OR DELETE ON public.audit_logs
-FOR EACH ROW EXECUTE FUNCTION public.fn_prevent_audit_tampering();
-```
-
-#### D. Treasury Asset Segregation Schema (`public.treasury_accounts` & `public.treasury_transactions`)
-Maintains a full transaction ledger across segregated asset accounts:
-```sql
-CREATE TYPE public.treasury_tx_type AS ENUM ('inflow', 'outflow', 'transfer');
-
-CREATE TABLE public.treasury_accounts (
-    id VARCHAR(50) PRIMARY KEY, -- 'boc_savings', 'cash_in_hand', 'fixed_deposits'
-    account_name VARCHAR(100) NOT NULL,
-    account_number VARCHAR(100),
-    description TEXT,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
-);
-
--- Initial Accounts Seeding
-INSERT INTO public.treasury_accounts (id, account_name, account_number, description) VALUES
-('boc_savings', 'Bank of Ceylon Operating Savings', 'BOC-HAM-8839201', 'Primary association operational bank account'),
-('cash_in_hand', 'Treasurer Physical Cash Float', NULL, 'Physical cash collected at airport desk awaiting bank deposit'),
-('fixed_deposits', 'BOC Fixed Deposit Capital Reserve', 'BOC-FD-0029104', 'Long-term interest-bearing emergency welfare reserve')
-ON CONFLICT (id) DO NOTHING;
-
-CREATE TABLE public.treasury_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    transaction_type public.treasury_tx_type NOT NULL,
-    source_account_id VARCHAR(50) REFERENCES public.treasury_accounts(id),
-    destination_account_id VARCHAR(50) REFERENCES public.treasury_accounts(id),
-    amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
-    reference_no VARCHAR(100) NOT NULL,
-    description TEXT NOT NULL,
-    recorded_by UUID NOT NULL REFERENCES public.members(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),
-    CONSTRAINT chk_treasury_accounts_validity CHECK (
-        (transaction_type = 'inflow' AND destination_account_id IS NOT NULL AND source_account_id IS NULL) OR
-        (transaction_type = 'outflow' AND source_account_id IS NOT NULL AND destination_account_id IS NULL) OR
-        (transaction_type = 'transfer' AND source_account_id IS NOT NULL AND destination_account_id IS NOT NULL AND source_account_id <> destination_account_id)
-    )
-);
-
--- Real-Time Balance Summary View
-CREATE OR REPLACE VIEW public.treasury_account_balances AS
-SELECT 
-    acc.id AS account_id,
-    acc.account_name,
-    COALESCE(SUM(
-        CASE 
-            WHEN tx.destination_account_id = acc.id THEN tx.amount 
-            WHEN tx.source_account_id = acc.id THEN -tx.amount 
-            ELSE 0 
-        END
-    ), 0.00) AS current_balance
-FROM public.treasury_accounts acc
-LEFT JOIN public.treasury_transactions tx 
-    ON acc.id = tx.source_account_id OR acc.id = tx.destination_account_id
-GROUP BY acc.id, acc.account_name;
-```
-
-#### E. Statutory Governance CMS Schema (`public.cms_documents`)
-Supports dual-slot Constitution uploads and bilingual statutory policies:
-* `id` UUID PRIMARY KEY DEFAULT gen_random_uuid()
-* `slug` VARCHAR(50) UNIQUE NOT NULL -- 'constitution', 'privacy_policy', 'security_terms'
-* `title_en` VARCHAR(255) NOT NULL
-* `title_si` VARCHAR(255) NOT NULL
-* `content_en` TEXT -- HTML or Markdown body for policies
-* `content_si` TEXT
-* `file_url_en` TEXT -- Versioned R2 storage key for English PDF
-* `file_url_si` TEXT -- Versioned R2 storage key for Sinhala PDF
-* `version` VARCHAR(20) NOT NULL DEFAULT '1.0'
-* `updated_by` UUID REFERENCES public.members(id)
-* `updated_at` TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
+5. **Settings Currency Prefix Standardization (Item 7):**
+   * In `duesSettingsForm` and `admissionFeeForm`, normalize input markup:
+     ```html
+     <div class="relative">
+       <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+       <input type="number" id="settingMonthlyDueAmount" required min="50" step="50" class="w-full pl-10 pr-3 py-2 rounded-xl border border-outline-variant bg-surface font-bold text-primary text-xs outline-none" />
+     </div>
+     ```
 
 ---
 
-### 3. Granular Row Level Security (RLS) Policy Matrix
+#### Pillar 2: RBAC Deletions, Approvals & Immutable Audit Logging
 
-Security is enforced at the PostgreSQL layer based on `public.get_current_user_role()`:
+1. **Dual-Mode Member Deletion & Archival (Item 3):**
+   * PostgreSQL Stored Procedure:
+     ```sql
+     CREATE OR REPLACE FUNCTION public.delete_or_archive_member(
+         p_member_id UUID,
+         p_admin_id UUID,
+         p_reason TEXT DEFAULT 'Administrative clean up'
+     ) RETURNS JSONB
+     LANGUAGE plpgsql
+     SECURITY DEFINER
+     SET search_path = public, pg_temp
+     AS $$
+     DECLARE
+         v_pay_count INT;
+         v_dues_count INT;
+         v_claim_count INT;
+         v_member RECORD;
+     BEGIN
+         SELECT * INTO v_member FROM public.members WHERE id = p_member_id;
+         IF NOT FOUND THEN
+             RAISE EXCEPTION 'Member record not found';
+         END IF;
 
-| Table | `member` | `committee_member` | `treasurer` | `secretary` | `manager` | `admin` |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `members` | Own Profile (R/W) | Read All Active | Read All Active | Full CRUD | Read All | Full CRUD |
-| `member_dues` | Own Dues (Read) | Read All | Full CRUD | Read All | Read All | Full CRUD |
-| `payments` | Own (Insert/Read) | Read All | Verify / Direct Cash | Read All | Read All | Full CRUD |
-| `benefit_claims` | Own (Insert/Read) | Read / Vote | Read / Disburse | Read All | Review / Approve | Full CRUD |
-| `treasury_transactions` | No Access | Read Summary | Full CRUD | Read Summary | Read All | Full CRUD |
-| `audit_logs` | No Access | No Access | No Access | No Access | Read Only | Full Read (No Write) |
-| `cms_documents` | Read Published | Read Published | Read Published | Edit Constitution | Read Published | Full CRUD |
+         SELECT COUNT(*) INTO v_pay_count FROM public.payments WHERE member_id = p_member_id;
+         SELECT COUNT(*) INTO v_dues_count FROM public.member_dues WHERE member_id = p_member_id;
+         SELECT COUNT(*) INTO v_claim_count FROM public.benefit_claims WHERE member_id = p_member_id;
+
+         IF (v_pay_count + v_dues_count + v_claim_count) > 0 THEN
+             -- Soft Archival Mode
+             UPDATE public.members
+             SET is_approved = false,
+                 role = 'archived',
+                 updated_at = NOW()
+             WHERE id = p_member_id;
+
+             PERFORM public.log_user_activity(
+                 'MEMBER_ARCHIVED',
+                 'MEMBER',
+                 p_member_id::text,
+                 jsonb_build_object(
+                     'reason', p_reason,
+                     'email', v_member.email,
+                     'epf', v_member.epf_number,
+                     'transactions_preserved', (v_pay_count + v_dues_count + v_claim_count)
+                 ),
+                 NULL, NULL, NULL
+             );
+
+             RETURN jsonb_build_object('action', 'archived', 'message', 'Member has existing records. Successfully archived.');
+         ELSE
+             -- Hard Delete Mode
+             DELETE FROM public.members WHERE id = p_member_id;
+
+             PERFORM public.log_user_activity(
+                 'MEMBER_DELETED',
+                 'MEMBER',
+                 p_member_id::text,
+                 jsonb_build_object(
+                     'reason', p_reason,
+                     'email', v_member.email,
+                     'epf', v_member.epf_number
+                 ),
+                 NULL, NULL, NULL
+             );
+
+             RETURN jsonb_build_object('action', 'deleted', 'message', 'Member had 0 records. Permanently deleted.');
+         END IF;
+     END;
+     $$;
+     ```
+
+2. **Accounting Receipt Voiding & Automatic Ledger Reversals (Item 4):**
+   * PostgreSQL Stored Procedure:
+     ```sql
+     ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'voided';
+
+     CREATE OR REPLACE FUNCTION public.void_payment_receipt(
+         p_payment_id UUID,
+         p_reason TEXT,
+         p_voided_by UUID
+     ) RETURNS JSONB
+     LANGUAGE plpgsql
+     SECURITY DEFINER
+     SET search_path = public, pg_temp
+     AS $$
+     DECLARE
+         v_payment RECORD;
+         v_source_account TEXT;
+         v_reversed_dues INT := 0;
+     BEGIN
+         SELECT * INTO v_payment FROM public.payments WHERE id = p_payment_id;
+         IF NOT FOUND THEN
+             RAISE EXCEPTION 'Payment record % not found', p_payment_id;
+         END IF;
+
+         IF v_payment.status = 'voided' THEN
+             RAISE EXCEPTION 'Payment % is already voided', p_payment_id;
+         END IF;
+
+         -- Update status and rejection reason
+         UPDATE public.payments
+         SET status = 'voided',
+             rejection_reason = p_reason,
+             verified_by = p_voided_by,
+             verified_at = NOW()
+         WHERE id = p_payment_id;
+
+         -- Un-settle reconciled dues
+         WITH reverted AS (
+             UPDATE public.member_dues md
+             SET status = 'pending',
+                 updated_at = NOW()
+             FROM public.payment_dues_reconciliation pdr
+             WHERE pdr.payment_id = p_payment_id
+               AND pdr.due_id = md.id
+             RETURNING md.id
+         )
+         SELECT COUNT(*) INTO v_reversed_dues FROM reverted;
+
+         DELETE FROM public.payment_dues_reconciliation WHERE payment_id = p_payment_id;
+
+         -- Compensating treasury outflow reversal
+         v_source_account := CASE 
+             WHEN v_payment.payment_method = 'cash' THEN 'cash_in_hand'
+             ELSE 'boc_savings'
+         END;
+
+         INSERT INTO public.treasury_transactions (
+             transaction_date,
+             transaction_type,
+             source_account_id,
+             amount,
+             reference_no,
+             description,
+             recorded_by
+         ) VALUES (
+             CURRENT_DATE,
+             'outflow',
+             v_source_account,
+             v_payment.amount,
+             'VOID-' || SUBSTRING(p_payment_id::text, 1, 8),
+             'Voided Receipt Reversal: ' || COALESCE(p_reason, 'Erroneous Entry'),
+             p_voided_by
+         );
+
+         -- Record in immutable audit log
+         PERFORM public.log_user_activity(
+             'RECEIPT_VOIDED',
+             'PAYMENT',
+             p_payment_id::text,
+             jsonb_build_object(
+                 'reason', p_reason,
+                 'amount', v_payment.amount,
+                 'reversed_dues_count', v_reversed_dues,
+                 'source_account', v_source_account
+             ),
+             NULL, NULL, NULL
+         );
+
+         RETURN jsonb_build_object(
+             'success', true,
+             'payment_id', p_payment_id,
+             'reversed_dues', v_reversed_dues,
+             'reversal_amount', v_payment.amount
+         );
+     END;
+     $$;
+     ```
 
 ---
 
-### 4. Asynchronous Claim Notification Edge Function (`send-claim-notification`)
+#### Pillar 3: Dues Logic, Dynamic Titles & Next-Month Auto-Selection
 
-* **Runtime:** Supabase Edge Function (Deno TypeScript runtime).
-* **Execution Trigger:** Frontend fires asynchronous `fetch('/functions/v1/send-claim-notification', { method: 'POST', body: JSON.stringify({ claim_id }) })` immediately after claim commit.
-* **Service Gateway:** Resend Transactional Email API (`POST https://api.resend.com/emails`).
-* **Recipient Resolution:** Supabase Service Role client queries all active members where `role IN ('admin', 'manager', 'secretary', 'treasurer', 'committee_member')` and extracts their verified emails.
-* **Email Template:** Formal institutional HTML notification displaying Claim ID, Member Name, EPF Number, Airport Designation, Benefit Category, Amount Claimed, and a direct link to the Executive Review Portal.
-* **Resilience Invariant:** Wrapped in `try...catch`. Any Resend HTTP error, rate-limit, or timeout logs an entry into `public.audit_logs` (`action = 'claim_notification_failed'`) with error details, returning HTTP 200 with `{ dispatched: false, error: ... }` to prevent client failure.
+1. **Dynamic Cumulative Contribution Tracker (Item 10):**
+   * On `dashboard.html`, update Card 2:
+     * Label in Sinhala: "මෙතෙක් ගෙවා ඇති මුදල"
+     * Label in English: "Contributions Paid to Date"
+     * Value computation: Sum of all verified payments (`payment_type IN ('monthly_due', 'admission_fee', 'donation')`) for the active member in the current calendar year.
+
+2. **Net Standing Calculation (+/- Values) (Item 11):**
+   * Algorithm in `js/page-dashboard.js`:
+     ```javascript
+     function calculateNetDuesStanding(dues, payments) {
+       const today = new Date().toISOString().slice(0, 10);
+       const overdueDues = dues.filter((d) => d.status === "pending" && d.billing_month <= today);
+       const totalArrears = overdueDues.reduce((sum, d) => sum + Number(d.amount), 0);
+
+       const futureSettled = dues.filter((d) => d.status === "settled" && d.billing_month > today);
+       const totalAdvance = futureSettled.reduce((sum, d) => sum + Number(d.amount), 0);
+
+       const net = totalAdvance - totalArrears;
+       return {
+         net,
+         isArrears: net < 0,
+         isAdvance: net > 0,
+         isSettled: net === 0,
+         displayAmount: Math.abs(net),
+       };
+     }
+     ```
+   * UI Representation:
+     * `net < 0`: `-Rs. ${displayAmount}` (text-rose-600, badge "Arrears / හිඟ මුදල්").
+     * `net > 0`: `+Rs. ${displayAmount}` (text-emerald-600, badge "Advance Paid / අත්තිකාරම් ගෙවීම්").
+     * `net === 0`: `Rs. 0.00` (text-slate-900, badge "All Settled / සම්පූර්ණයෙන්ම ගෙවා ඇත").
+
+3. **FIFO Chronological Auto-Selection Fix (Item 12):**
+   * In `populatePaymentMonths()`:
+     ```javascript
+     const pendingMonths = (currentDues || [])
+       .filter((d) => d.status === "pending")
+       .sort((a, b) => a.billing_month.localeCompare(b.billing_month)); // Sort ascending!
+
+     if (pendingMonths.length > 0) {
+       pendingMonths.forEach((d) => {
+         const opt = document.createElement("option");
+         opt.value = d.billing_month;
+         opt.textContent = `${d.billing_month.slice(0, 7)} (Unpaid Dues: ${formatCurrency(d.amount)})`;
+         select.appendChild(opt);
+       });
+       select.value = pendingMonths[0].billing_month; // Earliest month auto-selected
+     }
+     ```
+
+4. **Constitutional Formula Verification (Item 14):**
+   * Month-end cutoff rule: Active dues transition to overdue past 23:59:59 on the final day of the month.
+   * Admission fee default: Rs. 500/= non-refundable fee required upon registration.
+   * Monthly dues rate default: Rs. 300/= (dynamically read from `system_settings` key `monthly_due_amount`).
+   * Asset segregation invariant: Balance of `cash_in_hand` + `boc_savings` + `fixed_deposits` strictly equals net inflows minus net outflows in `treasury_transactions`.
 
 ---
 
-### 5. Frontend Client-Side Architecture
+#### Pillar 4: Onboarding, Locked Dashboard Preview & Internal Inquiries
 
-#### A. Strict Single-Language i18n Engine (`js/i18n.js`)
-* Complete dictionary mapping for 100% of UI keys in `en` and `si`.
-* Eliminates all container-level bilingual duplication. Elements specify `<span data-i18n="nav_dashboard">Dashboard</span>`.
-* When Sinhala is active, `document.documentElement.lang = 'si'` and `document.body.classList.add('lang-si')`.
-* CSS Invariant: `.lang-si` enforces `line-height: 1.6` on card headers and buttons to prevent vertical descender clipping in Sinhala glyphs.
+1. **Admin Notifications Center & Member Bell Icon (Item 8):**
+   * Database Schema:
+     ```sql
+     CREATE TABLE IF NOT EXISTS public.notifications (
+         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+         recipient_id UUID REFERENCES public.members(id) ON DELETE CASCADE, -- NULL for broadcast
+         title_en TEXT NOT NULL,
+         title_si TEXT NOT NULL,
+         message_en TEXT NOT NULL,
+         message_si TEXT NOT NULL,
+         priority TEXT NOT NULL CHECK (priority IN ('normal', 'urgent')) DEFAULT 'normal',
+         is_read BOOLEAN NOT NULL DEFAULT false,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     );
 
-#### B. Multi-Platform PWA Installation Lifecycle
-* `manifest.json`: Defines `id`, `start_url`, `display: "standalone"`, `background_color: "#FFFFFF"`, `theme_color: "#0F172A"`, and multi-density icon masks (`192x192`, `512x512`, `512x512-maskable`).
-* Windows/Linux/Android Shortcuts: Direct shortcuts for "My Dues Ledger", "Cash Collection Desk", and "Submit Slip".
-* `sw.js` (v3):
-  * Cache-First for web fonts (`Plus Jakarta Sans`), Google Material Symbols, and official Bank QR SVGs.
-  * Network-First for API requests (`/rest/v1/*`), with local fallback to `mria_cached_member`.
+     ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-#### C. Treasury Statement Export Engine (`js/treasury-export.js`)
-1. **RFC 4180 CSV Generator:**
-   - Escapes quotes and commas, standardizes headers: `Transaction Date, Reference No, Type, Source Account, Destination Account, Amount (LKR), Description, Recorded By`.
-   - Formats dates as ISO `YYYY-MM-DD` and amounts with two decimal places.
-2. **CSS-Paged PDF Generator:**
-   - Opens an isolated print preview window populated with official MRIA Welfare letterhead, executive metadata, date boundary summary, opening balance, detailed ledger rows, closing balances for all 3 asset accounts, and the official Treasurer verification seal block.
-   - Invokes `window.print()` with `@media print` rules setting A4 page margins, page-break preservation, and background color printing.
+     CREATE POLICY "Members view own or broadcast notifications" ON public.notifications
+         FOR SELECT USING (recipient_id IS NULL OR recipient_id = (SELECT id FROM public.members WHERE user_id = auth.uid()));
 
+     CREATE POLICY "Staff insert notifications" ON public.notifications
+         FOR INSERT WITH CHECK (
+             EXISTS (
+                 SELECT 1 FROM public.members m
+                 WHERE m.user_id = auth.uid()
+                   AND m.role IN ('admin', 'secretary', 'manager')
+             )
+         );
+     ```
+   * Header Bell Icon: Added to `dashboard.html` header:
+     ```html
+     <button id="notificationBellBtn" onclick="window.openNotificationsModal()" class="relative p-2 rounded-xl border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+       <span class="material-symbols-outlined text-[20px]">notifications</span>
+       <span id="notificationUnreadBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white font-bold text-[10px] flex items-center justify-center">0</span>
+     </button>
+     ```
+
+2. **Cloudflare R2 Welfare Claim Proof Uploads (Item 13):**
+   * Database Schema:
+     ```sql
+     ALTER TABLE public.benefit_claims 
+     ADD COLUMN IF NOT EXISTS document_key VARCHAR(500);
+     ```
+   * R2 Upload Pipeline:
+     * Client selects or snaps document proof -> calls `uploadBankSlip(file, "claims")` (generalized to support claim uploads).
+     * Returns key `claims/YYYY-MM/{member_id}_{uuid}.{ext}`.
+     * Inserts into `benefit_claims.document_key`.
+   * Edge Function Authorization: Update `get-slip-url` to permit access if `payments.slip_key = slipKey` OR `benefit_claims.document_key = slipKey`.
+
+3. **Read-Only Locked Dashboard Preview (Item 16):**
+   * In `js/page-dashboard.js`, allow unapproved users with pending registration records to access `dashboard.html`:
+     * If `member && !member.is_approved`:
+       * Render prominent sticky banner:
+         ```html
+         <div id="lockedDashboardBanner" class="p-4 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-3 shadow-xs">
+           <div class="flex items-center gap-2.5">
+             <span class="material-symbols-outlined text-amber-600 text-[22px]">lock_clock</span>
+             <div>
+               <p class="font-bold">Dashboard Preview Mode - Awaiting Approval</p>
+               <p class="text-amber-800 text-[11px]">ලේකම්වරයා විසින් ඔබගේ සාමාජිකත්වය අනුමත කළ පසු මෙම පුවරුව සම්පූර්ණයෙන්ම සක්‍රිය වනු ඇත.</p>
+             </div>
+           </div>
+           <button type="button" onclick="signOut()" class="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-900 font-bold hover:bg-amber-100 transition-colors cursor-pointer">Sign Out</button>
+         </div>
+         ```
+       * Disable all mutation buttons (`Make a Payment`, `Apply for Welfare Benefit`, drop areas).
+       * Keep "Sign Out", "Download Constitution PDF", and "Contact Administration" active.
+       * Render metrics as zero skeletons (`Rs. 0.00`).
+
+4. **In-App Inquiries Form (Replacing `mailto:`) (Item 17):**
+   * Database Schema:
+     ```sql
+     CREATE TABLE IF NOT EXISTS public.admin_inquiries (
+         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+         sender_id UUID REFERENCES public.members(id) ON DELETE SET NULL,
+         sender_name TEXT NOT NULL,
+         sender_email TEXT NOT NULL,
+         sender_epf TEXT,
+         subject TEXT NOT NULL,
+         message TEXT NOT NULL,
+         status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'resolved'
+         resolved_by UUID REFERENCES public.members(id) ON DELETE SET NULL,
+         resolution_notes TEXT,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     );
+
+     ALTER TABLE public.admin_inquiries ENABLE ROW LEVEL SECURITY;
+
+     CREATE POLICY "Users insert inquiries" ON public.admin_inquiries
+         FOR INSERT WITH CHECK (true);
+
+     CREATE POLICY "Staff view inquiries" ON public.admin_inquiries
+         FOR SELECT USING (
+             EXISTS (
+                 SELECT 1 FROM public.members m
+                 WHERE m.user_id = auth.uid()
+                   AND m.role IN ('admin', 'secretary', 'treasurer', 'manager')
+             )
+             OR sender_id = (SELECT id FROM public.members WHERE user_id = auth.uid())
+         );
+     ```
+   * Frontend: In `js/ui.js`, update `openContactModal()` to submit directly to `supabase.from("admin_inquiries").insert(...)` and eliminate `window.location.href = mailto:...`.
+
+---
+
+#### Pillar 5: Print Engine, App Installation & History Pagination
+
+1. **Prominent Dashboard "Install App" Button (Item 9):**
+   * Add button to `dashboard.html` header / banner:
+     ```html
+     <button id="btnInstallApp" class="hidden mutation-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold shadow-sm transition-all cursor-pointer">
+       <span class="material-symbols-outlined text-[16px]">install_mobile</span>
+       <span>Install App</span>
+     </button>
+     ```
+   * Bound to `window.addEventListener("beforeinstallprompt")`. On iOS Safari, display modal instructions ("Tap Share -> Add to Home Screen").
+
+2. **CSS-Isolated Hidden `<iframe>` Print Engine (Item 15):**
+   * Refactor `window.printReceipt()` in `js/receipt.js`:
+     ```javascript
+     export function printReceipt() {
+       const receiptEl = document.getElementById("printableReceipt");
+       if (!receiptEl) return;
+
+       const iframe = document.createElement("iframe");
+       iframe.style.position = "fixed";
+       iframe.style.right = "0";
+       iframe.style.bottom = "0";
+       iframe.style.width = "0";
+       iframe.style.height = "0";
+       iframe.style.border = "0";
+       document.body.appendChild(iframe);
+
+       const doc = iframe.contentWindow.document;
+       doc.open();
+       doc.write(`
+         <!DOCTYPE html>
+         <html>
+           <head>
+             <meta charset="utf-8" />
+             <title>MRIA Welfare Receipt</title>
+             <script src="https://cdn.tailwindcss.com"></script>
+             <style>
+               @page { size: auto; margin: 10mm; }
+               body { background: white; margin: 0; padding: 10px; font-family: sans-serif; }
+               .print\\:hidden { display: none !important; }
+             </style>
+           </head>
+           <body>
+             ${receiptEl.outerHTML}
+           </body>
+         </html>
+       `);
+       doc.close();
+
+       iframe.contentWindow.focus();
+       setTimeout(() => {
+         iframe.contentWindow.print();
+         document.body.removeChild(iframe);
+       }, 500);
+     }
+     ```
+
+3. **History Pagination (5 Initial + 25 Load More) (Item 18):**
+   * In `js/page-dashboard.js`, maintain pagination indices:
+     ```javascript
+     let paymentsRenderLimit = 5;
+     let claimsRenderLimit = 5;
+
+     function renderPaymentHistory(payments) {
+       const sliced = payments.slice(0, paymentsRenderLimit);
+       // Render rows ...
+       const loadMoreBtn = document.getElementById("btnLoadMorePayments");
+       if (loadMoreBtn) {
+         loadMoreBtn.style.display = payments.length > paymentsRenderLimit ? "inline-flex" : "none";
+         loadMoreBtn.onclick = () => {
+           paymentsRenderLimit += 25;
+           renderPaymentHistory(payments);
+         };
+       }
+     }
+     ```
 
 --------------------------------------------------------------------------------
 
 ## Alternatives Considered
 
-### Alternative 1: Synchronous Email Dispatch via Client-Side Webhook
+### Alternative 1: Physical SQL Deletion of Payments vs. Accounting Void & Reversal Outflow
 
-* **Mechanism**: The browser client or a synchronous database trigger halts the claim lodgment transaction until the Resend API confirms delivery of the notification email to all executive committee members.
-* **Pros**: 
-  * The member receives immediate visual confirmation on the dashboard that all committee members have received an email.
-  * Simpler execution topology without requiring background fire-and-forget handling.
-* **Cons**:
-  * External HTTP latency to the mail provider (typically 800ms–2500ms) is injected directly into the critical transaction path.
-  * Any third-party outage, DNS resolution failure, expired API secret, or rate-limiting error causes the member's welfare aid claim to abort and roll back.
-  * Catastrophic for airport staff submitting emergency bereavement or urgent medical aid requests during off-peak hours.
-* **Reason for Rejection**: Member welfare submissions must possess 100% database write availability. Asynchronous Edge Function execution decouples database persistence from external network health, logging any delivery exceptions directly to `audit_logs` without impacting the member.
+* **Option Evaluated:** Executing a raw SQL `DELETE FROM payments WHERE id = ...` when an administrative error occurs.
+* **Pros:** Simple to implement; immediately removes the row from the payments table.
+* **Cons:** Breaks relational foreign keys in `payment_dues_reconciliation`, leaves reconciled `member_dues` in an ambiguous state, and does not decrement the Society Treasury cash balance, creating an untraceable cash book imbalance against physical bank deposits.
+* **Reason for Rejection:** Double-entry accounting principles and association audit rules prohibit deleting monetary transactions. Formal voiding (`status = 'voided'`) with trigger-enforced dues un-settling and a compensating outflow entry guarantees mathematical ledger parity.
 
----
+### Alternative 2: Unconditional Hard Member Deletion vs. Dual-Mode Deletion & Archival
 
-### Alternative 2: Manual Balance Snapshot Overrides for Treasury Management
+* **Option Evaluated:** Allowing administrators to unconditionally execute `DELETE FROM members WHERE id = ...`.
+* **Pros:** Completely purges unwanted records in one operation.
+* **Cons:** Fails with PostgreSQL error `23503` (foreign key restriction) whenever a member has recorded payments, dues, or benefit claims. Cascading the deletion (`ON DELETE CASCADE`) would destroy historical audit logs and past financial ledgers.
+* **Reason for Rejection:** Legal and financial audit standards require retaining transaction records for any staff member who has ever paid dues or received welfare benefits. Strict hard deletion is permitted only for zero-transaction profiles; members with historical records are transitioned to soft archival (`is_approved = false`, `role = 'archived'`).
 
-* **Mechanism**: The Treasurer inputs balance figures manually for Savings, Fixed Deposits, and Cash in Hand whenever a physical count or bank reconciliation occurs, saving a point-in-time snapshot with textual notes.
-* **Pros**:
-  * Eliminates the need to log discrete internal transfers when cash collected from dues is deposited at a Bank of Ceylon branch.
-  * Faster to implement with fewer relational tables.
-* **Cons**:
-  * Destroys line-item mathematical auditability. There is no historical ledger tracing when specific cash batches were deposited, making forensic auditing impossible.
-  * Inadvertent arithmetic errors or deliberate balance manipulations cannot be detected without cross-referencing physical paper deposit slips.
-  * Fails to support automated date-filtered statement exports (monthly or custom range) because historical daily balances cannot be mathematically reconstructed.
-* **Reason for Rejection**: The association manages statutory employee welfare funds requiring forensic audit compliance. The double-entry `treasury_transactions` ledger enforces explicit source and destination account validation on every movement, ensuring continuous reconciliation against physical Bank of Ceylon passbooks and cash float drawers.
+### Alternative 3: Direct Host Window Print vs. CSS-Isolated Hidden `<iframe>` Printing
 
----
+* **Option Evaluated:** Calling `window.print()` directly on the host document, relying on CSS `@media print { ... }` selectors to hide non-receipt elements.
+* **Pros:** Requires no additional DOM elements or iframe creation.
+* **Cons:** Browser print engines often leak background colors, navigation headers, floating modals, and scrollbar containers into the print dialog, causing margin distortion and multi-page blank spills.
+* **Reason for Rejection:** Spawning a transient hidden `<iframe>` containing *only* the `#printableReceipt` markup and dedicated print styles guarantees centered, clean, single-page voucher exports across all desktop and mobile browsers.
 
-### Alternative 3: Single Unified Bilingual Constitution PDF
+### Alternative 4: Client-Side `mailto:` Links vs. Database-Persisted Inquiries Table
 
-* **Mechanism**: The Secretary uploads a single consolidated PDF document containing alternating Sinhala and English clauses or dual-column text, serving the same file to all users.
-* **Pros**:
-  * Requires only one file upload input in the administrative CMS.
-  * Eliminates the risk of version skew where the English text is updated but the Sinhala translation lags behind.
-* **Cons**:
-  * Strictly violates the core project invariant of 100% single-language isolation.
-  * Doubles the download payload for mobile airport staff on tarmac cellular connections.
-  * Substantially degrades reading ergonomics on small mobile screens due to dual-column typography.
-* **Reason for Rejection**: The association's statutory protocol mandates clean, uncompromised linguistic isolation. The dual-slot CMS enforces paired, version-stamped documents (`constitution_si.pdf` and `constitution_en.pdf`) delivered conditionally based on the active user session language.
+* **Option Evaluated:** Preserving the existing `mailto:krishaja@gmail.com` link inside the Contact Administration modal.
+* **Pros:** Requires zero database schema changes or backend handling.
+* **Cons:** Fails on devices without a configured native mail client (e.g. airport shared kiosks, web-mail only users), provides no delivery confirmation, and leaves no record in the administrative dashboard for Secretary review.
+* **Reason for Rejection:** Storing inquiries in a dedicated `public.admin_inquiries` table with authenticated Row Level Security guarantees message delivery, enables in-app triage, and retains a permanent communication trail.
 
----
+### Alternative 5: Server-Side REST Pagination vs. Client-Side Sliced Pagination for Member History
 
-### Alternative 4: Rigid Pre-Seeding Only Member Onboarding
-
-* **Mechanism**: Only airport staff members whose email addresses were manually pre-entered by the Secretary into `public.members` can sign in. Unrecognized users receive a static rejection screen with no submission capabilities.
-* **Pros**:
-  * Zero unverified registration records ever touch the database.
-  * Simplest possible authorization code paths.
-* **Cons**:
-  * Airport employees whose personal Google OAuth addresses differ from official personnel records are permanently locked out without recourse.
-  * Creates significant administrative bottlenecks and endless offline WhatsApp messaging back-and-forth with the Secretary to get emails added.
-* **Reason for Rejection**: The hybrid onboarding model balances security with usability. Pre-seeding handles the bulk roster, while the self-service modal on `unauthorized.html` captures unlisted staff EPF numbers and designations, presenting a structured verification queue to the Secretary.
-
----
-
-### Alternative 5: Client-Side Audit Event Generation
-
-* **Mechanism**: Audit logs are generated by JavaScript frontend functions sending `INSERT` requests to the `audit_logs` table upon button clicks or form submissions.
-* **Pros**:
-  * Trivial to implement without writing PL/pgSQL database trigger functions.
-* **Cons**:
-  * Trivially bypassed or forged by anyone with an active Supabase JWT token using standard REST tools.
-  * Fails completely if an ad-blocker or network drop interrupts the secondary audit HTTP call.
-  * Misses all direct SQL operations or administrative dashboard queries.
-* **Reason for Rejection**: An audit log that can be forged or omitted is legally and forensically worthless. PostgreSQL `SECURITY DEFINER` table triggers guarantee that every mutation across `members`, `payments`, `member_dues`, and `treasury_transactions` is recorded unconditionally at the database engine level.
-
+* **Option Evaluated:** Querying the Supabase REST API in batches (`/rest/v1/payments?limit=5&offset=...`) every time the user navigates history.
+* **Pros:** Minimizes initial JSON payload size.
+* **Cons:** Individual member payment history rarely exceeds 50 records. Slicing on the server introduces unnecessary network latency, breaks offline cache lookup in `sw.js`, and complicates offline PWA operation.
+* **Reason for Rejection:** Fetching the full member record set in a single authenticated request and slicing DOM rendering on the client (5 initial + 25 on click) delivers instant UI rendering while preserving offline PWA usability.
 
 --------------------------------------------------------------------------------
 
 ## Detailed Implementation Plan
 
-The implementation is executed as a unified, phased rollout across database migrations, backend Edge Functions, client-side core modules, and HTML/JavaScript user views.
+### Target Files to Create / Modify
 
-### 1. Phased Execution Sequence
+#### 1. `supabase/migrations/20261109000006_enhanced_governance_remediations.sql` (Create)
+* **Type / Scope:** Database Schema & Migration (PostgreSQL DDL/DML).
+* **Rationale:** Establishes all database entities and security definer functions required by the 18 requirements:
+  * Adds `voided` value to `payment_status` enum.
+  * Creates `public.admin_inquiries` table with RLS policies allowing authenticated member inserts, member self-read, and staff read/resolution.
+  * Creates `public.notifications` table with RLS policies supporting broadcast (recipient NULL) and targeted member delivery.
+  * Adds `document_key VARCHAR(500)` column to `public.benefit_claims`.
+  * Implements `public.void_payment_receipt(p_payment_id, p_reason, p_voided_by)` atomic function to un-settle reconciled dues, record compensating outflows in `treasury_transactions`, update accounts, and append `audit_logs`.
+  * Implements `public.delete_or_archive_member(p_member_id, p_admin_id, p_reason)` atomic function to enforce hard deletion if transaction count is 0, or soft archival if transaction history exists.
 
-```mermaid
-flowchart TD
-    Phase1["Phase 1: Database Migrations & Security Invariants<br/>(20261108000004_comprehensive_overhaul.sql)"]
-    Phase2["Phase 2: Backend Edge Function Deployment<br/>(send-claim-notification via Resend API)"]
-    Phase3["Phase 3: Core Architecture, i18n & PWA Infrastructure<br/>(js/i18n.js, js/api.js, js/treasury-export.js, sw.js, manifest.json)"]
-    Phase4["Phase 4: Landing & Onboarding Overhaul<br/>(index.html, unauthorized.html, js/page-unauthorized.js)"]
-    Phase5["Phase 5: Member Dashboard & Interactive Ledger<br/>(dashboard.html, js/page-dashboard.js)"]
-    Phase6["Phase 6: Executive Administration & Treasury Console<br/>(admin.html, js/page-admin.js)"]
+#### 2. `admin.html` (Modify)
+* **Type / Scope:** Administrative Console HTML Markup.
+* **Rationale:**
+  * Cash Desk: Inserts `#btnDownloadCashVoucher` in the `#cashReceiptPreview` card header.
+  * Receipts Toolbar: Refactors `#tab-content-receipts` toolbar from wide 12-column grid into compact flexbox with constrained widths.
+  * Tables: Applies `text-right font-mono tabular-nums` to all currency columns in Slips Queue, Receipts Register, Cash Book, Defaulters Roster, and Member Directory.
+  * Payout Desk: Normalizes container heights and repositions timezone indicator beside section title.
+  * Settings: Standardizes input prefix padding (`pl-3` and `pl-10`) across currency fields.
+  * Receipt Voiding Modal: Adds `#voidReceiptModal` with mandatory reason textarea and confirmation triggers.
+  * Notifications Panel: Adds admin broadcast messaging panel under Admin CMS.
+  * Inquiries Drawer: Adds administrative triage panel for reviewing and resolving submitted inquiries.
 
-    Phase1 --> Phase2
-    Phase1 --> Phase3
-    Phase2 --> Phase5
-    Phase3 --> Phase4
-    Phase3 --> Phase5
-    Phase3 --> Phase6
-```
+#### 3. `dashboard.html` (Modify)
+* **Type / Scope:** Member Self-Service Console HTML Markup.
+* **Rationale:**
+  * Header: Inserts `#btnInstallApp` button and `#notificationBellBtn` with unread badge counter `#notificationUnreadBadge`.
+  * Metric Cards: Converts Card 2 label into dynamic "So Far Paid Accordingly / මෙතෙක් ගෙවා ඇති මුදල", and updates Card 1 with net standing container.
+  * Claim Modal: Adds camera capture and file picker drop area for attaching supporting documents (death certificates, medical invoices).
+  * Locked Preview Banner: Adds `#lockedDashboardBanner` container displayed when an unapproved OAuth user accesses the dashboard.
+  * History Tables: Adds pagination buttons `#btnLoadMorePayments` and `#btnLoadMoreClaims`.
+  * Notifications Modal: Adds `#notificationsModal` container listing broadcast and member alerts.
+
+#### 4. `js/api.js` (Modify)
+* **Type / Scope:** Supabase Client Data Access Module.
+* **Rationale:**
+  * Exports `voidPaymentReceipt(paymentId, reason, voidedBy)` calling the PostgreSQL stored procedure.
+  * Exports `deleteOrArchiveMember(memberId, adminId, reason)` calling the PostgreSQL stored procedure.
+  * Exports `getNotifications(memberId)` and `markNotificationAsRead(notificationId)`.
+  * Exports `sendNotification({ recipientId, titleEn, titleSi, messageEn, messageSi, priority })`.
+  * Exports `submitInquiry({ senderName, senderEmail, senderEpf, subject, message })`.
+  * Exports `getAdminInquiries()` and `resolveAdminInquiry(inquiryId, notes)`.
+  * Updates `calculateMemberBalance()` to return net standing (arrears vs advance) and cumulative YTD verified contributions.
+
+#### 5. `js/page-admin.js` (Modify)
+* **Type / Scope:** Admin Application Controller.
+* **Rationale:**
+  * Connects `#btnDownloadCashVoucher` to `downloadReceiptFile()`.
+  * Wires void receipt buttons in Receipts Register to `promptVoidReceipt()` and `executeVoidReceipt()`.
+  * Updates Member Directory delete action to call `deleteOrArchiveMember()` with prompt confirmation.
+  * Wires notification dispatch form in Admin CMS to `sendNotification()`.
+  * Wires Inquiries triage drawer to display submissions and handle status updates via `resolveAdminInquiry()`.
+  * Refactors Receipts Register rendering to display `voided` badges and updated tabular alignment.
+
+#### 6. `js/page-dashboard.js` (Modify)
+* **Type / Scope:** Member Dashboard Application Controller.
+* **Rationale:**
+  * Binds PWA `beforeinstallprompt` to `#btnInstallApp` with fallback instructions for iOS Safari.
+  * Loads unread notifications, updates `#notificationUnreadBadge`, and renders the notifications list.
+  * Evaluates `member.is_approved`: if false, displays `#lockedDashboardBanner`, sets zero-state skeletons, disables mutation buttons, and preserves Sign Out, Constitution download, and Contact modal.
+  * Updates `populatePaymentMonths()` with ascending chronological sort to auto-select the earliest unpaid month.
+  * Updates `renderMetrics()` to render negative arrears vs positive advance balance with appropriate color coding.
+  * Updates Card 2 to display cumulative YTD verified payments.
+  * Connects `#claimForm` file input to upload proof documents to Cloudflare R2 and store `document_key`.
+  * Implements client-side pagination slicing (5 initial + 25 on click) for payment and claim histories.
+
+#### 7. `js/receipt.js` (Modify)
+* **Type / Scope:** Digital Receipt & Voucher Generator.
+* **Rationale:**
+  * Replaces direct `window.print()` with a hidden `<iframe>` print engine to isolate receipt markup from host page chrome.
+  * Adds "VOIDED / අවලංගු කරන ලදී" watermark and badge styling when `payment.status === 'voided'`.
+
+#### 8. `js/storage.js` (Modify)
+* **Type / Scope:** Object Storage Client.
+* **Rationale:**
+  * Generalizes `uploadBankSlip()` to support `claims` folder for claim proof documents.
+  * Generates keys formatted as `claims/YYYY-MM/{member_id}_{uuid}.{ext}`.
+
+#### 9. `js/ui.js` (Modify)
+* **Type / Scope:** Shared UI Utilities & Modals.
+* **Rationale:**
+  * Updates `openContactModal()` to submit directly to `admin_inquiries` via `api.js`, completely removing the `mailto:` redirect.
+  * Adds notification modal opener and dismissers.
+
+#### 10. `js/i18n.js` (Modify)
+* **Type / Scope:** Bilingual Localization Dictionaries (`en` and `si`).
+* **Rationale:**
+  * Adds dictionary keys for:
+    * `cumulative_contributions`: "මෙතෙක් ගෙවා ඇති මුදල" / "Contributions Paid to Date".
+    * `advance_balance`: "අත්තිකාරම් ශේෂය" / "Advance Prepaid Balance".
+    * `overdue_arrears`: "හිඟ මුදල්" / "Overdue Arrears".
+    * `status_voided`: "අවලංගු කරන ලදී" / "Voided".
+    * `notifications_title`: "දැනුම්දීම් පුවරුව" / "Notifications".
+    * `install_app`: "යෙදුම ස්ථාපනය කරන්න" / "Install App".
+    * `inquiry_submitted`: "ඔබගේ විමසීම සාර්ථකව යොමු කරන ලදී" / "Inquiry submitted successfully".
+
+#### 11. `supabase/functions/get-slip-url/index.ts` (Modify)
+* **Type / Scope:** Cloudflare R2 Presigned Download Edge Function.
+* **Rationale:**
+  * Updates authorization check to permit presigned download if `payments.slip_key = slipKey` OR `benefit_claims.document_key = slipKey`.
+
+#### 12. `assets/styles.css` (Modify - via Build)
+* **Type / Scope:** Production CSS Stylesheet.
+* **Rationale:** Recompiled using `npm run build:css` to bundle Tailwind `tabular-nums` and newly added badge/print utility classes.
 
 ---
 
-### 2. Comprehensive File Manifest & Impact Rationale
+### Verification Plan
 
-| File Path | Status | Impact Rationale |
-| :--- | :--- | :--- |
-| `supabase/migrations/20261108000004_comprehensive_overhaul.sql` | **New** | Executes backward-compatible enum alterations (`secretary`, `committee_member`); adds `epf_number` (UNIQUE) and `designation` to `members`; creates immutable `audit_logs` table with tamper-proof trigger; establishes `treasury_accounts`, `treasury_transactions`, and `treasury_account_balances` view; creates `cms_documents`; defines automated table-level audit triggers; and updates RLS policies for all 6 roles. |
-| `supabase/functions/send-claim-notification/index.ts` | **New** | Deno TypeScript Edge Function orchestrating asynchronous committee email notifications on welfare claim creation via the Resend API gateway. Logs failures to `audit_logs` with zero disruption to the member. |
-| `js/config.js` | **Modified** | Standardizes official titles strictly to "MRIA කළමනාකාර සුබසාධක සංගමය", binds institutional contact email `krishaja@gmail.com`, and establishes endpoints for CMS document retrieval. |
-| `js/i18n.js` | **Modified** | Complete dictionary overhaul delivering 100% strict single-language isolation (zero dual-language text in Sinhala mode). Implements `.lang-si` body class switching for line-height and typography normalization. |
-| `js/api.js` | **Modified** | Adds Secretary member profile CRUD (including EPF and Designation), in-app registration submission, treasury transaction recording (`recordTreasuryTransaction`), real-time account balances retrieval, and date-filtered statement queries. |
-| `js/treasury-export.js` | **New** | Implements RFC 4180 compliant CSV export engine with ISO dates and decimal formatting, alongside a dedicated CSS-paged print window generator formatted with official welfare crest headers for formal audit PDF printing. |
-| `js/ui.js` | **Modified** | Implements interactive Contact Administration modal (`openContactModal`), notification center dismiss persistence (`mria_dismissed_announcements`), and enhanced modal controllers. |
-| `sw.js` | **Modified** | Upgrades to `mria-welfare-v3`, introducing Cache-First caching for Google Fonts, Material Symbols, and official Bank QR SVGs, alongside Network-First caching for Supabase REST endpoints. |
-| `manifest.json` | **Modified** | Updates official application name, defines desktop and mobile shortcuts ("My Dues Ledger", "Cash Collection Desk", "Submit Slip"), and configures standalone PWA display parameters across Windows, Linux, Android, and iOS. |
-| `index.html` | **Modified** | Updates hero branding ("Digital Platform - MRIA Management Welfare Association", "100% DEDICATED STAFF WELFARE"), removes domain restrictions and raw phone numbers, wires the interactive contact modal, updates voucher copy (removes SMS), and unifies global footer. |
-| `js/page-index.js` | **Modified** | Connects contact form submission logic routing to `krishaja@gmail.com` and synchronizes single-language DOM transitions. |
-| `unauthorized.html` | **Modified** | Replaces static raw contact numbers with the interactive Self-Service Registration Modal, allowing unrecognized airport staff to submit their EPF Number, Airport Designation, and Phone Number for administrative approval. |
-| `js/page-unauthorized.js` | **Modified** | Manages registration modal submission, validating required fields, creating an unapproved record in `public.members`, and rendering a verified submission confirmation state. |
-| `dashboard.html` | **Modified** | Implements statutory member header (`Full Name (EPF: [epf]) • [designation]`), top-3 dismissible Notification Center, interactive Outstanding Dues popup trigger, dynamic Current Month Due card, and language-aware Constitution download button. |
-| `js/page-dashboard.js` | **Modified** | Connects interactive dues breakdown popup (paid vs. unpaid months), handles notification dismissal persistence, fires asynchronous Edge Function call upon claim submission, and downloads `constitution_si.pdf` or `constitution_en.pdf` based on the active language. |
-| `admin.html` | **Modified** | Restructures administrative console into role-filtered workspaces: Secretary Member Administration tab (profile CRUD, EPF approval queue), Treasurer Cash Collection & Slip Verification queues, Society Treasury Module (3-account balances, transaction logger, CSV/PDF export controls), and Statutory Governance CMS. |
-| `js/page-admin.js` | **Modified** | Implements Secretary member CRUD and verification actions, wires Treasury transaction recording with account constraints, connects date-filtered CSV and PDF statement exports, manages dual-slot Constitution uploads to Cloudflare R2, and filters tab visibility per role. |
+#### 1. Syntax & Build Compilation
+* Execute `node --check js/*.js` to guarantee clean JavaScript module syntax.
+* Execute `npm run build:css` to verify Tailwind CSS build without bundle errors.
 
----
+#### 2. Database Migration & RLS Execution
+* Apply `supabase/migrations/20261109000006_enhanced_governance_remediations.sql` to remote Supabase via management API.
+* Verify `void_payment_receipt` and `delete_or_archive_member` execute atomically.
+* Confirm Row Level Security policies prevent unapproved users from accessing other members' records or sensitive financial data.
 
-### 3. Step-by-Step Implementation Specifications
+#### 3. Functional End-to-End Verification
+* **Cash Desk Export:** Click "Download Voucher" on direct cash intake desk; verify standalone HTML file downloads with correct styling.
+* **Receipts Toolbar:** Verify toolbar is compact on desktop and wraps neatly on mobile; verify search and sorting dropdowns function smoothly.
+* **Numerical Alignment:** Inspect Slips Queue, Receipts Register, Cash Book, Defaulters Roster, and Member Directory tables; verify all amounts are right-aligned with aligned decimal places.
+* **Payout Desk Baseline:** Inspect Direct Benefit Payout Desk; verify Payment Method and Disbursement Date inputs share identical vertical baselines.
+* **Settings Prefix:** Inspect Monthly Dues settings; verify "Rs." prefix aligns identically with other form inputs.
+* **Member Deletion & Archival:**
+  * Create a test member with 0 transactions -> trigger delete -> verify member is permanently purged from `members` and logged in `audit_logs`.
+  * Select a member with existing transactions -> trigger delete -> verify hard delete is blocked, member is soft-archived (`is_approved = false`, `role = 'archived'`), and action is logged in `audit_logs`.
+* **Receipt Voiding:**
+  * Select an issued receipt in Receipts Register -> click "Void Receipt" -> provide reason.
+  * Verify `payments.status` transitions to `voided`.
+  * Verify settled dues return to `pending`.
+  * Verify a compensating `outflow` is appended to `treasury_transactions` and account balance decrements.
+  * Verify immutable entry in `audit_logs`.
+* **Dynamic Contribution & Dues Cards:**
+  * Card 2 displays verified cumulative contributions paid to date.
+  * Card 1 displays `-Rs. 500.00` in red when in arrears, and `+Rs. 600.00` in green when prepaid in advance.
+* **FIFO Month Auto-Selection:**
+  * Member with past unpaid dues opens payment modal -> verify earliest unpaid month is pre-selected automatically.
+* **Cloudflare R2 Claim Attachments:**
+  * Submit a welfare benefit claim with attached image/PDF -> verify file uploads to R2 and `document_key` is stored on `benefit_claims`.
+  * Review claim in Admin Payout Desk -> verify "View Proof Document" button opens the uploaded attachment.
+* **Locked Preview Mode:**
+  * Sign in with an unapproved Google OAuth user -> navigate to `dashboard.html`.
+  * Verify `#lockedDashboardBanner` is displayed.
+  * Verify metrics show zero skeletons (`Rs. 0.00`) and mutation buttons are disabled.
+  * Verify "Sign Out", "Download Constitution PDF", and "Contact Administration" remain functional.
+* **In-App Inquiries:**
+  * Submit message via "Contact Administration" modal -> verify record is inserted into `admin_inquiries` without firing `mailto:`.
+  * Verify inquiry appears in Admin review panel.
+* **App Installation:**
+  * Visit `dashboard.html` on mobile / Chrome -> verify `#btnInstallApp` is visible and triggers native install prompt.
+* **Isolated Voucher Print:**
+  * Click "Print / PDF" on any receipt -> verify browser print dialog renders *only* the voucher without host webpage artifacts.
+* **History Pagination:**
+  * View payment history -> verify initial 5 records are displayed.
+  * Click "Load More (+25)" -> verify the next batch of records is appended smoothly.
 
-#### Step 1: Database Migration & Security Hardening
-1. Execute `20261108000004_comprehensive_overhaul.sql` via Supabase SQL engine.
-2. Verify enum values `secretary` and `committee_member` are present in `app_role`.
-3. Verify `members` columns `epf_number` and `designation` are enforced with appropriate constraints.
-4. Verify table `audit_logs` is created with trigger `trg_audit_logs_immutable`. Test attempting an `UPDATE` or `DELETE` to ensure PostgreSQL raises an uncatchable exception.
-5. Create tables `treasury_accounts`, `treasury_transactions`, and the `treasury_account_balances` view. Test check constraints ensuring `inflow`, `outflow`, and `transfer` enforce proper source and destination accounts.
-6. Attach table-level `SECURITY DEFINER` audit triggers on `members`, `payments`, `member_dues`, and `treasury_transactions`.
+--------------------------------------------------------------------------------
 
-#### Step 2: Supabase Edge Function Deployment
-1. Scaffold `supabase/functions/send-claim-notification/index.ts`.
-2. Configure `RESEND_API_KEY` in Supabase Secrets.
-3. Test function execution by passing mock claim payloads, verifying committee email extraction and audit log fallback on invalid keys.
-
-#### Step 3: Core Client Libraries & PWA Infrastructure
-1. Update `js/config.js` with standardized titles and institutional contact configuration.
-2. Expand `js/i18n.js` with comprehensive bilingual dictionaries, ensuring zero mixed-language leakage and binding `.lang-si` typographic rules.
-3. Update `js/api.js` to include Secretary CRUD, registration requests, treasury logging, and balance queries.
-4. Create `js/treasury-export.js` implementing RFC 4180 CSV export and CSS-paged print PDF generation.
-5. Update `sw.js` to v3 with Cache-First handling for fonts and bank QR media.
-6. Enhance `manifest.json` with multi-platform shortcuts and standalone configurations.
-
-#### Step 4: Public Landing & Onboarding Workflows
-1. Overhaul `index.html` typography, copywriting, contact modal, and unified footer.
-2. Wire `js/page-index.js` to handle interactive contact modal submissions.
-3. Update `unauthorized.html` and `js/page-unauthorized.js` to replace raw phone numbers with the Self-Service Registration Modal capturing EPF and Designation.
-
-#### Step 5: Member Self-Service Dashboard
-1. Update `dashboard.html` with the statutory identity header (`Full Name`, `EPF`, `Designation`).
-2. Add the dismissible top-3 Notification Center and wire dismiss state persistence in `js/page-dashboard.js`.
-3. Implement the interactive Outstanding Dues popup detailing settled vs. pending monthly breakdown.
-4. Wire asynchronous Edge Function notification dispatch on claim submission.
-5. Connect language-aware Constitution download (`constitution_si.pdf` vs. `constitution_en.pdf`).
-
-#### Step 6: Executive Administration & Treasury Console
-1. Re-architect `admin.html` into tabbed, role-gated modules (Secretary Console, Treasurer Console, Committee Console, Governance CMS).
-2. Wire Secretary member CRUD and one-click verification queue in `js/page-admin.js`.
-3. Connect Treasury transaction logging (Inflows, Outflows, Internal Transfers) and real-time 3-account balance rendering.
-4. Hook date-filtered monthly, yearly, and custom range statement downloads to `js/treasury-export.js`.
-5. Connect dual-slot Constitution PDF replacement with confirmation dialogs.
+*Drafted with EGM*
