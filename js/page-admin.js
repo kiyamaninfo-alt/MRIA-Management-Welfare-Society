@@ -159,22 +159,220 @@ window.switchAdminTab = switchAdminTab;
 
 async function loadInitialData() {
   allMembers = await getAllMembers();
+  window.allMembers = allMembers;
   populateMemberDropdowns(allMembers);
   await loadSlipApprovalQueue();
   await loadTreasuryData();
 }
 
+let approvedMembersList = [];
+
 function populateMemberDropdowns(members) {
+  approvedMembersList = (members || []).filter((m) => m.is_approved);
+  renderCashMemberOptions(approvedMembersList);
+  updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+}
+
+function renderCashMemberOptions(members) {
   const cashSelect = document.getElementById("cashMemberSelect");
   if (!cashSelect) return;
 
-  cashSelect.innerHTML = '<option value="" disabled selected>-- Select Member --</option>';
-  members.filter((m) => m.is_approved).forEach((m) => {
+  const currentVal = cashSelect.value;
+  cashSelect.innerHTML = '<option value="" disabled selected>-- Select Member from list or search above --</option>';
+
+  members.forEach((m) => {
     const opt = document.createElement("option");
     opt.value = m.id;
     opt.textContent = `${m.full_name} (EPF: ${m.epf_number || "N/A"}) - ${m.designation || "Staff"}`;
     cashSelect.appendChild(opt);
   });
+
+  if (currentVal && members.some((m) => m.id === currentVal)) {
+    cashSelect.value = currentVal;
+  }
+}
+
+function updateCashMemberMatchCount(matches, total) {
+  const badge = document.getElementById("cashMemberMatchCount");
+  if (!badge) return;
+  if (matches === total) {
+    badge.textContent = `${total} Members Available`;
+  } else {
+    badge.textContent = `${matches} of ${total} Matches`;
+  }
+}
+
+export function selectCashMember(member) {
+  const cashSelect = document.getElementById("cashMemberSelect");
+  const searchInput = document.getElementById("cashMemberSearchInput");
+  const resultsList = document.getElementById("cashMemberResultsList");
+  const clearBtn = document.getElementById("cashMemberClearSearchBtn");
+  const card = document.getElementById("cashSelectedMemberCard");
+
+  if (!member) return;
+
+  // 1. Ensure the option is in the select dropdown and select it
+  if (cashSelect) {
+    if (![...cashSelect.options].some((opt) => opt.value === member.id)) {
+      renderCashMemberOptions(approvedMembersList);
+    }
+    cashSelect.value = member.id;
+  }
+
+  // 2. Set search input text
+  if (searchInput) {
+    searchInput.value = `${member.full_name} (EPF: ${member.epf_number || "N/A"})`;
+  }
+  if (clearBtn) clearBtn.classList.remove("hidden");
+
+  // 3. Hide popover
+  if (resultsList) resultsList.classList.add("hidden");
+
+  // 4. Update and display selected member card
+  if (card) {
+    const nameEl = document.getElementById("cashSelectedMemberName");
+    const epfEl = document.getElementById("cashSelectedMemberEpf");
+    const desigEl = document.getElementById("cashSelectedMemberDesignation");
+    const initialsEl = document.getElementById("cashSelectedMemberInitials");
+
+    if (nameEl) nameEl.textContent = member.full_name || "-";
+    if (epfEl) epfEl.textContent = `EPF: ${member.epf_number || "N/A"}`;
+    if (desigEl) desigEl.textContent = `${member.designation || "Staff"} • ${member.email || ""}`;
+    if (initialsEl) {
+      initialsEl.textContent = (member.full_name || "M").charAt(0).toUpperCase();
+    }
+    card.classList.remove("hidden");
+  }
+}
+window.selectCashMember = selectCashMember;
+
+window.clearCashMemberSearch = function () {
+  const searchInput = document.getElementById("cashMemberSearchInput");
+  const clearBtn = document.getElementById("cashMemberClearSearchBtn");
+  const resultsList = document.getElementById("cashMemberResultsList");
+
+  if (searchInput) {
+    searchInput.value = "";
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add("hidden");
+  if (resultsList) resultsList.classList.add("hidden");
+
+  renderCashMemberOptions(approvedMembersList);
+  updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+};
+
+window.resetCashMemberSelection = function () {
+  const cashSelect = document.getElementById("cashMemberSelect");
+  const searchInput = document.getElementById("cashMemberSearchInput");
+  const clearBtn = document.getElementById("cashMemberClearSearchBtn");
+  const resultsList = document.getElementById("cashMemberResultsList");
+  const card = document.getElementById("cashSelectedMemberCard");
+
+  if (cashSelect) cashSelect.value = "";
+  if (searchInput) {
+    searchInput.value = "";
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add("hidden");
+  if (resultsList) resultsList.classList.add("hidden");
+  if (card) card.classList.add("hidden");
+
+  renderCashMemberOptions(approvedMembersList);
+  updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+};
+
+function setupCashMemberSearch() {
+  const searchInput = document.getElementById("cashMemberSearchInput");
+  const resultsList = document.getElementById("cashMemberResultsList");
+  const clearBtn = document.getElementById("cashMemberClearSearchBtn");
+  const cashSelect = document.getElementById("cashMemberSelect");
+
+  if (!searchInput || !resultsList) return;
+
+  function filterMembers(q) {
+    const query = q.trim().toLowerCase();
+    if (!query) {
+      if (clearBtn) clearBtn.classList.add("hidden");
+      renderCashMemberOptions(approvedMembersList);
+      updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+      resultsList.classList.add("hidden");
+      return;
+    }
+
+    if (clearBtn) clearBtn.classList.remove("hidden");
+
+    const matches = approvedMembersList.filter((m) => {
+      const name = (m.full_name || "").toLowerCase();
+      const epf = (m.epf_number || "").toLowerCase();
+      const desig = (m.designation || "").toLowerCase();
+      const email = (m.email || "").toLowerCase();
+      return name.includes(query) || epf.includes(query) || desig.includes(query) || email.includes(query);
+    });
+
+    renderCashMemberOptions(matches.length > 0 ? matches : approvedMembersList);
+    updateCashMemberMatchCount(matches.length, approvedMembersList.length);
+
+    // Populate search popover
+    if (matches.length === 0) {
+      resultsList.innerHTML = `
+        <div class="p-3 text-center text-xs text-on-surface-variant font-medium">
+          No members found matching "<span class="font-bold text-on-surface">${q}</span>"
+        </div>
+      `;
+    } else {
+      resultsList.innerHTML = matches.map((m) => {
+        const initials = (m.full_name || "M").charAt(0).toUpperCase();
+        return `
+          <div class="p-2.5 hover:bg-sky-50 transition-colors cursor-pointer flex items-center justify-between gap-2" onclick="window.selectCashMember(window.allMembers.find(item => item.id === '${m.id}'))">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded-full bg-sky-100 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                ${initials}
+              </div>
+              <div class="min-w-0">
+                <div class="font-bold text-xs text-on-surface truncate">${m.full_name}</div>
+                <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+                  <span class="font-mono text-[10px] text-primary font-bold bg-sky-50 px-1 rounded border border-sky-200">EPF: ${m.epf_number || "N/A"}</span>
+                  <span class="truncate">${m.designation || "Staff"}</span>
+                </div>
+              </div>
+            </div>
+            <span class="material-symbols-outlined text-[16px] text-primary/70 shrink-0">check</span>
+          </div>
+        `;
+      }).join("");
+    }
+    resultsList.classList.remove("hidden");
+  }
+
+  searchInput.addEventListener("input", (e) => {
+    filterMembers(e.target.value);
+  });
+
+  searchInput.addEventListener("focus", () => {
+    if (searchInput.value.trim().length > 0) {
+      filterMembers(searchInput.value);
+    }
+  });
+
+  // Close search popover when clicking outside
+  document.addEventListener("click", (e) => {
+    const group = document.getElementById("cashMemberSelectGroup");
+    if (group && !group.contains(e.target)) {
+      resultsList.classList.add("hidden");
+    }
+  });
+
+  // Synchronize when user manually changes the select dropdown
+  if (cashSelect) {
+    cashSelect.addEventListener("change", () => {
+      const memberId = cashSelect.value;
+      const member = approvedMembersList.find((m) => m.id === memberId);
+      if (member) {
+        selectCashMember(member);
+      }
+    });
+  }
 }
 
 // ================= TAB 1: SLIPS APPROVAL =================
@@ -284,6 +482,8 @@ window.rejectSlipPrompt = async function (paymentId) {
 // ================= TAB 2: CASH DESK =================
 
 function setupAdminForms() {
+  setupCashMemberSearch();
+
   const cashForm = document.getElementById("cashCollectionForm");
   if (cashForm) {
     cashForm.addEventListener("submit", async (e) => {
@@ -319,6 +519,7 @@ function setupAdminForms() {
 
         showToast("Cash payment recorded! Official voucher generated.", "success");
         cashForm.reset();
+        window.resetCashMemberSelection();
         await loadTreasuryData();
       } catch (err) {
         showToast(err.message || "Failed to record cash payment.", "error");
