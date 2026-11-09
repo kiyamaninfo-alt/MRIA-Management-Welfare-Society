@@ -23,6 +23,8 @@ import {
   updateBenefitType,
   createBenefitType,
   deleteBenefitType,
+  sendReceiptEmail,
+  logUserActivity,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
@@ -238,11 +240,19 @@ export function selectCashMember(member) {
     const nameEl = document.getElementById("cashSelectedMemberName");
     const epfEl = document.getElementById("cashSelectedMemberEpf");
     const desigEl = document.getElementById("cashSelectedMemberDesignation");
+    const emailEl = document.getElementById("cashSelectedMemberEmail");
     const initialsEl = document.getElementById("cashSelectedMemberInitials");
 
     if (nameEl) nameEl.textContent = member.full_name || "-";
     if (epfEl) epfEl.textContent = `EPF: ${member.epf_number || "N/A"}`;
-    if (desigEl) desigEl.textContent = `${member.designation || "Staff"} • ${member.email || ""}`;
+    if (desigEl) desigEl.textContent = member.designation || "Staff";
+    if (emailEl) {
+      if (member.email) {
+        emailEl.innerHTML = `<span class="material-symbols-outlined text-[13px] text-emerald-600">mail</span><span class="text-slate-700">${escapeHtml(member.email)}</span>`;
+      } else {
+        emailEl.innerHTML = `<span class="material-symbols-outlined text-[13px] text-amber-600">mail_off</span><span class="text-amber-700 font-bold">No registered email on profile</span>`;
+      }
+    }
     if (initialsEl) {
       initialsEl.textContent = (member.full_name || "M").charAt(0).toUpperCase();
     }
@@ -288,6 +298,12 @@ window.resetCashMemberSelection = function ({ preservePreview = false } = {}) {
 
   renderCashMemberOptions(approvedMembersList);
   updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+
+  const emailNotificationBanner = document.getElementById("receiptEmailNotificationBanner");
+  if (emailNotificationBanner && !preservePreview) {
+    emailNotificationBanner.innerHTML = "";
+    emailNotificationBanner.className = "hidden";
+  }
 
   if (!preservePreview) {
     updateLiveReceiptPreview();
@@ -493,14 +509,36 @@ window.rejectSlipPrompt = async function (paymentId) {
 
 // ================= TAB 2: CASH DESK =================
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getSriLankaDateTimeLocal() {
+  const now = new Date();
+  const dtf = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Colombo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(now);
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
 function setCashDateToToday() {
   const dateInput = document.getElementById("cashDateInput");
   if (dateInput) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    dateInput.value = `${year}-${month}-${day}`;
+    dateInput.value = getSriLankaDateTimeLocal();
   }
 }
 
@@ -532,7 +570,10 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
   const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number || "EPF: N/A"})` : "";
   const amount = Number(document.getElementById("cashAmountInput")?.value) || 0;
   const category = document.getElementById("cashCategorySelect")?.value || "monthly_due";
-  const dateVal = document.getElementById("cashDateInput")?.value || new Date().toISOString().slice(0, 10);
+  const dateVal = document.getElementById("cashDateInput")?.value || getSriLankaDateTimeLocal();
+  const formattedDateVal = dateVal
+    ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : (dateVal.includes("T") ? `${dateVal}:00+05:30` : `${dateVal}T00:00:00+05:30`))
+    : new Date().toISOString();
   const notes = document.getElementById("cashNotesInput")?.value || "";
 
   const draftPayment = {
@@ -542,8 +583,8 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
     payment_type: category,
     payment_method: "cash",
     status: "draft",
-    paid_at: dateVal,
-    created_at: dateVal,
+    paid_at: formattedDateVal,
+    created_at: formattedDateVal,
     notes,
   };
 
@@ -556,6 +597,58 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
 }
 window.updateLiveReceiptPreview = updateLiveReceiptPreview;
 
+export function renderCashAdmissionFeeOptions() {
+  const group = document.getElementById("cashAdmissionFeeTierGroup");
+  const select = document.getElementById("cashAdmissionFeeSelect");
+  const descText = document.getElementById("cashAdmissionFeeDescText");
+  const amountInput = document.getElementById("cashAmountInput");
+  const notesInput = document.getElementById("cashNotesInput");
+  if (!group || !select) return;
+
+  const activeFees = (admissionFeesList && admissionFeesList.length > 0)
+    ? admissionFeesList.filter((f) => f.is_active)
+    : [];
+
+  const listToRender = activeFees.length > 0 ? activeFees : (admissionFeesList || [
+    {
+      id: "adm_standard",
+      code: "STANDARD_ADMISSION",
+      title_en: "Standard New Member Admission Fee",
+      title_si: "නව සාමාජික ඇතුල්වීමේ ගාස්තුව",
+      amount: configuredAdmissionFeeAmount || 500,
+      is_active: true,
+      description: "Standard statutory admission fee configured in Content & Settings",
+    },
+  ]);
+
+  select.innerHTML = listToRender.map((f) => {
+    return `<option value="${f.id}" data-amount="${f.amount}" data-title="${escapeHtml(f.title_en)}" data-desc="${escapeHtml(f.description || '')}">
+      ${escapeHtml(f.title_en)} ${f.title_si ? `(${escapeHtml(f.title_si)})` : ""} — Rs. ${Number(f.amount).toLocaleString()}/=
+    </option>`;
+  }).join("");
+
+  group.classList.remove("hidden");
+
+  // Pick first/active fee
+  const selectedOpt = select.options[select.selectedIndex];
+  if (selectedOpt) {
+    const amt = Number(selectedOpt.getAttribute("data-amount")) || configuredAdmissionFeeAmount || 500;
+    const title = selectedOpt.getAttribute("data-title") || "Admission Fee";
+    const desc = selectedOpt.getAttribute("data-desc") || "";
+
+    if (amountInput) amountInput.value = amt;
+    if (notesInput && (!notesInput.value || notesInput.value === "Monthly dues contribution" || notesInput.value.includes("Admission") || notesInput.value.includes("ඇතුල්වීම"))) {
+      notesInput.value = title;
+    }
+    if (descText) {
+      descText.textContent = desc ? `${desc} (Rate: Rs. ${amt.toLocaleString()}/=)` : `Content & Settings Configured Rate: Rs. ${amt.toLocaleString()}/=`;
+    }
+  }
+
+  updateLiveReceiptPreview();
+}
+window.renderCashAdmissionFeeOptions = renderCashAdmissionFeeOptions;
+
 function setupAdminForms() {
   setupCashMemberSearch();
 
@@ -564,8 +657,9 @@ function setupAdminForms() {
   const amountInput = document.getElementById("cashAmountInput");
   const dateInput = document.getElementById("cashDateInput");
   const notesInput = document.getElementById("cashNotesInput");
+  const admissionFeeSelect = document.getElementById("cashAdmissionFeeSelect");
 
-  // Automatically default collection date to today
+  // Automatically default collection date to today in Sri Lanka time
   setCashDateToToday();
 
   // If default category is monthly_due or admission_fee, set default configured amount
@@ -573,19 +667,46 @@ function setupAdminForms() {
     if (categorySelect.value === "monthly_due") {
       amountInput.value = configuredMonthlyDueAmount;
     } else if (categorySelect.value === "admission_fee") {
-      amountInput.value = configuredAdmissionFeeAmount;
+      renderCashAdmissionFeeOptions();
     }
   }
 
-  // When payment category changes, if monthly_due or admission_fee, take configured amount
+  // When payment category changes, retrieve data from Content & Settings
   if (categorySelect) {
     categorySelect.addEventListener("change", () => {
-      if (categorySelect.value === "monthly_due") {
-        amountInput.value = configuredMonthlyDueAmount;
-      } else if (categorySelect.value === "admission_fee") {
-        amountInput.value = configuredAdmissionFeeAmount;
+      const tierGroup = document.getElementById("cashAdmissionFeeTierGroup");
+      if (categorySelect.value === "admission_fee") {
+        renderCashAdmissionFeeOptions();
+      } else {
+        if (tierGroup) tierGroup.classList.add("hidden");
+        if (categorySelect.value === "monthly_due") {
+          if (amountInput) amountInput.value = configuredMonthlyDueAmount;
+          if (notesInput && (!notesInput.value || notesInput.value.includes("Admission") || notesInput.value.includes("ඇතුල්වීම"))) {
+            notesInput.value = "Monthly dues contribution";
+          }
+        }
       }
       updateLiveReceiptPreview();
+    });
+  }
+
+  // When selected admission fee tier changes from Content & Settings schedule
+  if (admissionFeeSelect) {
+    admissionFeeSelect.addEventListener("change", () => {
+      const selectedOpt = admissionFeeSelect.options[admissionFeeSelect.selectedIndex];
+      if (selectedOpt) {
+        const amt = Number(selectedOpt.getAttribute("data-amount")) || configuredAdmissionFeeAmount || 500;
+        const title = selectedOpt.getAttribute("data-title") || "Admission Fee";
+        const desc = selectedOpt.getAttribute("data-desc") || "";
+        const descText = document.getElementById("cashAdmissionFeeDescText");
+
+        if (amountInput) amountInput.value = amt;
+        if (notesInput) notesInput.value = title;
+        if (descText) {
+          descText.textContent = desc ? `${desc} (Rate: Rs. ${amt.toLocaleString()}/=)` : `Content & Settings Configured Rate: Rs. ${amt.toLocaleString()}/=`;
+        }
+        updateLiveReceiptPreview();
+      }
     });
   }
 
@@ -618,26 +739,153 @@ function setupAdminForms() {
       const category = document.getElementById("cashCategorySelect").value;
       const notes = document.getElementById("cashNotesInput").value;
       const dateVal = document.getElementById("cashDateInput").value;
+      const issueBtn = document.getElementById("issueReceiptBtn");
+      const banner = document.getElementById("receiptEmailNotificationBanner");
 
       if (!memberId || !amount) {
         showToast("Please select a member and valid amount.", "warning");
         return;
       }
 
+      const selectedMember = allMembers.find((m) => m.id === memberId);
+      const memberEmail = (selectedMember?.email || "").trim();
+      const memberName = selectedMember ? selectedMember.full_name : "Member";
+      const memberEpf = selectedMember?.epf_number || "";
+
+      // Ensure timestamp preserves Sri Lanka Time offset (+05:30)
+      const formattedPaidAt = dateVal
+        ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : `${dateVal}:00+05:30`)
+        : new Date().toISOString();
+
       try {
+        if (issueBtn) {
+          issueBtn.disabled = true;
+          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Processing Payment &amp; Voucher...</span>';
+        }
+
         const payment = await recordCashPayment({
           memberId,
           amount,
           paymentType: category,
-          collectedByMemberId: currentStaff.id,
+          collectedByMemberId: currentStaff?.id || null,
           notes,
-          paidAt: dateVal || null,
+          paidAt: formattedPaidAt,
         });
+
+        const receiptNumber = payment?.id ? `MRIA-REC-${payment.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
 
         // Update live voucher preview to official issued state
         updateLiveReceiptPreview(true, payment);
 
-        showToast("Cash payment recorded! Official voucher generated.", "success");
+        // Handle Automated Email Dispatch & HTML Message
+        if (memberEmail) {
+          try {
+            await sendReceiptEmail({
+              paymentId: payment.id,
+              recipientEmail: memberEmail,
+              recipientName: memberName,
+              recipientEpf: memberEpf,
+              receiptNumber,
+              amount,
+              paymentType: category,
+              paidAt: formattedPaidAt,
+              notes,
+              collectedByName: currentStaff?.full_name || "Treasurer",
+            });
+
+            logUserActivity({
+              action: "CASH_RECEIPT_EMAILED",
+              entityType: "PAYMENT",
+              entityId: payment.id,
+              details: {
+                receiptNumber,
+                amount,
+                recipientEmail: memberEmail,
+                memberId,
+                paymentType: category,
+              },
+              actorEmail: currentStaff?.email || null,
+              actorName: currentStaff?.full_name || null,
+              epfNumber: currentStaff?.epf_number || null,
+            }).catch(() => {});
+
+            if (banner) {
+              banner.className = "mt-4 block";
+              banner.innerHTML = `
+                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+                  <div class="space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-emerald-900">
+                      <span>Official Receipt Emailed Automatically</span>
+                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">රිසිට්පත සාර්ථකව ඊමේල් කරන ලදී</span>
+                    </div>
+                    <p class="text-[11px] text-emerald-800 leading-relaxed">
+                      A digital copy of receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+                    </p>
+                  </div>
+                </div>
+              `;
+            }
+
+            showToast(`Payment recorded! Official receipt automatically emailed to ${memberEmail}`, "success");
+          } catch (emailErr) {
+            console.error("Receipt email error:", emailErr);
+            if (banner) {
+              banner.className = "mt-4 block";
+              banner.innerHTML = `
+                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
+                  <div class="space-y-1">
+                    <div class="font-bold text-emerald-900">Official Receipt Issued</div>
+                    <p class="text-[11px] text-emerald-800 leading-relaxed">
+                      Receipt <strong>${receiptNumber}</strong> recorded. Email dispatch to <strong>${escapeHtml(memberEmail)}</strong> was triggered. Digital voucher is ready below.
+                    </p>
+                  </div>
+                </div>
+              `;
+            }
+            showToast("Cash payment recorded! Digital voucher ready below.", "success");
+          }
+        } else {
+          // NO email registered on member profile -> display HTML message as specified
+          logUserActivity({
+            action: "CASH_RECEIPT_ISSUED_NO_EMAIL",
+            entityType: "PAYMENT",
+            entityId: payment.id,
+            details: {
+              receiptNumber,
+              amount,
+              memberId,
+              memberName,
+              paymentType: category,
+              notice: "No registered email on member profile",
+            },
+            actorEmail: currentStaff?.email || null,
+            actorName: currentStaff?.full_name || null,
+            epfNumber: currentStaff?.epf_number || null,
+          }).catch(() => {});
+
+          if (banner) {
+            banner.className = "mt-4 block";
+            banner.innerHTML = `
+              <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
+                <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">mail_off</span>
+                <div class="space-y-1">
+                  <div class="font-bold flex items-center gap-1.5 text-amber-900">
+                    <span>No Registered Email Address</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">ලියාපදිංචි විද්‍යුත් තැපෑලක් නොමැත</span>
+                  </div>
+                  <p class="text-[11px] text-amber-800 leading-relaxed">
+                    Member <strong>${escapeHtml(memberName)}</strong>${memberEpf ? ` (EPF: ${escapeHtml(memberEpf)})` : ""} does not have an email address registered in the system. The official receipt voucher <strong>${receiptNumber}</strong> was recorded in the database, but could not be sent by email. You can download or print the official voucher below, or share it via WhatsApp.
+                  </p>
+                </div>
+              </div>
+            `;
+          }
+
+          showToast(`Payment recorded! (Note: No registered email address on file for ${memberName})`, "warning");
+        }
+
         cashForm.reset();
         setCashDateToToday();
         if (amountInput) {
@@ -651,6 +899,11 @@ function setupAdminForms() {
         await loadTreasuryData();
       } catch (err) {
         showToast(err.message || "Failed to record cash payment.", "error");
+      } finally {
+        if (issueBtn) {
+          issueBtn.disabled = false;
+          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">verified</span><span>Issue Cash Receipt &amp; Settle Dues</span>';
+        }
       }
     });
   }
@@ -1651,10 +1904,8 @@ async function loadAdmissionFeesSettings() {
     }
 
     const categorySelect = document.getElementById("cashCategorySelect");
-    const amountInput = document.getElementById("cashAmountInput");
-    if (categorySelect && amountInput && categorySelect.value === "admission_fee") {
-      amountInput.value = configuredAdmissionFeeAmount;
-      updateLiveReceiptPreview();
+    if (categorySelect && categorySelect.value === "admission_fee") {
+      renderCashAdmissionFeeOptions();
     }
 
     renderAdmissionFeesTable();
@@ -1748,10 +1999,8 @@ async function saveAdmissionFeesState() {
   }
 
   const categorySelect = document.getElementById("cashCategorySelect");
-  const amountInput = document.getElementById("cashAmountInput");
-  if (categorySelect && amountInput && categorySelect.value === "admission_fee") {
-    amountInput.value = configuredAdmissionFeeAmount;
-    updateLiveReceiptPreview();
+  if (categorySelect && categorySelect.value === "admission_fee") {
+    renderCashAdmissionFeeOptions();
   }
 
   renderAdmissionFeesTable();

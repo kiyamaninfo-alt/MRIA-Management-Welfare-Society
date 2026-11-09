@@ -250,6 +250,7 @@
                       <span class="px-1.5 py-0.2 rounded font-mono text-[10px] bg-white font-bold border border-sky-300 text-primary" id="cashSelectedMemberEpf">-</span>
                     </div>
                     <div class="text-[11px] text-on-surface-variant truncate" id="cashSelectedMemberDesignation">-</div>
+                    <div class="text-[11px] font-semibold truncate flex items-center gap-1 mt-0.5" id="cashSelectedMemberEmail"></div>
                   </div>
                 </div>
                 <button 
@@ -278,9 +279,35 @@
               </div>
             </div>
 
+            <!-- Dynamic Admission Fee Schedule Selector (retrieved from Content & Settings) -->
+            <div id="cashAdmissionFeeTierGroup" class="hidden">
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-on-surface">
+                  Admission Fee Schedule (from Content &amp; Settings)
+                </label>
+                <span class="text-[10px] font-semibold text-primary">Content &amp; Settings Rate</span>
+              </div>
+              <select id="cashAdmissionFeeSelect" class="w-full px-3 py-2 rounded-xl border border-sky-300 bg-sky-50/50 text-xs font-semibold text-primary outline-none focus:ring-1 focus:ring-primary">
+              </select>
+              <p class="text-[10px] text-on-surface-variant mt-1" id="cashAdmissionFeeDescText">
+                Rate loaded from Content &amp; Settings.
+              </p>
+            </div>
+
             <div>
-              <label class="block text-xs font-bold text-on-surface mb-1">Collection Date</label>
-              <input type="date" id="cashDateInput" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" />
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-on-surface">
+                  Collection Date &amp; Time (දිනය හා වේලාව)
+                </label>
+                <span class="text-[10px] font-bold text-primary flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[13px]">schedule</span>
+                  <span>Sri Lanka Time (Asia/Colombo)</span>
+                </span>
+              </div>
+              <input type="datetime-local" id="cashDateInput" step="60" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+              <span class="text-[10px] text-on-surface-variant mt-1 block">
+                Format: <strong>YYYY-MM-DD HH:mm</strong> (Year, Month, Date &amp; Sri Lanka Standard Time)
+              </span>
             </div>
 
             <div>
@@ -288,7 +315,7 @@
               <input type="text" id="cashNotesInput" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" placeholder="e.g. May contribution paid at office" />
             </div>
 
-            <button type="submit" class="mutation-btn w-full py-2.5 px-4 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm flex items-center justify-center gap-2">
+            <button type="submit" id="issueReceiptBtn" class="mutation-btn w-full py-2.5 px-4 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm flex items-center justify-center gap-2 cursor-pointer">
               <span class="material-symbols-outlined text-[18px]">verified</span>
               <span>Issue Cash Receipt &amp; Settle Dues</span>
             </button>
@@ -310,6 +337,8 @@
           </div>
           <div id="cashReceiptPreview" class="min-h-[300px]">
           </div>
+          <!-- HTML Status Message Container (Automated email notification or No registered email message) -->
+          <div id="receiptEmailNotificationBanner" class="hidden"></div>
         </div>
 
       </div>
