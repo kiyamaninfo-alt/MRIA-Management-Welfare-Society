@@ -602,7 +602,7 @@ export async function createMember({
 export async function getAllBenefitClaims() {
   const { data, error } = await supabase
     .from("benefit_claims")
-    .select("*, members(full_name, email, epf_number, designation, phone), benefit_types(title_en, title_si)")
+    .select("*, members:members!benefit_claims_member_id_fkey(full_name, email, epf_number, designation, phone), benefit_types(title_en, title_si)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -664,7 +664,7 @@ export async function recordDirectBenefitGrant({
   memberId,
   benefitTypeId,
   amount,
-  sourceAccountId = "boc_savings",
+  paymentMethod = "cash",
   disbursedByMemberId,
   disbursedAt = null,
   notes = null,
@@ -678,12 +678,13 @@ export async function recordDirectBenefitGrant({
       .update({
         status: "disbursed",
         disbursed_amount: Number(amount),
+        payment_method: paymentMethod || "cash",
         disbursed_by: disbursedByMemberId,
         disbursed_at: formattedDisbursedAt,
         notes,
       })
       .eq("id", claimId)
-      .select("*, members(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
+      .select("*, members:members!benefit_claims_member_id_fkey(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
       .single();
 
     if (error) throw error;
@@ -697,6 +698,7 @@ export async function recordDirectBenefitGrant({
           benefit_type_id: benefitTypeId,
           claim_amount: Number(amount),
           disbursed_amount: Number(amount),
+          payment_method: paymentMethod || "cash",
           status: "disbursed",
           approved_by: disbursedByMemberId,
           disbursed_by: disbursedByMemberId,
@@ -704,29 +706,29 @@ export async function recordDirectBenefitGrant({
           notes,
         },
       ])
-      .select("*, members(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
+      .select("*, members:members!benefit_claims_member_id_fkey(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
       .single();
 
     if (error) throw error;
     claim = data;
   }
 
-  // Ensure treasury transaction source account and transaction date match
+  // Ensure treasury transaction source account, description, and transaction date match
   if (claim?.id) {
     try {
-      const txUpdates = {};
-      if (sourceAccountId && sourceAccountId !== "boc_savings") {
-        txUpdates.source_account_id = sourceAccountId;
-      }
+      const sourceAccountId = paymentMethod === "cash" ? "cash_in_hand" : "boc_savings";
+      const methodLabel = paymentMethod === "cash" ? "Direct Cash Float" : paymentMethod === "qr_payment" ? "LankaQR Scan" : "Bank Transfer";
+      const txUpdates = {
+        source_account_id: sourceAccountId,
+        description: `Disbursed Welfare Aid Grant (${methodLabel})`,
+      };
       if (formattedDisbursedAt) {
         txUpdates.transaction_date = formattedDisbursedAt.split("T")[0];
       }
-      if (Object.keys(txUpdates).length > 0) {
-        await supabase
-          .from("treasury_transactions")
-          .update(txUpdates)
-          .eq("claim_id", claim.id);
-      }
+      await supabase
+        .from("treasury_transactions")
+        .update(txUpdates)
+        .eq("claim_id", claim.id);
     } catch (txErr) {
       console.warn("Notice updating treasury transaction source account:", txErr);
     }

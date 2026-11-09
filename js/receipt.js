@@ -169,9 +169,18 @@ export async function shareGrantVoucher(grant, memberName, verifierName) {
     ? (grantObj.benefit_title_si || grantObj.benefit_title_en || "සුබසාධන ප්‍රතිලාභ දීමනාව")
     : (grantObj.benefit_title_en || "Welfare Aid Grant");
 
-  const sourceName = grantObj.source_account_id === "cash_in_hand"
-    ? (isSi ? "භාණ්ඩාගාර අත්පිට මුදල් (Desk Cash Float)" : "Treasurer Cash Float (Desk Cash)")
-    : (isSi ? "ලංකා බැංකු ඉතුරුම් ගිණුම (BOC Operating Savings)" : "Bank of Ceylon Operating Savings");
+  const methodNamesEn = {
+    cash: "Direct Cash Float (Desk Cash)",
+    bank_transfer: "Bank Transfer / Deposit (BOC Account)",
+    qr_payment: "LankaQR / QR Scan",
+  };
+  const methodNamesSi = {
+    cash: "භාණ්ඩාගාර අත්පිට මුදල් (Desk Cash Float)",
+    bank_transfer: "ලංකා බැංකු තැන්පතු (BOC Account)",
+    qr_payment: "LankaQR ගෙවීම්",
+  };
+  const methodKey = grantObj.payment_method || (grantObj.source_account_id === "cash_in_hand" ? "cash" : "bank_transfer");
+  const methodDisplay = isSi ? (methodNamesSi[methodKey] || methodKey) : (methodNamesEn[methodKey] || methodKey);
 
   const beneficiaryName = memberName || (isSi ? "සංගමයේ සාමාජික" : "Association Member");
 
@@ -182,8 +191,8 @@ export async function shareGrantVoucher(grant, memberName, verifierName) {
     `👤 Beneficiary: ${beneficiaryName}\n` +
     `📅 Date: ${dateStr}\n` +
     `🏷 Program: ${benefitName}\n` +
+    `💳 Payment Method: ${methodDisplay}\n` +
     `💰 Disbursed Amount: Rs. ${amountVal}\n` +
-    `🏦 Disbursed From: ${sourceName}\n` +
     `✅ Status: Approved & Disbursed from Society Treasury\n` +
     `✍️ Authorized By: ${verifierName || "Treasurer"}\n` +
     `--------------------------------\n` +
@@ -319,9 +328,18 @@ export function renderGrantVoucherHtml(grant, memberName, verifierName = "භා
     ? (grantObj.benefit_title_si || grantObj.benefit_title_en || "සුබසාධන ප්‍රතිලාභ ප්‍රදානය")
     : (grantObj.benefit_title_en || "Welfare Aid Grant");
 
-  const sourceAccountDisplay = grantObj.source_account_id === "cash_in_hand"
-    ? (isSi ? "භාණ්ඩාගාර අත්පිට මුදල් (Desk Cash Float)" : "Treasurer Physical Cash Float (Desk Cash)")
-    : (isSi ? "ලංකා බැංකු ඉතුරුම් ගිණුම (BOC Operating Savings)" : "Bank of Ceylon Operating Savings (BOC-HAM-8839201)");
+  const methodNamesEn = {
+    cash: "Direct Cash Float (Physical Desk Float)",
+    bank_transfer: "Bank Transfer / Deposit (BOC Account)",
+    qr_payment: "LankaQR / QR Scan",
+  };
+  const methodNamesSi = {
+    cash: "භාණ්ඩාගාර අත්පිට මුදල් (අතින් දුන් මුදල්)",
+    bank_transfer: "ලංකා බැංකු තැන්පතු (BOC ගිණුම)",
+    qr_payment: "LankaQR ගෙවීම් (QR ස්කෑන්)",
+  };
+  const methodKey = grantObj.payment_method || (grantObj.source_account_id === "cash_in_hand" ? "cash" : "bank_transfer");
+  const methodDisplay = isSi ? (methodNamesSi[methodKey] || methodKey) : (methodNamesEn[methodKey] || methodKey);
 
   const title = isSi ? "MRIA කළමනාකාර සුබසාධක සංගමය" : "MRIA Management Welfare Association";
   const subtitle = isActuallyDraft
@@ -332,7 +350,7 @@ export function renderGrantVoucherHtml(grant, memberName, verifierName = "භා
   const dateLabel = isSi ? "දිනය හා වේලාව:" : "Disbursement Date & Time:";
   const beneficiaryLabel = isSi ? "ප්‍රතිලාභී සාමාජිකයා:" : "Beneficiary Member:";
   const progLabel = isSi ? "සුබසාධන වැඩසටහන:" : "Benefit Program:";
-  const sourceLabel = isSi ? "ගෙවූ ගිණුම:" : "Disbursed From:";
+  const methodLabel = isSi ? "ගෙවූ ආකාරය (Method):" : "Payment Method:";
   const amountLabel = isSi ? "ගෙවූ මුළු මුදල" : "Total Amount Disbursed";
   const verifiedLabel = isActuallyDraft
     ? (isSi ? "පෙරදසුන - ගෙවීම සඳහා Disburse ක්ලික් කරන්න" : "Draft Preview - Click Disburse to Finalize")
@@ -376,8 +394,8 @@ export function renderGrantVoucherHtml(grant, memberName, verifierName = "භා
           <span class="font-medium text-slate-700">${benefitProgram}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-slate-500">${sourceLabel}</span>
-          <span class="font-medium text-slate-700">${sourceAccountDisplay}</span>
+          <span class="text-slate-500">${methodLabel}</span>
+          <span class="font-bold text-slate-800">${methodDisplay}</span>
         </div>
         ${grantObj.notes ? `
         <div class="flex justify-between">

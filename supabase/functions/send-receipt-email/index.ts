@@ -148,6 +148,10 @@ Deno.serve(async (req: Request) => {
             <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Authorized & Disbursed By:</td>
             <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${collectedByName || "Welfare Association Treasurer"}</td>
           </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Payment Method:</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${methodDisplay}</td>
+          </tr>
           ${notes ? `
           <tr>
             <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Notes / Remarks:</td>

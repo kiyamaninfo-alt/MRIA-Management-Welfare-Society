@@ -2121,7 +2121,7 @@ export function populateGrantBenefitTypes() {
   const currentVal = select.value;
   select.innerHTML = '<option value="" disabled selected>-- Select Benefit Facility --</option>';
 
-  const list = (allBenefitTypes && allBenefitTypes.length > 0)
+  const rawList = (allBenefitTypes && allBenefitTypes.length > 0)
     ? allBenefitTypes
     : [
         {
@@ -2135,27 +2135,31 @@ export function populateGrantBenefitTypes() {
         },
       ];
 
-  list.forEach((b) => {
+  // ONLY show active welfare programs in the payout desk as configured in Content & Settings
+  const activeList = rawList.filter((b) => b.is_active === true || b.is_active === 1 || b.is_active === "true");
+
+  if (activeList.length === 0) {
+    select.innerHTML = '<option value="" disabled selected>No active benefit facilities available in settings</option>';
+    return;
+  }
+
+  activeList.forEach((b) => {
     const opt = document.createElement("option");
     opt.value = b.id;
     opt.dataset.amount = b.max_amount;
     opt.dataset.titleEn = b.title_en;
     opt.dataset.titleSi = b.title_si || "";
     opt.dataset.descEn = b.description_en || "";
-    opt.dataset.isActive = b.is_active ? "1" : "0";
-    const statusTag = b.is_active ? "" : " (Inactive)";
-    opt.textContent = `${b.title_en} ${b.title_si ? `(${b.title_si})` : ""} — Max Rs. ${Number(b.max_amount).toLocaleString()}/=${statusTag}`;
+    opt.dataset.isActive = "1";
+    opt.textContent = `${b.title_en} ${b.title_si ? `(${b.title_si})` : ""} — Limit: Rs. ${Number(b.max_amount).toLocaleString()}/=`;
     select.appendChild(opt);
   });
 
   // Select first active or match previous
-  if (currentVal && [...select.options].some((opt) => opt.value === currentVal)) {
+  if (currentVal && activeList.some((opt) => opt.id === currentVal)) {
     select.value = currentVal;
-  } else {
-    const firstActive = list.find((b) => b.is_active) || list[0];
-    if (firstActive) {
-      select.value = firstActive.id;
-    }
+  } else if (activeList.length > 0) {
+    select.value = activeList[0].id;
   }
 
   updateGrantBenefitInfoCard();
@@ -2185,12 +2189,11 @@ export function updateGrantBenefitInfoCard() {
   if (infoMax) infoMax.textContent = `Max: Rs. ${maxAmount.toLocaleString()}/=`;
   if (infoDesc) infoDesc.textContent = descEn;
 
-  if (amountInput && (!amountInput.value || amountInput.value === "20000" || amountInput.dataset.autoFilled === "true")) {
+  if (amountInput) {
     amountInput.value = maxAmount;
-    amountInput.dataset.autoFilled = "true";
   }
 
-  if (notesInput && (!notesInput.value || notesInput.value.includes("grant") || notesInput.value.includes("ආධාර"))) {
+  if (notesInput && (!notesInput.value || notesInput.value.includes("grant") || notesInput.value.includes("ආධාර") || notesInput.value.includes("Disbursement"))) {
     notesInput.value = `${titleEn} grant disbursement to member`;
   }
 }
@@ -2206,6 +2209,8 @@ export function updateLiveGrantVoucherPreview(isCommitted = false, claimData = n
   const previewContainer = document.getElementById("grantVoucherPreview");
   const statusBadge = document.getElementById("grantVoucherStatusBadge");
   if (!previewContainer) return;
+
+  const method = document.getElementById("grantMethodSelect")?.value || document.getElementById("grantSourceAccountSelect")?.value || "cash";
 
   if (isCommitted && claimData) {
     if (statusBadge) {
@@ -2223,7 +2228,8 @@ export function updateLiveGrantVoucherPreview(isCommitted = false, claimData = n
       amount: claimData.disbursed_amount || claimData.claim_amount,
       benefit_title_en: bt.title_en || "Welfare Benefit Grant",
       benefit_title_si: bt.title_si || "",
-      source_account_id: document.getElementById("grantSourceAccountSelect")?.value || "boc_savings",
+      payment_method: claimData.payment_method || method,
+      source_account_id: (claimData.payment_method === "cash" || method === "cash") ? "cash_in_hand" : "boc_savings",
       disbursed_at: claimData.disbursed_at || claimData.created_at,
       notes: claimData.notes,
       status: "disbursed",
@@ -2245,7 +2251,6 @@ export function updateLiveGrantVoucherPreview(isCommitted = false, claimData = n
   const benefitTypeId = document.getElementById("grantBenefitTypeSelect")?.value;
   const selectedBenefit = (allBenefitTypes || []).find((b) => b.id === benefitTypeId);
   const amount = Number(document.getElementById("grantAmountInput")?.value) || 0;
-  const sourceAccountId = document.getElementById("grantSourceAccountSelect")?.value || "boc_savings";
   const dateVal = document.getElementById("grantDateInput")?.value || getSriLankaDateTimeLocal();
   const formattedDateVal = dateVal
     ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : (dateVal.includes("T") ? `${dateVal}:00+05:30` : `${dateVal}T00:00:00+05:30`))
@@ -2257,7 +2262,8 @@ export function updateLiveGrantVoucherPreview(isCommitted = false, claimData = n
     amount,
     benefit_title_en: selectedBenefit?.title_en || "Welfare Aid Grant",
     benefit_title_si: selectedBenefit?.title_si || "",
-    source_account_id: sourceAccountId,
+    payment_method: method,
+    source_account_id: method === "cash" ? "cash_in_hand" : "boc_savings",
     disbursed_at: formattedDateVal,
     notes,
     status: "draft",
@@ -2340,6 +2346,12 @@ window.loadClaimIntoPayoutDesk = function (claimId) {
     notesInput.value = claim.notes || `Disbursement for ${btTitle} (CLM-${claim.id.slice(0, 8).toUpperCase()})`;
   }
 
+  // Set payment method if previously saved
+  const methodSelect = document.getElementById("grantMethodSelect") || document.getElementById("grantSourceAccountSelect");
+  if (methodSelect && claim.payment_method) {
+    methodSelect.value = claim.payment_method;
+  }
+
   if (section) {
     section.scrollIntoView({ behavior: "smooth" });
   }
@@ -2378,7 +2390,7 @@ function setupGrantDeskForm() {
   const form = document.getElementById("grantDisbursementForm");
   const benefitSelect = document.getElementById("grantBenefitTypeSelect");
   const amountInput = document.getElementById("grantAmountInput");
-  const sourceSelect = document.getElementById("grantSourceAccountSelect");
+  const methodSelect = document.getElementById("grantMethodSelect") || document.getElementById("grantSourceAccountSelect");
   const dateInput = document.getElementById("grantDateInput");
   const notesInput = document.getElementById("grantNotesInput");
 
@@ -2396,8 +2408,8 @@ function setupGrantDeskForm() {
     });
   }
 
-  if (sourceSelect) {
-    sourceSelect.addEventListener("change", () => {
+  if (methodSelect) {
+    methodSelect.addEventListener("change", () => {
       updateLiveGrantVoucherPreview();
     });
   }
@@ -2424,7 +2436,7 @@ function setupGrantDeskForm() {
       const memberId = document.getElementById("grantMemberSelect")?.value;
       const benefitTypeId = document.getElementById("grantBenefitTypeSelect")?.value;
       const amount = Number(document.getElementById("grantAmountInput")?.value);
-      const sourceAccountId = document.getElementById("grantSourceAccountSelect")?.value || "boc_savings";
+      const method = document.getElementById("grantMethodSelect")?.value || document.getElementById("grantSourceAccountSelect")?.value || "cash";
       const dateVal = document.getElementById("grantDateInput")?.value;
       const notes = document.getElementById("grantNotesInput")?.value || "";
       const claimId = document.getElementById("grantClaimIdInput")?.value || null;
@@ -2466,7 +2478,7 @@ function setupGrantDeskForm() {
           memberId,
           benefitTypeId,
           amount,
-          sourceAccountId,
+          paymentMethod: method,
           disbursedByMemberId: currentStaff?.id || null,
           disbursedAt: formattedDisbursedAt,
           notes,
@@ -2489,6 +2501,7 @@ function setupGrantDeskForm() {
               receiptNumber: voucherNumber,
               amount,
               paymentType: `Welfare Grant: ${benefitTitle}`,
+              paymentMethod: method,
               paidAt: formattedDisbursedAt,
               notes,
               collectedByName: currentStaff?.full_name || "Treasurer",
@@ -2501,6 +2514,7 @@ function setupGrantDeskForm() {
               details: {
                 voucherNumber,
                 amount,
+                paymentMethod: method,
                 recipientEmail: memberEmail,
                 memberId,
                 benefitTypeId,
@@ -2557,6 +2571,7 @@ function setupGrantDeskForm() {
             details: {
               voucherNumber,
               amount,
+              paymentMethod: method,
               memberId,
               memberName,
               benefitTitle,
@@ -2589,6 +2604,9 @@ function setupGrantDeskForm() {
         }
 
         form.reset();
+        if (methodSelect) {
+          methodSelect.value = "cash";
+        }
         window.unlinkClaimFromGrantDesk();
         window.resetGrantMemberSelection({ preservePreview: true });
         setGrantDateToToday();
@@ -2708,7 +2726,8 @@ window.viewGrantVoucher = function (claimId) {
     amount: claim.disbursed_amount || claim.claim_amount,
     benefit_title_en: bt.title_en || "Welfare Grant",
     benefit_title_si: bt.title_si || "",
-    source_account_id: "boc_savings",
+    payment_method: claim.payment_method || "cash",
+    source_account_id: claim.payment_method === "cash" ? "cash_in_hand" : "boc_savings",
     disbursed_at: claim.disbursed_at || claim.created_at,
     notes: claim.notes || "Welfare benefit payout",
     status: "disbursed",
