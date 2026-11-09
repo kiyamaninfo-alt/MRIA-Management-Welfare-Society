@@ -113,7 +113,7 @@ BEGIN
             )
         );
     ELSIF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
-        v_action := 'PAYMENT_STATUS_' || UPPER(NEW.status);
+        v_action := 'PAYMENT_STATUS_' || UPPER(NEW.status::text);
 
         INSERT INTO public.audit_logs (timestamp, user_email, full_name, epf_number, action, entity_type, entity_id, diff_json)
         VALUES (
@@ -175,7 +175,7 @@ BEGIN
             )
         );
     ELSIF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
-        v_action := 'CLAIM_STATUS_' || UPPER(NEW.status);
+        v_action := 'CLAIM_STATUS_' || UPPER(NEW.status::text);
 
         INSERT INTO public.audit_logs (timestamp, user_email, full_name, epf_number, action, entity_type, entity_id, diff_json)
         VALUES (

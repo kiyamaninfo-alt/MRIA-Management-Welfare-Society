@@ -710,7 +710,7 @@ window.viewSlip = async function (slipKey) {
 window.approveSlip = async function (paymentId) {
   if (!confirm("Are you sure you want to approve this deposit slip? Dues will be reconciled via FIFO.")) return;
   try {
-    await verifyPayment(paymentId, currentStaff.id);
+    await verifyPayment(paymentId, currentStaff?.id || null);
     showToast("Bank slip approved and reconciled successfully!", "success");
     await loadSlipApprovalQueue();
     await loadTreasuryData();
@@ -723,7 +723,7 @@ window.rejectSlipPrompt = async function (paymentId) {
   const reason = prompt("Enter reason for rejection:");
   if (reason === null) return;
   try {
-    await rejectPayment(paymentId, currentStaff.id, reason || "Incorrect amount or unverified slip");
+    await rejectPayment(paymentId, currentStaff?.id || null, reason || "Incorrect amount or unverified slip");
     showToast("Payment slip rejected.", "info");
     await loadSlipApprovalQueue();
   } catch (err) {
