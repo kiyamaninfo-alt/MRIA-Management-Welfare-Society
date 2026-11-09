@@ -49,11 +49,11 @@ let currentQrDataUrl = "/assets/default-bank-qr.svg";
 
 // Role-based Module Permissions Matrix
 const ROLE_TABS = {
-  admin: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
-  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
-  treasurer: ["treasury", "slips", "cash", "defaulters", "cms", "audit"],
-  secretary: ["secretary", "claims", "defaulters", "cms"],
-  committee_member: ["claims", "defaulters"],
+  admin: ["slips", "cash", "treasury", "receipts", "secretary", "claims", "defaulters", "cms", "audit"],
+  manager: ["slips", "cash", "treasury", "receipts", "secretary", "claims", "defaulters", "cms", "audit"],
+  treasurer: ["treasury", "receipts", "slips", "cash", "defaulters", "cms", "audit"],
+  secretary: ["secretary", "receipts", "claims", "defaulters", "cms"],
+  committee_member: ["claims", "defaulters", "receipts"],
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
