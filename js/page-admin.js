@@ -15,6 +15,7 @@ import {
   getTreasuryBalances,
   recordTreasuryTransaction,
   getTreasuryStatement,
+  getCashBookTransactions,
   getAuditLogs,
   getSystemSetting,
   updateSystemSetting,
@@ -498,6 +499,9 @@ async function loadTreasuryData() {
     if (eInput && !eInput.value) {
       eInput.value = new Date().toISOString().slice(0, 10);
     }
+
+    // Load initial 10 Cash Book transactions
+    await loadCashBookTransactions({ reset: true });
   } catch (err) {
     console.error("Failed to load treasury balances:", err);
   }
@@ -554,6 +558,213 @@ async function fetchTreasuryStatement() {
     showToast(err.message || "Failed to fetch statement.", "error");
   }
 }
+
+// ================= CASH BOOK LEDGER (මුදල් පොත) =================
+
+let cashBookOffset = 0;
+const CASH_BOOK_PAGE_SIZE = 10;
+let cashBookSelectedAccount = "";
+let cashBookTotalCount = 0;
+let cashBookTransactionsList = [];
+let cashBookIsLoading = false;
+
+async function loadCashBookTransactions({ reset = false } = {}) {
+  const tbody = document.getElementById("cashBookTableBody");
+  const countBadge = document.getElementById("cashBookCountBadge");
+  const statusText = document.getElementById("cashBookStatusText");
+  const nextBtn = document.getElementById("btnLoadNextCashBook");
+  const refreshBtn = document.getElementById("btnRefreshCashBook");
+
+  if (!tbody) return;
+
+  if (reset) {
+    cashBookOffset = 0;
+    cashBookTransactionsList = [];
+    cashBookTotalCount = 0;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-10 text-center text-on-surface-variant font-medium">
+          <div class="inline-flex items-center gap-2">
+            <span class="material-symbols-outlined text-[20px] animate-spin text-primary">sync</span>
+            <span>Fetching cash book transactions...</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    cashBookIsLoading = true;
+    if (nextBtn) {
+      nextBtn.disabled = true;
+      nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Loading...</span>';
+    }
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+    }
+
+    const rows = await getCashBookTransactions({
+      limit: CASH_BOOK_PAGE_SIZE,
+      offset: cashBookOffset,
+      accountId: cashBookSelectedAccount,
+    });
+
+    if (reset) {
+      cashBookTransactionsList = rows;
+    } else {
+      cashBookTransactionsList = [...cashBookTransactionsList, ...rows];
+    }
+
+    cashBookTotalCount = Number(rows[0]?.total_count || cashBookTransactionsList.length || 0);
+
+    renderCashBookRows();
+
+    if (countBadge) {
+      countBadge.textContent = `Showing ${cashBookTransactionsList.length} of ${cashBookTotalCount}`;
+    }
+
+    if (statusText) {
+      statusText.textContent = `Showing ${cashBookTransactionsList.length} of ${cashBookTotalCount} transactions recorded in the cash book.`;
+    }
+
+    if (nextBtn) {
+      if (cashBookTransactionsList.length >= cashBookTotalCount || rows.length === 0) {
+        nextBtn.disabled = true;
+        nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>All transactions loaded (සියල්ල පෙන්වා ඇත)</span>';
+      } else {
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">expand_more</span><span>Load Next 10 Transactions (තවත් 10ක් පෙන්වන්න)</span>';
+      }
+    }
+  } catch (err) {
+    console.error("Cash Book error:", err);
+    if (tbody && reset) {
+      tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-rose-600 font-bold">Failed to load cash book: ${err.message || err}</td></tr>`;
+    }
+    if (statusText) statusText.textContent = `Error: ${err.message || err}`;
+  } finally {
+    cashBookIsLoading = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+function renderCashBookRows() {
+  const tbody = document.getElementById("cashBookTableBody");
+  if (!tbody) return;
+
+  if (cashBookTransactionsList.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-10 text-center text-on-surface-variant font-medium">
+          <div class="max-w-sm mx-auto space-y-2">
+            <span class="material-symbols-outlined text-3xl text-on-surface-variant/60">receipt_long</span>
+            <div class="text-sm font-bold text-on-surface">No Transactions Found</div>
+            <p class="text-xs text-on-surface-variant">No cash book transactions match the selected account filter.</p>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = cashBookTransactionsList.map((tx) => {
+    const dateStr = tx.created_at || tx.transaction_date;
+    const formattedDate = dateStr
+      ? new Date(dateStr).toLocaleString("en-GB", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "-";
+
+    // Account badge formatting
+    const destAcc = tx.destination_account_id;
+    const srcAcc = tx.source_account_id;
+    let accBadge = "";
+
+    const formatAccountPill = (accId) => {
+      if (accId === "boc_savings") {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200"><span class="material-symbols-outlined text-[13px]">account_balance</span>BOC Savings</span>`;
+      } else if (accId === "cash_in_hand") {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><span class="material-symbols-outlined text-[13px]">payments</span>Cash in Hand</span>`;
+      } else if (accId === "fixed_deposits") {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-200"><span class="material-symbols-outlined text-[13px]">lock_clock</span>Fixed Deposits</span>`;
+      }
+      return `<span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100">${accId || "General"}</span>`;
+    };
+
+    if (tx.transaction_type === "transfer" && srcAcc && destAcc) {
+      accBadge = `<div class="flex items-center gap-1 flex-wrap">${formatAccountPill(srcAcc)} <span class="material-symbols-outlined text-[12px] text-on-surface-variant">arrow_forward</span> ${formatAccountPill(destAcc)}</div>`;
+    } else {
+      accBadge = formatAccountPill(destAcc || srcAcc);
+    }
+
+    const refPill = tx.reference_no
+      ? `<span class="px-1.5 py-0.5 rounded font-mono text-[10px] bg-slate-100 text-on-surface font-semibold">${tx.reference_no}</span>`
+      : "";
+
+    const memberInfo = tx.member_name && tx.member_name !== "MRIA Welfare Fund"
+      ? `<div class="text-[11px] text-on-surface-variant flex items-center gap-1 mt-0.5">
+           <span class="material-symbols-outlined text-[12px]">person</span>
+           <span>${tx.member_name}</span>
+           ${tx.member_epf && tx.member_epf !== "N/A" ? `<span class="font-mono text-[10px] text-primary">(${tx.member_epf})</span>` : ""}
+         </div>`
+      : "";
+
+    const inflowNum = Number(tx.inflow || 0);
+    const outflowNum = Number(tx.outflow || 0);
+    const runningBalNum = Number(tx.running_balance || 0);
+
+    const inCol = inflowNum > 0
+      ? `<span class="font-mono font-bold text-emerald-700">+${formatCurrency(inflowNum)}</span>`
+      : `<span class="text-on-surface-variant/40">-</span>`;
+
+    const outCol = outflowNum > 0
+      ? `<span class="font-mono font-bold text-rose-700">-${formatCurrency(outflowNum)}</span>`
+      : `<span class="text-on-surface-variant/40">-</span>`;
+
+    return `
+      <tr class="hover:bg-surface/60 transition-colors text-xs font-sans">
+        <td class="py-3 px-3 whitespace-nowrap text-on-surface-variant font-mono text-[11px]">
+          ${formattedDate}
+        </td>
+        <td class="py-3 px-3">
+          ${accBadge}
+        </td>
+        <td class="py-3 px-3">
+          <div class="font-bold text-on-surface text-xs flex items-center gap-1.5 flex-wrap">
+            <span>${tx.description || "-"}</span>
+            ${refPill}
+          </div>
+          ${memberInfo}
+        </td>
+        <td class="py-3 px-3 text-right">
+          ${inCol}
+        </td>
+        <td class="py-3 px-3 text-right">
+          ${outCol}
+        </td>
+        <td class="py-3 px-3 text-right">
+          <span class="font-mono font-extrabold text-on-surface text-xs">${formatCurrency(runningBalNum)}</span>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+window.loadNextCashBookTransactions = function () {
+  if (cashBookIsLoading) return;
+  cashBookOffset += CASH_BOOK_PAGE_SIZE;
+  loadCashBookTransactions({ reset: false });
+};
+
+window.reloadCashBook = function () {
+  loadCashBookTransactions({ reset: true });
+};
+
+window.filterCashBookAccount = function (accountId) {
+  cashBookSelectedAccount = accountId;
+  loadCashBookTransactions({ reset: true });
+};
 
 // ================= TAB 4: SECRETARY CONSOLE =================
 

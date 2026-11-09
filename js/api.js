@@ -632,6 +632,23 @@ export async function getTreasuryTransactions(limit = 100) {
 }
 
 /**
+ * Fetches paginated Cash Book transactions with IN, OUT, and running balance.
+ */
+export async function getCashBookTransactions({ limit = 10, offset = 0, accountId = null } = {}) {
+  const { data, error } = await supabase.rpc("get_cash_book_transactions", {
+    p_limit: limit,
+    p_offset: offset,
+    p_account_id: accountId || null,
+  });
+
+  if (error) {
+    console.error("Error fetching cash book transactions:", error);
+    throw error;
+  }
+  return data || [];
+}
+
+/**
  * Records an internal treasury transaction (inflow, outflow, or transfer).
  */
 export async function recordTreasuryTransaction({
