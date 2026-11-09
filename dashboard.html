@@ -352,6 +352,67 @@
       </div>
     </section>
 
+    <!-- 6. SOCIETY TREASURY & LIQUID ASSETS (ACROSS 3 ACCOUNTS) -->
+    <section class="space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
+        <div>
+          <h3 class="font-bold text-sm sm:text-base text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
+            <span data-i18n="treasury_overview">Total Liquid Assets &amp; Association Treasury</span>
+          </h3>
+          <p class="text-xs text-on-surface-variant mt-0.5">
+            Transparent overview of MRIA Welfare Association reserves across all 3 segregated accounts.
+          </p>
+        </div>
+        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full w-fit">
+          <span class="material-symbols-outlined text-[14px]">verified</span>
+          <span>Verified Funds</span>
+        </span>
+      </div>
+
+      <!-- 3 Asset Segregated Accounts Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Total Liquid Assets -->
+        <div class="bg-sky-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-200" data-i18n="treasury_total_liquid">Total Liquid Assets</span>
+          <div id="dashboardTreasuryTotal" class="text-2xl font-extrabold my-2 text-white">Rs. 2,100.00</div>
+          <span class="text-[11px] text-sky-200" data-i18n="across_3_accounts">Across 3 Accounts</span>
+        </div>
+
+        <!-- BOC Savings -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_savings">BOC Savings</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
+          </div>
+          <div id="dashboardBalBoc" class="text-xl font-extrabold text-on-surface my-2">Rs. 1,300.00</div>
+          <span class="text-[11px] text-on-surface-variant font-mono font-medium">Acc: 8201948201</span>
+        </div>
+
+        <!-- Cash in Hand -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_cash">Cash in Hand</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">payments</span>
+          </div>
+          <div id="dashboardBalCash" class="text-xl font-extrabold text-on-surface my-2">Rs. 800.00</div>
+          <span class="text-[11px] text-on-surface-variant" data-i18n="petty_desk_cash">Petty &amp; Desk Cash</span>
+        </div>
+
+        <!-- Fixed Deposits -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_fd">Fixed Deposits</span>
+            <span class="material-symbols-outlined text-primary text-[20px]">lock_clock</span>
+          </div>
+          <div id="dashboardBalFd" class="text-xl font-extrabold text-on-surface my-2">Rs. 0.00</div>
+          <span class="text-[11px] text-on-surface-variant" data-i18n="term_deposits">Term Deposits</span>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 
   <!-- MODALS -->

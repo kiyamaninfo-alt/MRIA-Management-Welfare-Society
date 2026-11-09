@@ -7,6 +7,7 @@ import {
   getBenefitTypes,
   getAnnouncements,
   getSystemSetting,
+  getTreasuryBalances,
   submitPayment,
   submitBenefitClaim,
 } from "./api.js";
@@ -137,9 +138,53 @@ async function refreshDashboardData() {
     currentClaims = await getMemberClaims(currentMember.id);
     renderClaimsSummary(currentClaims);
 
+    // F. Treasury Reserves & Segregated Assets Overview
+    await loadTreasuryReserves();
+
   } catch (err) {
     console.error("Failed to refresh dashboard data:", err);
     showToast("Error loading financial ledger data.", "error");
+  }
+}
+
+/**
+ * Loads dynamic treasury balances if available from the database,
+ * otherwise retains the default initial asset values.
+ */
+async function loadTreasuryReserves() {
+  try {
+    const balances = await getTreasuryBalances();
+    if (balances && balances.length > 0) {
+      let total = 0;
+      let hasData = false;
+      balances.forEach((b) => {
+        const bal = Number(b.current_balance ?? b.balance ?? 0);
+        total += bal;
+        if (bal > 0) hasData = true;
+      });
+
+      if (hasData) {
+        balances.forEach((b) => {
+          const bal = Number(b.current_balance ?? b.balance ?? 0);
+          if (b.account_id === "boc_savings") {
+            const el = document.getElementById("dashboardBalBoc");
+            if (el) el.textContent = formatCurrency(bal);
+          }
+          if (b.account_id === "cash_in_hand") {
+            const el = document.getElementById("dashboardBalCash");
+            if (el) el.textContent = formatCurrency(bal);
+          }
+          if (b.account_id === "fixed_deposits") {
+            const el = document.getElementById("dashboardBalFd");
+            if (el) el.textContent = formatCurrency(bal);
+          }
+        });
+        const totalEl = document.getElementById("dashboardTreasuryTotal");
+        if (totalEl) totalEl.textContent = formatCurrency(total);
+      }
+    }
+  } catch (err) {
+    console.debug("Treasury balances live fetch skipped / using defaults:", err);
   }
 }
 
