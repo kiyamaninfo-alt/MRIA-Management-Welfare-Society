@@ -723,16 +723,24 @@ export async function getDefaultersRoster() {
 }
 
 /**
- * Fetches immutable audit logs (Admin only).
+ * Fetches immutable audit logs (first 25 items by default, loaded on demand).
  */
-export async function getAuditLogs(limit = 100) {
+export async function getAuditLogs(limit = 25) {
   const { data, error } = await supabase
     .from("audit_logs")
     .select("*")
-    .order("created_at", { ascending: false })
+    .order("timestamp", { ascending: false })
     .limit(limit);
 
   if (error) {
+    console.warn("Retrying audit logs fetch with created_at fallback:", error.message);
+    const fallback = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!fallback.error) return fallback.data || [];
     console.error("Error fetching audit logs:", error);
     return [];
   }

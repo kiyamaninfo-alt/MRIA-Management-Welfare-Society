@@ -144,10 +144,10 @@
           <span data-i18n="tab_cms">Content &amp; Settings</span>
         </button>
 
-        <!-- Tab: Audit Logs (Admin only) -->
+        <!-- Tab: Audit Logs -->
         <button id="tab-btn-audit" onclick="switchAdminTab('audit')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
-          <span class="material-symbols-outlined text-[18px]">verified_user</span>
-          <span>Audit Trail</span>
+          <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+          <span>System &amp; Audit Logs</span>
         </button>
 
       </nav>
@@ -728,17 +728,28 @@
 
     </div>
 
-    <!-- ================= TAB 8: IMMUTABLE AUDIT TRAIL ================= -->
+    <!-- ================= TAB 8: IMMUTABLE AUDIT TRAIL & SYSTEM LOGS ================= -->
     <div id="tab-content-audit" class="tab-content hidden space-y-4">
-      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
-        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-outline-variant">
           <div>
-            <h3 class="font-bold text-base text-on-surface">Immutable System Audit Trail</h3>
-            <p class="text-xs text-on-surface-variant">PostgreSQL append-only cryptographic change ledger.</p>
+            <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[22px]">verified_user</span>
+              <span>System Audit Trail &amp; Activity Logs</span>
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">
+              PostgreSQL cryptographic ledger. Loaded on-demand (first 25 most recent events).
+            </p>
           </div>
-          <span class="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200">
-            Protected by Triggers
-          </span>
+          <div class="flex items-center gap-2">
+            <span id="auditCountBadge" class="px-2.5 py-1 rounded-lg bg-sky-50 text-primary text-[11px] font-bold border border-sky-200">
+              Max 25 Items
+            </span>
+            <button type="button" id="btnRefreshAuditLogs" onclick="loadAuditLogsData(true)" class="px-3.5 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Load / Refresh Logs</span>
+            </button>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -746,14 +757,32 @@
             <thead>
               <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
                 <th class="py-2.5 px-3">Timestamp</th>
-                <th class="py-2.5 px-3">Actor (EPF / Email)</th>
+                <th class="py-2.5 px-3">Actor (User / EPF)</th>
                 <th class="py-2.5 px-3">Action</th>
-                <th class="py-2.5 px-3">Target Table</th>
-                <th class="py-2.5 px-3">Changes (Diff)</th>
+                <th class="py-2.5 px-3">Target Entity</th>
+                <th class="py-2.5 px-3">Details / Changes</th>
               </tr>
             </thead>
-            <tbody id="auditLogsBody" class="divide-y divide-outline-variant font-mono">
-              <tr><td colspan="5" class="py-8 text-center font-sans text-on-surface-variant">Loading immutable audit logs...</td></tr>
+            <tbody id="auditLogsBody" class="divide-y divide-outline-variant">
+              <tr>
+                <td colspan="5" class="py-12 px-4 text-center">
+                  <div class="max-w-md mx-auto space-y-3">
+                    <div class="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 text-primary flex items-center justify-center mx-auto">
+                      <span class="material-symbols-outlined text-[26px]">manage_search</span>
+                    </div>
+                    <div>
+                      <h4 class="font-bold text-sm text-on-surface">Audit Logs Ready to Load</h4>
+                      <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                        To conserve bandwidth and improve page response times, system activity logs are only loaded on demand. Click below to load the <strong>first 25 most recent records</strong>.
+                      </p>
+                    </div>
+                    <button type="button" onclick="loadAuditLogsData(true)" class="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+                      <span class="material-symbols-outlined text-[16px]">history</span>
+                      <span>Load First 25 Logs</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>

@@ -46,8 +46,8 @@ let currentQrDataUrl = "/assets/default-bank-qr.svg";
 // Role-based Module Permissions Matrix
 const ROLE_TABS = {
   admin: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
-  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms"],
-  treasurer: ["treasury", "slips", "cash", "defaulters", "cms"],
+  manager: ["slips", "cash", "treasury", "secretary", "claims", "defaulters", "cms", "audit"],
+  treasurer: ["treasury", "slips", "cash", "defaulters", "cms", "audit"],
   secretary: ["secretary", "claims", "defaulters", "cms"],
   committee_member: ["claims", "defaulters"],
 };
@@ -750,32 +750,118 @@ async function loadDefaultersData() {
   }
 }
 
-// ================= TAB 8: AUDIT LOGS =================
+// ================= TAB 8: AUDIT LOGS (ON-DEMAND & FIRST 25 ITEMS) =================
 
-async function loadAuditLogsData() {
+let auditLogsAlreadyLoaded = false;
+
+async function loadAuditLogsData(force = false) {
   const tbody = document.getElementById("auditLogsBody");
   if (!tbody) return;
 
+  // Only load when explicitly requested or needed
+  if (!force && !auditLogsAlreadyLoaded) {
+    return;
+  }
+
+  const refreshBtn = document.getElementById("btnRefreshAuditLogs");
+  const countBadge = document.getElementById("auditCountBadge");
+
   try {
-    const logs = await getAuditLogs();
-    if (logs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-on-surface-variant font-sans">No audit logs recorded yet.</td></tr>`;
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Loading...</span>';
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="py-12 text-center text-on-surface-variant font-medium">
+          <div class="inline-flex items-center gap-2">
+            <span class="material-symbols-outlined text-[20px] animate-spin text-primary">sync</span>
+            <span>Fetching latest 25 audit entries from database...</span>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    // Fetch ONLY the first 25 items
+    const logs = await getAuditLogs(25);
+    auditLogsAlreadyLoaded = true;
+
+    if (!logs || logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-on-surface-variant font-medium">No audit logs recorded yet in the database.</td></tr>`;
+      if (countBadge) countBadge.textContent = "0 Items";
       return;
     }
 
-    tbody.innerHTML = logs.map((log) => `
-      <tr class="hover:bg-sky-50/30 transition-colors text-[11px]">
-        <td class="py-2.5 px-3 text-on-surface-variant">${new Date(log.created_at).toLocaleString()}</td>
-        <td class="py-2.5 px-3 font-bold">${log.performed_by_email || log.performed_by || "SYSTEM"}</td>
-        <td class="py-2.5 px-3 uppercase text-primary font-bold">${log.action}</td>
-        <td class="py-2.5 px-3">${log.target_table || "-"}</td>
-        <td class="py-2.5 px-3 max-w-xs truncate" title="${JSON.stringify(log.diff || {})}">${JSON.stringify(log.diff || {})}</td>
-      </tr>
-    `).join("");
+    if (countBadge) {
+      countBadge.textContent = `Showing First ${logs.length} Items`;
+    }
+
+    tbody.innerHTML = logs.map((log) => {
+      const dateStr = log.timestamp || log.created_at;
+      const formattedDate = dateStr ? new Date(dateStr).toLocaleString("en-GB", {
+        dateStyle: "short",
+        timeStyle: "medium",
+      }) : "-";
+
+      const actorEmail = log.user_email || log.performed_by_email || log.performed_by || "SYSTEM";
+      const actorName = log.full_name || actorEmail;
+      const epf = log.epf_number ? `EPF: ${log.epf_number}` : "";
+
+      const action = String(log.action || "UNKNOWN").toUpperCase();
+      let actionClass = "bg-sky-50 text-sky-800 border-sky-200";
+      if (action.includes("DELETE") || action.includes("REJECT") || action.includes("REMOVE")) {
+        actionClass = "bg-rose-50 text-rose-800 border-rose-200";
+      } else if (action.includes("CREATE") || action.includes("INSERT") || action.includes("VERIF") || action.includes("APPROV")) {
+        actionClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+      } else if (action.includes("UPDATE") || action.includes("EDIT")) {
+        actionClass = "bg-amber-50 text-amber-800 border-amber-200";
+      }
+
+      const entity = log.entity_type || log.target_table || "-";
+      const entityId = log.entity_id ? `<span class="text-[10px] font-mono text-on-surface-variant block truncate max-w-[120px]">${log.entity_id}</span>` : "";
+
+      const diffObj = log.diff_json || log.diff || {};
+      const diffStr = typeof diffObj === "object" ? JSON.stringify(diffObj, null, 1) : String(diffObj);
+
+      return `
+        <tr class="hover:bg-surface/60 transition-colors text-xs font-sans">
+          <td class="py-3 px-3 whitespace-nowrap text-on-surface-variant font-mono text-[11px]">
+            ${formattedDate}
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-bold text-on-surface text-xs">${actorName}</div>
+            <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+              <span>${actorEmail}</span>
+              ${epf ? `<span class="px-1.5 py-0.5 rounded font-mono text-[10px] bg-slate-100 font-semibold">${epf}</span>` : ""}
+            </div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${actionClass}">
+              ${action}
+            </span>
+          </td>
+          <td class="py-3 px-3">
+            <span class="font-mono font-bold text-primary text-[11px]">${entity}</span>
+            ${entityId}
+          </td>
+          <td class="py-3 px-3 max-w-xs md:max-w-md">
+            <pre class="text-[11px] font-mono bg-surface p-2 rounded-lg border border-outline-variant text-on-surface-variant overflow-x-auto max-h-20 leading-tight select-all">${diffStr}</pre>
+          </td>
+        </tr>
+      `;
+    }).join("");
   } catch (err) {
     console.error("Audit log error:", err);
+    tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-600 font-bold">Error loading audit logs: ${err.message || err}</td></tr>`;
+  } finally {
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">refresh</span><span>Load / Refresh Logs</span>';
+    }
   }
 }
+window.loadAuditLogsData = loadAuditLogsData;
 
 // ================= TAB 7: BANK COORDINATES & LANKAQR SETTINGS =================
 
