@@ -1,6 +1,6 @@
 import { getCurrentSession, getMemberProfile, signOut } from "./auth.js";
 import { initLanguage, t } from "./i18n.js";
-import { submitRegistrationRequest } from "./api.js";
+import { submitRegistrationRequest, logUserActivity } from "./api.js";
 import { showToast, openContactModal } from "./ui.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -73,6 +73,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           epfNumber,
           designation,
           phone,
+        });
+
+        await logUserActivity({
+          action: "MEMBER_REGISTRATION_REQUEST",
+          entityType: "MEMBERS",
+          entityId: user.email,
+          actorEmail: user.email,
+          actorName: fullName,
+          epfNumber: epfNumber,
+          details: {
+            designation,
+            phone,
+            user_id: user.id,
+            submitted_at: new Date().toISOString(),
+          },
         });
 
         regForm.classList.add("hidden");

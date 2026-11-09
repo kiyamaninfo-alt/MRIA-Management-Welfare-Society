@@ -723,6 +723,41 @@ export async function getDefaultersRoster() {
 }
 
 /**
+ * Records an immutable audit log entry via database RPC.
+ * Uneditable and tamper-proof; cannot be modified or deleted.
+ */
+export async function logUserActivity({
+  action,
+  entityType = "USER_EVENT",
+  entityId = "",
+  details = {},
+  actorEmail = null,
+  actorName = null,
+  epfNumber = null,
+}) {
+  try {
+    const { data, error } = await supabase.rpc("log_user_activity", {
+      p_action: action,
+      p_entity_type: entityType,
+      p_entity_id: String(entityId || ""),
+      p_details: details,
+      p_actor_email: actorEmail,
+      p_actor_name: actorName,
+      p_epf_number: epfNumber,
+    });
+
+    if (error) {
+      console.warn("Audit logging notice:", error.message);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.warn("Audit logging non-fatal exception:", err);
+    return null;
+  }
+}
+
+/**
  * Fetches immutable audit logs (first 25 items by default, loaded on demand).
  */
 export async function getAuditLogs(limit = 25) {

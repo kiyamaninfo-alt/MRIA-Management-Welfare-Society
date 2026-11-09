@@ -1,6 +1,7 @@
 // UI Helpers, Toast Notifications, Offline Detection, Modals & Interactive Ledgers
 import { t, getLanguage } from "./i18n.js";
 import { CONFIG } from "./config.js";
+import { supabase } from "./auth.js";
 
 export function showToast(message, type = "info") {
   let toastContainer = document.getElementById("toastContainer");
@@ -122,10 +123,33 @@ export function openContactModal(userEmail = "", userName = "") {
       closeModal("contactAdminModal");
     });
 
-    document.getElementById("contactAdminForm").addEventListener("submit", (e) => {
+    document.getElementById("contactAdminForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const subject = encodeURIComponent(document.getElementById("contactSubject").value);
-      const message = encodeURIComponent(document.getElementById("contactMessage").value);
+      const senderName = document.getElementById("contactSenderName")?.value.trim() || "";
+      const senderEmail = document.getElementById("contactSenderEmail")?.value.trim() || "";
+      const subjectText = document.getElementById("contactSubject")?.value.trim() || "";
+      const messageText = document.getElementById("contactMessage")?.value.trim() || "";
+
+      try {
+        await supabase.rpc("log_user_activity", {
+          p_action: "CONTACT_ADMIN_MESSAGE",
+          p_entity_type: "INQUIRY",
+          p_entity_id: senderEmail,
+          p_details: {
+            subject: subjectText,
+            message_length: messageText.length,
+            message_preview: messageText.slice(0, 300),
+            recipient: CONFIG.ADMIN_EMAIL,
+          },
+          p_actor_email: senderEmail,
+          p_actor_name: senderName,
+        });
+      } catch (err) {
+        console.warn("Could not log contact message event:", err);
+      }
+
+      const subject = encodeURIComponent(subjectText);
+      const message = encodeURIComponent(messageText);
       const mailtoUrl = `mailto:${CONFIG.ADMIN_EMAIL}?subject=${subject}&body=${message}`;
       window.location.href = mailtoUrl;
       showToast(t("inquiry_sent"), "success");

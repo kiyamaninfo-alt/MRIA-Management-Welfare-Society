@@ -30,7 +30,34 @@ export async function signInWithGoogle() {
   return data;
 }
 
+export async function logAuthActivity(action, member = null, extra = {}) {
+  try {
+    await supabase.rpc("log_user_activity", {
+      p_action: action,
+      p_entity_type: "AUTH",
+      p_entity_id: member?.id || "",
+      p_details: extra,
+      p_actor_email: member?.email || null,
+      p_actor_name: member?.full_name || null,
+      p_epf_number: member?.epf_number || null,
+    });
+  } catch (err) {
+    console.debug("Auth audit logging notice:", err);
+  }
+}
+
 export async function signOut() {
+  try {
+    const cachedStr = localStorage.getItem("mria_cached_member");
+    const member = cachedStr ? JSON.parse(cachedStr) : null;
+    await logAuthActivity("USER_LOGOUT", member, {
+      page: window.location.pathname,
+      logout_time: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn("Could not log logout event:", e);
+  }
+
   try {
     localStorage.removeItem("mria_cached_member");
     sessionStorage.clear();
@@ -203,6 +230,18 @@ export async function checkAuthAndWhitelist({ requireApproved = true, allowedRol
     localStorage.setItem("mria_cached_member", JSON.stringify(member));
   } catch (e) {
     console.warn("Failed to cache member profile:", e);
+  }
+
+  // Record uneditable login event once per browser tab session
+  const sessionLogKey = `mria_session_logged_${user.id}`;
+  if (!sessionStorage.getItem(sessionLogKey)) {
+    sessionStorage.setItem(sessionLogKey, "true");
+    logAuthActivity("USER_LOGIN", member, {
+      page: window.location.pathname,
+      role: member?.role || "unapproved",
+      login_time: new Date().toISOString(),
+      user_agent: navigator.userAgent,
+    });
   }
 
   // If approved member visited unauthorized.html, send them to dashboard
