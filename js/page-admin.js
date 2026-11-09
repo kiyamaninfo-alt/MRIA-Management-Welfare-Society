@@ -151,6 +151,7 @@ export function switchAdminTab(targetTab) {
   if (targetTab === "cms") {
     loadBankSettings();
     loadDuesSettings();
+    loadAdmissionFeesSettings();
     loadBenefitTypesSettings();
   }
   if (targetTab === "audit") loadAuditLogsData();
@@ -160,13 +161,15 @@ window.switchAdminTab = switchAdminTab;
 async function loadInitialData() {
   allMembers = await getAllMembers();
   window.allMembers = allMembers;
-  await loadDuesSettings();
+  await Promise.all([loadDuesSettings(), loadAdmissionFeesSettings()]);
   populateMemberDropdowns(allMembers);
   await loadSlipApprovalQueue();
   await loadTreasuryData();
 }
 
 let configuredMonthlyDueAmount = 300;
+let configuredAdmissionFeeAmount = 500;
+let admissionFeesList = [];
 let approvedMembersList = [];
 
 function populateMemberDropdowns(members) {
@@ -565,16 +568,22 @@ function setupAdminForms() {
   // Automatically default collection date to today
   setCashDateToToday();
 
-  // If default category is monthly_due, set default configured amount
-  if (categorySelect && amountInput && categorySelect.value === "monthly_due") {
-    amountInput.value = configuredMonthlyDueAmount;
+  // If default category is monthly_due or admission_fee, set default configured amount
+  if (categorySelect && amountInput) {
+    if (categorySelect.value === "monthly_due") {
+      amountInput.value = configuredMonthlyDueAmount;
+    } else if (categorySelect.value === "admission_fee") {
+      amountInput.value = configuredAdmissionFeeAmount;
+    }
   }
 
-  // When payment category changes, if monthly_due, take configured amount
+  // When payment category changes, if monthly_due or admission_fee, take configured amount
   if (categorySelect) {
     categorySelect.addEventListener("change", () => {
       if (categorySelect.value === "monthly_due") {
         amountInput.value = configuredMonthlyDueAmount;
+      } else if (categorySelect.value === "admission_fee") {
+        amountInput.value = configuredAdmissionFeeAmount;
       }
       updateLiveReceiptPreview();
     });
@@ -632,7 +641,11 @@ function setupAdminForms() {
         cashForm.reset();
         setCashDateToToday();
         if (amountInput) {
-          amountInput.value = configuredMonthlyDueAmount;
+          if (categorySelect?.value === "monthly_due") {
+            amountInput.value = configuredMonthlyDueAmount;
+          } else if (categorySelect?.value === "admission_fee") {
+            amountInput.value = configuredAdmissionFeeAmount;
+          }
         }
         window.resetCashMemberSelection({ preservePreview: true });
         await loadTreasuryData();
@@ -775,6 +788,7 @@ function setupAdminForms() {
   // Bank Coordinates & QR Code Form
   setupBankSettingsHandlers();
   setupDuesSettingsHandlers();
+  setupAdmissionFeeModalsHandlers();
   setupBenefitModalsHandlers();
 }
 
@@ -1600,6 +1614,373 @@ function setupDuesSettingsHandlers() {
       }
     }
   });
+}
+
+// ================= ADMISSION FEES SCHEDULE SETTINGS =================
+
+async function loadAdmissionFeesSettings() {
+  const tbody = document.getElementById("admissionFeesTableBody");
+  try {
+    const rawList = await getSystemSetting("admission_fees_list");
+    if (Array.isArray(rawList) && rawList.length > 0) {
+      admissionFeesList = rawList;
+    } else {
+      const singleSetting = await getSystemSetting("admission_fee_amount");
+      const defaultAmount = singleSetting?.amount != null ? Number(singleSetting.amount) : 500;
+      admissionFeesList = [
+        {
+          id: "adm_standard",
+          code: "STANDARD_ADMISSION",
+          title_en: "Standard New Member Admission Fee",
+          title_si: "නව සාමාජික ඇතුල්වීමේ ගාස්තුව",
+          amount: defaultAmount,
+          is_active: true,
+          description: "Standard one-time statutory admission fee for non-legacy staff joining the association",
+        },
+      ];
+      if (currentStaff?.id) {
+        updateSystemSetting("admission_fees_list", admissionFeesList, currentStaff.id).catch(() => {});
+      }
+    }
+
+    const activeFee = admissionFeesList.find((f) => f.is_active && f.code === "STANDARD_ADMISSION")
+      || admissionFeesList.find((f) => f.is_active)
+      || admissionFeesList[0];
+    if (activeFee && activeFee.amount != null) {
+      configuredAdmissionFeeAmount = Number(activeFee.amount);
+    }
+
+    const categorySelect = document.getElementById("cashCategorySelect");
+    const amountInput = document.getElementById("cashAmountInput");
+    if (categorySelect && amountInput && categorySelect.value === "admission_fee") {
+      amountInput.value = configuredAdmissionFeeAmount;
+      updateLiveReceiptPreview();
+    }
+
+    renderAdmissionFeesTable();
+  } catch (err) {
+    console.error("Failed to load admission fees:", err);
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-rose-600 font-bold">Error loading admission fees schedule.</td></tr>';
+    }
+  }
+}
+window.loadAdmissionFeesSettings = loadAdmissionFeesSettings;
+
+function renderAdmissionFeesTable() {
+  const tbody = document.getElementById("admissionFeesTableBody");
+  if (!tbody) return;
+
+  if (!admissionFeesList || admissionFeesList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-on-surface-variant">No admission fee categories found. Click "Add Admission Fee" above to create one.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = admissionFeesList.map((f) => {
+    const statusBadge = f.is_active
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+           <span class="material-symbols-outlined text-[14px]">check_circle</span>
+           <span>Active Fee</span>
+         </span>`
+      : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+           <span class="material-symbols-outlined text-[14px]">pause_circle</span>
+           <span>Inactive / Paused</span>
+         </span>`;
+
+    return `
+      <tr class="hover:bg-surface/50 transition-colors" data-fee-id="${f.id}">
+        <td class="py-3 px-3">
+          <div class="flex items-start gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[22px] mt-0.5">assignment_ind</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-on-surface text-xs sm:text-sm">${f.title_en}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-50 text-primary border border-sky-200">${f.code}</span>
+              </div>
+              <div class="text-[11px] text-primary font-medium mt-0.5">${f.title_si || ""}</div>
+              ${f.description ? `<div class="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed">${f.description}</div>` : ""}
+            </div>
+          </div>
+        </td>
+        <td class="py-3 px-3 whitespace-nowrap">
+          <div class="flex flex-col gap-1.5 items-start">
+            ${statusBadge}
+            <button type="button" onclick="toggleAdmissionFeeActive('${f.id}', ${!f.is_active})" class="text-[11px] font-bold underline ${f.is_active ? 'text-amber-700 hover:text-amber-800' : 'text-emerald-700 hover:text-emerald-800'} transition-colors cursor-pointer">
+              ${f.is_active ? "Pause Fee" : "Activate Fee"}
+            </button>
+          </div>
+        </td>
+        <td class="py-3 px-3 whitespace-nowrap">
+          <div class="flex items-center gap-1.5 max-w-[190px]">
+            <span class="text-xs font-bold text-on-surface-variant">Rs.</span>
+            <input type="number" id="admissionFeeAmount_${f.id}" value="${Number(f.amount || 0)}" min="50" step="50" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            <button type="button" onclick="saveAdmissionFeeRow('${f.id}')" id="saveAdmissionFeeBtn_${f.id}" title="Quick Save Fee" class="p-1.5 bg-primary text-white rounded-lg hover:bg-primary-hover shadow-sm inline-flex items-center justify-center transition-colors cursor-pointer shrink-0">
+              <span class="material-symbols-outlined text-[15px]">save</span>
+            </button>
+          </div>
+        </td>
+        <td class="py-3 px-3 text-right whitespace-nowrap">
+          <div class="inline-flex items-center gap-1.5 justify-end">
+            <button type="button" onclick="openEditAdmissionFeeModal('${f.id}')" title="Edit Full Fee Details" class="px-2.5 py-1.5 bg-white border border-outline-variant text-on-surface text-xs font-bold rounded-xl hover:border-primary hover:text-primary transition-colors shadow-sm inline-flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[15px] text-primary">edit</span>
+              <span>Edit</span>
+            </button>
+            <button type="button" onclick="removeAdmissionFeeItem('${f.id}')" title="Remove Fee Item" class="px-2.5 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors shadow-sm inline-flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[15px]">delete</span>
+              <span>Remove</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function saveAdmissionFeesState() {
+  await updateSystemSetting("admission_fees_list", admissionFeesList, currentStaff?.id || null);
+
+  const activeFee = admissionFeesList.find((f) => f.is_active && f.code === "STANDARD_ADMISSION")
+    || admissionFeesList.find((f) => f.is_active)
+    || admissionFeesList[0];
+  if (activeFee && activeFee.amount != null) {
+    configuredAdmissionFeeAmount = Number(activeFee.amount);
+    await updateSystemSetting("admission_fee_amount", { amount: configuredAdmissionFeeAmount, currency: "LKR" }, currentStaff?.id || null);
+  }
+
+  const categorySelect = document.getElementById("cashCategorySelect");
+  const amountInput = document.getElementById("cashAmountInput");
+  if (categorySelect && amountInput && categorySelect.value === "admission_fee") {
+    amountInput.value = configuredAdmissionFeeAmount;
+    updateLiveReceiptPreview();
+  }
+
+  renderAdmissionFeesTable();
+}
+
+window.openAddAdmissionFeeModal = function () {
+  const form = document.getElementById("addAdmissionFeeForm");
+  if (form) form.reset();
+  const amountInput = document.getElementById("addAdmissionFeeAmount");
+  if (amountInput) amountInput.value = "500";
+  const activeCheck = document.getElementById("addAdmissionFeeIsActive");
+  if (activeCheck) activeCheck.checked = true;
+  openModal("addAdmissionFeeModal");
+};
+
+window.openEditAdmissionFeeModal = function (id) {
+  const fee = admissionFeesList.find((f) => f.id === id);
+  if (!fee) {
+    showToast("Admission fee schedule not found.", "warning");
+    return;
+  }
+
+  const idInput = document.getElementById("editAdmissionFeeId");
+  const codeBadge = document.getElementById("editAdmissionFeeCodeBadge");
+  const statusBadge = document.getElementById("editAdmissionFeeStatusBadge");
+  const titleEn = document.getElementById("editAdmissionFeeTitleEn");
+  const titleSi = document.getElementById("editAdmissionFeeTitleSi");
+  const amount = document.getElementById("editAdmissionFeeAmount");
+  const desc = document.getElementById("editAdmissionFeeDesc");
+  const isActive = document.getElementById("editAdmissionFeeIsActive");
+
+  if (idInput) idInput.value = fee.id;
+  if (codeBadge) codeBadge.textContent = fee.code;
+  if (titleEn) titleEn.value = fee.title_en || "";
+  if (titleSi) titleSi.value = fee.title_si || "";
+  if (amount) amount.value = Number(fee.amount || 500);
+  if (desc) desc.value = fee.description || "";
+  if (isActive) isActive.checked = Boolean(fee.is_active);
+
+  if (statusBadge) {
+    statusBadge.innerHTML = fee.is_active
+      ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Paused</span>';
+  }
+
+  openModal("editAdmissionFeeModal");
+};
+
+window.saveAdmissionFeeRow = async function (id) {
+  const input = document.getElementById(`admissionFeeAmount_${id}`);
+  const btn = document.getElementById(`saveAdmissionFeeBtn_${id}`);
+  if (!input) return;
+
+  const newAmount = Number(input.value);
+  if (!newAmount || newAmount <= 0) {
+    showToast("Please enter a valid admission fee amount.", "warning");
+    return;
+  }
+
+  const fee = admissionFeesList.find((f) => f.id === id);
+  if (!fee) return;
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[14px] animate-spin">refresh</span>';
+    }
+
+    fee.amount = newAmount;
+    await saveAdmissionFeesState();
+    showToast(`Admission fee for "${fee.title_en}" updated to Rs. ${newAmount.toLocaleString()} /=`, "success");
+  } catch (err) {
+    console.error("Failed to update admission fee:", err);
+    showToast(err.message || "Failed to update admission fee.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[15px]">save</span>';
+    }
+  }
+};
+
+window.toggleAdmissionFeeActive = async function (id, newStatus) {
+  const fee = admissionFeesList.find((f) => f.id === id);
+  if (!fee) return;
+
+  try {
+    fee.is_active = newStatus;
+    await saveAdmissionFeesState();
+    showToast(`Admission fee "${fee.title_en}" ${newStatus ? "activated" : "paused"} successfully.`, "success");
+  } catch (err) {
+    console.error("Failed to toggle admission fee status:", err);
+    showToast(err.message || "Failed to update admission fee status.", "error");
+  }
+};
+
+window.removeAdmissionFeeItem = async function (id) {
+  const fee = admissionFeesList.find((f) => f.id === id);
+  if (!fee) return;
+
+  if (admissionFeesList.length <= 1) {
+    const confirmLast = window.confirm(
+      `"${fee.title_en}" is currently the only admission fee configured.\n\nAre you sure you want to remove it? (You can also pause it instead).`
+    );
+    if (!confirmLast) return;
+  } else {
+    const confirmed = window.confirm(`Are you sure you want to remove admission fee item "${fee.title_en}"?`);
+    if (!confirmed) return;
+  }
+
+  try {
+    admissionFeesList = admissionFeesList.filter((f) => f.id !== id);
+    await saveAdmissionFeesState();
+    showToast(`Admission fee "${fee.title_en}" removed successfully.`, "success");
+  } catch (err) {
+    console.error("Failed to remove admission fee:", err);
+    showToast(err.message || "Failed to remove admission fee.", "error");
+  }
+};
+
+function setupAdmissionFeeModalsHandlers() {
+  const addForm = document.getElementById("addAdmissionFeeForm");
+  if (addForm) {
+    addForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const codeInput = document.getElementById("addAdmissionFeeCode");
+      const titleEnInput = document.getElementById("addAdmissionFeeTitleEn");
+      const titleSiInput = document.getElementById("addAdmissionFeeTitleSi");
+      const amountInput = document.getElementById("addAdmissionFeeAmount");
+      const descInput = document.getElementById("addAdmissionFeeDesc");
+      const isActiveInput = document.getElementById("addAdmissionFeeIsActive");
+      const submitBtn = document.getElementById("submitAddAdmissionFeeBtn");
+
+      const code = (codeInput?.value || "").trim().toUpperCase().replace(/\s+/g, "_");
+      const title_en = (titleEnInput?.value || "").trim();
+      const title_si = (titleSiInput?.value || "").trim();
+      const amount = Number(amountInput?.value);
+      const description = (descInput?.value || "").trim() || "";
+      const is_active = Boolean(isActiveInput?.checked);
+
+      if (!code || !title_en || !title_si || !amount || amount <= 0) {
+        showToast("Please provide all required fields with a valid amount.", "warning");
+        return;
+      }
+
+      if (admissionFeesList.some((f) => f.code === code)) {
+        showToast(`Fee code "${code}" already exists. Please choose a unique code.`, "warning");
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Creating...</span>';
+        }
+
+        const newFee = {
+          id: "adm_" + Date.now(),
+          code,
+          title_en,
+          title_si,
+          amount,
+          is_active,
+          description,
+        };
+
+        admissionFeesList.push(newFee);
+        await saveAdmissionFeesState();
+        showToast(`Admission fee "${title_en}" created successfully!`, "success");
+        closeModal("addAdmissionFeeModal");
+        addForm.reset();
+      } catch (err) {
+        console.error("Failed to add admission fee:", err);
+        showToast(err.message || "Failed to create admission fee.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Create Fee Item</span>';
+        }
+      }
+    });
+  }
+
+  const editForm = document.getElementById("editAdmissionFeeForm");
+  if (editForm) {
+    editForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("editAdmissionFeeId")?.value;
+      const titleEn = document.getElementById("editAdmissionFeeTitleEn")?.value.trim();
+      const titleSi = document.getElementById("editAdmissionFeeTitleSi")?.value.trim();
+      const amount = Number(document.getElementById("editAdmissionFeeAmount")?.value);
+      const desc = document.getElementById("editAdmissionFeeDesc")?.value.trim() || "";
+      const isActive = Boolean(document.getElementById("editAdmissionFeeIsActive")?.checked);
+      const submitBtn = document.getElementById("submitEditAdmissionFeeBtn");
+
+      if (!id || !titleEn || !titleSi || !amount || amount <= 0) {
+        showToast("Please provide all required fields with a valid amount.", "warning");
+        return;
+      }
+
+      const fee = admissionFeesList.find((f) => f.id === id);
+      if (!fee) return;
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Saving...</span>';
+        }
+
+        fee.title_en = titleEn;
+        fee.title_si = titleSi;
+        fee.amount = amount;
+        fee.description = desc;
+        fee.is_active = isActive;
+
+        await saveAdmissionFeesState();
+        showToast(`Admission fee "${titleEn}" updated successfully!`, "success");
+        closeModal("editAdmissionFeeModal");
+      } catch (err) {
+        console.error("Failed to update admission fee:", err);
+        showToast(err.message || "Failed to update admission fee.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">save</span><span>Save Changes</span>';
+        }
+      }
+    });
+  }
 }
 
 // ================= WELFARE BENEFITS & FACILITIES SETTINGS =================

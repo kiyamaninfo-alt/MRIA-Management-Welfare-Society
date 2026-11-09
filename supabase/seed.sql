@@ -34,8 +34,13 @@ VALUES
 ),
 (
     'admission_fee_amount',
-    '{"amount": 1000.00, "currency": "LKR"}',
+    '{"amount": 500.00, "currency": "LKR"}',
     'One-time admission registration fee for non-legacy new members'
+),
+(
+    'admission_fees_list',
+    '[{"id":"adm_standard","code":"STANDARD_ADMISSION","title_en":"Standard New Member Admission Fee","title_si":"නව සාමාජික ඇතුල්වීමේ ගාස්තුව","amount":500.00,"is_active":true,"description":"Standard one-time statutory admission fee for non-legacy staff joining the association"}]',
+    'Configurable list of admission fee schedules'
 ),
 (
     'contact_whatsapp',

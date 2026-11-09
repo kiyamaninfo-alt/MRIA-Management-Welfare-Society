@@ -737,17 +737,17 @@
         </form>
       </div>
 
-      <!-- Monthly Contribution & Dues Settings -->
-      <div id="duesSettingsCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+      <!-- Monthly Contribution & Admission Fees Settings -->
+      <div id="duesSettingsCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-6">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-4 border-b border-outline-variant">
           <div class="flex items-center gap-2.5">
             <span class="material-symbols-outlined text-primary text-[24px]">calendar_month</span>
             <div>
               <h4 class="font-bold text-sm sm:text-base text-on-surface">
-                Monthly Dues &amp; Contribution Rate
+                Monthly Dues &amp; Statutory Fees
               </h4>
               <p class="text-xs text-on-surface-variant">
-                Configure the baseline monthly membership fee charged to active members.
+                Configure baseline monthly dues and member admission fees. Add, edit, or remove admission fee schedules.
               </p>
             </div>
           </div>
@@ -757,7 +757,8 @@
           </span>
         </div>
 
-        <form id="duesSettingsForm" class="max-w-xl space-y-4">
+        <!-- 1. Baseline Monthly Dues Form -->
+        <form id="duesSettingsForm" class="max-w-xl space-y-4 pb-6 border-b border-outline-variant">
           <div>
             <label class="block text-xs font-bold text-on-surface mb-1">
               Default Monthly Payment (LKR)
@@ -767,18 +768,60 @@
               <input type="number" id="settingMonthlyDueAmount" required min="50" step="50" value="300" placeholder="e.g. 300" class="w-full pl-12 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
             </div>
             <p class="text-[11px] text-on-surface-variant mt-1.5 leading-relaxed">
-              Standard default contribution is <strong>Rs. 300/=</strong>. Updating this value adjusts new billing periods and default payment inputs across all member dashboards.
+              Standard default contribution is <strong>Rs. 300/=</strong>. Updating this value adjusts new billing periods and cash desk dues.
             </p>
           </div>
 
-          <div class="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-outline-variant">
+          <div class="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <span id="duesSettingsStatus" class="text-xs text-on-surface-variant italic"></span>
-            <button type="submit" id="saveDuesSettingsBtn" class="px-5 py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-colors shadow-sm flex items-center gap-2">
+            <button type="submit" id="saveDuesSettingsBtn" class="px-5 py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-colors shadow-sm flex items-center gap-2 cursor-pointer">
               <span class="material-symbols-outlined text-[18px]">save</span>
               <span>Save Monthly Dues</span>
             </button>
           </div>
         </form>
+
+        <!-- 2. Admission Fees Management Section (Add / Remove / Edit, Default 500) -->
+        <div class="space-y-4 pt-1">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h5 class="font-bold text-sm text-on-surface">
+                  Admission Fees Schedule (ඇතුල්වීමේ ගාස්තු)
+                </h5>
+                <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                  Default: Rs. 500/=
+                </span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-0.5">
+                Manage one-time admission fee categories. Add new fee types, edit rates, or remove fee items anytime.
+              </p>
+            </div>
+            <button type="button" onclick="window.openAddAdmissionFeeModal()" class="px-3.5 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+              <span class="material-symbols-outlined text-[16px]">add_circle</span>
+              <span>Add Admission Fee</span>
+            </button>
+          </div>
+
+          <!-- Admission Fees Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider text-[11px] bg-surface/50">
+                  <th class="py-2.5 px-3">Fee Item</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Amount (LKR)</th>
+                  <th class="py-2.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admissionFeesTableBody" class="divide-y divide-outline-variant">
+                <tr>
+                  <td colspan="4" class="py-6 text-center text-on-surface-variant">Loading admission fees...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- Welfare Benefits & Facilities Management -->
@@ -1178,6 +1221,139 @@
             Cancel
           </button>
           <button type="submit" id="submitEditBenefitBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">save</span>
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD ADMISSION FEE MODAL -->
+  <div id="addAdmissionFeeModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[24px]">assignment_ind</span>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface">Add Admission Fee Schedule</h4>
+        </div>
+        <button type="button" onclick="closeModal('addAdmissionFeeModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="addAdmissionFeeForm" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Fee Code (Unique ID)</label>
+          <input type="text" id="addAdmissionFeeCode" required placeholder="e.g. SPECIAL_ADMISSION" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-mono font-bold uppercase focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          <span class="text-[10px] text-on-surface-variant">System identifier (uppercase alphanumeric and underscores).</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (English)</label>
+            <input type="text" id="addAdmissionFeeTitleEn" required placeholder="e.g. Associate Member Admission" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (Sinhala / සිංහල)</label>
+            <input type="text" id="addAdmissionFeeTitleSi" required placeholder="e.g. සහකාර සාමාජික ඇතුල්වීමේ ගාස්තුව" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Fee Amount (LKR)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+            <input type="number" id="addAdmissionFeeAmount" required min="50" step="50" value="500" placeholder="500" class="w-full pl-10 pr-3 py-2 rounded-xl border border-outline-variant bg-surface font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+          <span class="text-[10px] text-on-surface-variant">Standard statutory admission fee defaults to Rs. 500/=.</span>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (Optional)</label>
+          <textarea id="addAdmissionFeeDesc" rows="2" placeholder="Fee purpose, eligibility criteria, or notes..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 p-3 bg-surface rounded-xl border border-outline-variant">
+          <input type="checkbox" id="addAdmissionFeeIsActive" checked class="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary cursor-pointer" />
+          <label for="addAdmissionFeeIsActive" class="font-bold text-on-surface cursor-pointer select-none">
+            Active Fee (Available for cash collection and member onboarding)
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('addAdmissionFeeModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" id="submitAddAdmissionFeeBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            <span>Create Fee Item</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT ADMISSION FEE MODAL -->
+  <div id="editAdmissionFeeModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[24px]">edit_note</span>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface">Edit Admission Fee Schedule</h4>
+        </div>
+        <button type="button" onclick="closeModal('editAdmissionFeeModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="editAdmissionFeeForm" class="space-y-3.5 text-xs">
+        <input type="hidden" id="editAdmissionFeeId" />
+
+        <div class="flex items-center justify-between p-3 bg-surface rounded-xl border border-outline-variant">
+          <div>
+            <span class="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider block">Fee Code</span>
+            <span id="editAdmissionFeeCodeBadge" class="font-mono font-extrabold text-primary text-xs"></span>
+          </div>
+          <span id="editAdmissionFeeStatusBadge"></span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (English)</label>
+            <input type="text" id="editAdmissionFeeTitleEn" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (Sinhala / සිංහල)</label>
+            <input type="text" id="editAdmissionFeeTitleSi" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Fee Amount (LKR)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+            <input type="number" id="editAdmissionFeeAmount" required min="50" step="50" class="w-full pl-10 pr-3 py-2 rounded-xl border border-outline-variant bg-surface font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (Optional)</label>
+          <textarea id="editAdmissionFeeDesc" rows="2" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 p-3 bg-surface rounded-xl border border-outline-variant">
+          <input type="checkbox" id="editAdmissionFeeIsActive" class="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary cursor-pointer" />
+          <label for="editAdmissionFeeIsActive" class="font-bold text-on-surface cursor-pointer select-none">
+            Active Fee (Available for cash collection and member onboarding)
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('editAdmissionFeeModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" id="submitEditAdmissionFeeBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
             <span class="material-symbols-outlined text-[16px]">save</span>
             <span>Save Changes</span>
           </button>

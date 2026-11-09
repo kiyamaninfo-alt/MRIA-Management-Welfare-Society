@@ -42,7 +42,8 @@ export async function calculateMemberBalance(member) {
       .maybeSingle();
 
     if (!admissionPayment) {
-      admissionFeeDue = 1000.00;
+      const setting = await getSystemSetting("admission_fee_amount");
+      admissionFeeDue = setting?.amount != null ? Number(setting.amount) : 500.00;
     }
   }
 
