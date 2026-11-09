@@ -641,7 +641,7 @@
 
       <!-- Welfare Benefits & Facilities Management -->
       <div id="benefitsManagementCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-4 border-b border-outline-variant">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-outline-variant">
           <div class="flex items-center gap-2.5">
             <span class="material-symbols-outlined text-primary text-[24px]">volunteer_activism</span>
             <div>
@@ -649,14 +649,16 @@
                 Welfare Benefit Programs &amp; Facilities
               </h4>
               <p class="text-xs text-on-surface-variant">
-                Control active welfare facilities and donation limits. Only active facilities are available for member applications.
+                Control active welfare facilities and donation limits. Add, edit, or remove programs anytime.
               </p>
             </div>
           </div>
-          <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
-            <span class="material-symbols-outlined text-[14px]">health_and_safety</span>
-            <span>Programs Policy</span>
-          </span>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="openAddBenefitModal()" class="px-3.5 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">add_circle</span>
+              <span>Add Benefit Program</span>
+            </button>
+          </div>
         </div>
 
         <div class="p-3.5 bg-sky-50 border border-sky-100 rounded-xl text-xs text-sky-950 space-y-1">
@@ -868,6 +870,148 @@
       <div id="slipViewerContent" class="min-h-[300px] flex items-center justify-center">
         <!-- Rendered image / pdf embed -->
       </div>
+    </div>
+  </div>
+
+  <!-- ADD WELFARE BENEFIT MODAL -->
+  <div id="addBenefitModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[24px]">volunteer_activism</span>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface">Add Welfare Benefit Program</h4>
+        </div>
+        <button type="button" onclick="closeModal('addBenefitModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="addBenefitForm" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Program Code (Unique ID)</label>
+          <input type="text" id="addBenefitCode" required placeholder="e.g. EDUCATION_AID" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-mono font-bold uppercase focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          <span class="text-[10px] text-on-surface-variant">System identifier (uppercase alphanumeric and underscores).</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (English)</label>
+            <input type="text" id="addBenefitTitleEn" required placeholder="e.g. Education Aid" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (Sinhala / සිංහල)</label>
+            <input type="text" id="addBenefitTitleSi" required placeholder="e.g. දරු අධ්‍යාපන ආධාර" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Max Grant / Donation Limit (LKR)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+            <input type="number" id="addBenefitMaxAmount" required min="500" step="500" value="10000" placeholder="10000" class="w-full pl-10 pr-3 py-2 rounded-xl border border-outline-variant bg-surface font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (English)</label>
+          <textarea id="addBenefitDescEn" rows="2" placeholder="Brief explanation of eligibility or purpose..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (Sinhala)</label>
+          <textarea id="addBenefitDescSi" rows="2" placeholder="සුබසාධන ප්‍රතිලාභය පිළිබඳ කෙටි විස්තරය..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 p-3 bg-surface rounded-xl border border-outline-variant">
+          <input type="checkbox" id="addBenefitIsActive" class="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary cursor-pointer" />
+          <label for="addBenefitIsActive" class="font-bold text-on-surface cursor-pointer select-none">
+            Activate Facility Immediately (Allow member claim submissions)
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('addBenefitModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface">
+            Cancel
+          </button>
+          <button type="submit" id="submitAddBenefitBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            <span>Create Program</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT WELFARE BENEFIT MODAL -->
+  <div id="editBenefitModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[24px]">edit_note</span>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface">Edit Welfare Benefit Program</h4>
+        </div>
+        <button type="button" onclick="closeModal('editBenefitModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="editBenefitForm" class="space-y-3.5 text-xs">
+        <input type="hidden" id="editBenefitId" />
+
+        <div class="flex items-center justify-between p-3 bg-surface rounded-xl border border-outline-variant">
+          <div>
+            <span class="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider block">Program Code</span>
+            <span id="editBenefitCodeBadge" class="font-mono font-extrabold text-primary text-xs"></span>
+          </div>
+          <span id="editBenefitStatusBadge"></span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (English)</label>
+            <input type="text" id="editBenefitTitleEn" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Title (Sinhala / සිංහල)</label>
+            <input type="text" id="editBenefitTitleSi" required class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Max Grant / Donation Limit (LKR)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+            <input type="number" id="editBenefitMaxAmount" required min="500" step="500" class="w-full pl-10 pr-3 py-2 rounded-xl border border-outline-variant bg-surface font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (English)</label>
+          <textarea id="editBenefitDescEn" rows="2" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Description (Sinhala)</label>
+          <textarea id="editBenefitDescSi" rows="2" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 p-3 bg-surface rounded-xl border border-outline-variant">
+          <input type="checkbox" id="editBenefitIsActive" class="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary cursor-pointer" />
+          <label for="editBenefitIsActive" class="font-bold text-on-surface cursor-pointer select-none">
+            Facility Active (Available for member claims)
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('editBenefitModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface">
+            Cancel
+          </button>
+          <button type="submit" id="submitEditBenefitBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">save</span>
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

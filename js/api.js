@@ -164,6 +164,39 @@ export async function createBenefitType(payload) {
 }
 
 /**
+ * Deletes a benefit type if no claims reference it.
+ */
+export async function deleteBenefitType(id) {
+  // 1. Check if any benefit claims reference this program
+  const { count, error: countErr } = await supabase
+    .from("benefit_claims")
+    .select("id", { count: "exact", head: true })
+    .eq("benefit_type_id", id);
+
+  if (!countErr && count && count > 0) {
+    throw new Error(
+      `Cannot permanently delete this benefit program because ${count} member claim(s) reference it. Please deactivate/pause the facility instead.`
+    );
+  }
+
+  // 2. Perform deletion
+  const { error } = await supabase
+    .from("benefit_types")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error(
+        "Cannot delete this program because existing claims reference it. Please pause/deactivate it instead."
+      );
+    }
+    throw error;
+  }
+  return true;
+}
+
+/**
  * Fetches claims made by a member.
  */
 export async function getMemberClaims(memberId) {

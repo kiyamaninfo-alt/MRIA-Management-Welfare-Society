@@ -20,6 +20,8 @@ import {
   updateSystemSetting,
   getAllBenefitTypes,
   updateBenefitType,
+  createBenefitType,
+  deleteBenefitType,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
@@ -456,6 +458,7 @@ function setupAdminForms() {
   // Bank Coordinates & QR Code Form
   setupBankSettingsHandlers();
   setupDuesSettingsHandlers();
+  setupBenefitModalsHandlers();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -971,23 +974,25 @@ function setupDuesSettingsHandlers() {
 
 // ================= WELFARE BENEFITS & FACILITIES SETTINGS =================
 
+let allBenefitTypes = [];
+
 async function loadBenefitTypesSettings() {
   const tbody = document.getElementById("benefitTypesTableBody");
   if (!tbody) return;
 
   try {
-    const types = await getAllBenefitTypes();
-    if (!types || types.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-on-surface-variant">No welfare benefit programs configured.</td></tr>';
+    allBenefitTypes = await getAllBenefitTypes();
+    if (!allBenefitTypes || allBenefitTypes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-on-surface-variant">No welfare benefit programs configured. Click "Add Benefit Program" above to create one.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = types.map((b) => {
+    tbody.innerHTML = allBenefitTypes.map((b) => {
       const isDeath = b.code === "DEATH_AID";
       const isMedical = b.code === "MEDICAL_AID";
       const isPension = b.code === "PENSION_PARTY";
 
-      const icon = isDeath ? "volunteer_activism" : isMedical ? "medical_services" : "celebration";
+      const icon = isDeath ? "volunteer_activism" : isMedical ? "medical_services" : isPension ? "celebration" : "loyalty";
       const statusBadge = b.is_active
         ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
              <span class="material-symbols-outlined text-[14px]">check_circle</span>
@@ -1012,9 +1017,12 @@ async function loadBenefitTypesSettings() {
             <div class="flex items-start gap-2.5">
               <span class="material-symbols-outlined text-primary text-[22px] mt-0.5">${icon}</span>
               <div>
-                <div class="font-bold text-on-surface text-xs sm:text-sm">${b.title_en}</div>
-                <div class="text-[11px] text-primary font-medium">${b.title_si || ""}</div>
-                <div class="text-[10px] text-on-surface-variant mt-0.5">${helperText}</div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-on-surface text-xs sm:text-sm">${b.title_en}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-50 text-primary border border-sky-200">${b.code}</span>
+                </div>
+                <div class="text-[11px] text-primary font-medium mt-0.5">${b.title_si || ""}</div>
+                <div class="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed">${helperText}</div>
               </div>
             </div>
           </td>
@@ -1027,16 +1035,25 @@ async function loadBenefitTypesSettings() {
             </div>
           </td>
           <td class="py-3 px-3 whitespace-nowrap">
-            <div class="flex items-center gap-1.5 max-w-[180px]">
+            <div class="flex items-center gap-1.5 max-w-[190px]">
               <span class="text-xs font-bold text-on-surface-variant">Rs.</span>
               <input type="number" id="benefitAmount_${b.id}" value="${Number(b.max_amount || 0)}" min="500" step="500" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+              <button type="button" onclick="saveBenefitRow('${b.id}')" id="saveBenefitBtn_${b.id}" title="Quick Save Limit" class="p-1.5 bg-primary text-white rounded-lg hover:bg-primary-hover shadow-sm inline-flex items-center justify-center transition-colors cursor-pointer shrink-0">
+                <span class="material-symbols-outlined text-[15px]">save</span>
+              </button>
             </div>
           </td>
           <td class="py-3 px-3 text-right whitespace-nowrap">
-            <button type="button" onclick="saveBenefitRow('${b.id}')" id="saveBenefitBtn_${b.id}" class="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-hover shadow-sm inline-flex items-center gap-1 transition-colors">
-              <span class="material-symbols-outlined text-[15px]">save</span>
-              <span>Save</span>
-            </button>
+            <div class="inline-flex items-center gap-1.5 justify-end">
+              <button type="button" onclick="openEditBenefitModal('${b.id}')" title="Edit Full Program Details" class="px-2.5 py-1.5 bg-white border border-outline-variant text-on-surface text-xs font-bold rounded-xl hover:border-primary hover:text-primary transition-colors shadow-sm inline-flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[15px] text-primary">edit</span>
+                <span>Edit</span>
+              </button>
+              <button type="button" onclick="removeBenefitItem('${b.id}')" title="Delete Program" class="px-2.5 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors shadow-sm inline-flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[15px]">delete</span>
+                <span>Remove</span>
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -1047,6 +1064,178 @@ async function loadBenefitTypesSettings() {
   }
 }
 window.loadBenefitTypesSettings = loadBenefitTypesSettings;
+
+window.openAddBenefitModal = function () {
+  const form = document.getElementById("addBenefitForm");
+  if (form) form.reset();
+  const activeCheckbox = document.getElementById("addBenefitIsActive");
+  if (activeCheckbox) activeCheckbox.checked = false;
+  openModal("addBenefitModal");
+};
+
+window.openEditBenefitModal = function (id) {
+  const benefit = allBenefitTypes.find((b) => b.id === id);
+  if (!benefit) {
+    showToast("Benefit program details not found.", "warning");
+    return;
+  }
+
+  const idInput = document.getElementById("editBenefitId");
+  const codeBadge = document.getElementById("editBenefitCodeBadge");
+  const statusBadge = document.getElementById("editBenefitStatusBadge");
+  const titleEn = document.getElementById("editBenefitTitleEn");
+  const titleSi = document.getElementById("editBenefitTitleSi");
+  const maxAmount = document.getElementById("editBenefitMaxAmount");
+  const descEn = document.getElementById("editBenefitDescEn");
+  const descSi = document.getElementById("editBenefitDescSi");
+  const isActive = document.getElementById("editBenefitIsActive");
+
+  if (idInput) idInput.value = benefit.id;
+  if (codeBadge) codeBadge.textContent = benefit.code;
+  if (titleEn) titleEn.value = benefit.title_en || "";
+  if (titleSi) titleSi.value = benefit.title_si || "";
+  if (maxAmount) maxAmount.value = Number(benefit.max_amount || 0);
+  if (descEn) descEn.value = benefit.description_en || "";
+  if (descSi) descSi.value = benefit.description_si || "";
+  if (isActive) isActive.checked = Boolean(benefit.is_active);
+
+  if (statusBadge) {
+    statusBadge.innerHTML = benefit.is_active
+      ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Paused</span>';
+  }
+
+  openModal("editBenefitModal");
+};
+
+function setupBenefitModalsHandlers() {
+  // 1. Add Benefit Form
+  const addForm = document.getElementById("addBenefitForm");
+  if (addForm) {
+    addForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const codeInput = document.getElementById("addBenefitCode");
+      const titleEnInput = document.getElementById("addBenefitTitleEn");
+      const titleSiInput = document.getElementById("addBenefitTitleSi");
+      const maxAmountInput = document.getElementById("addBenefitMaxAmount");
+      const descEnInput = document.getElementById("addBenefitDescEn");
+      const descSiInput = document.getElementById("addBenefitDescSi");
+      const isActiveInput = document.getElementById("addBenefitIsActive");
+      const submitBtn = document.getElementById("submitAddBenefitBtn");
+
+      const code = codeInput?.value.trim().toUpperCase().replace(/\s+/g, "_");
+      const title_en = titleEnInput?.value.trim();
+      const title_si = titleSiInput?.value.trim();
+      const max_amount = Number(maxAmountInput?.value);
+      const description_en = descEnInput?.value.trim() || null;
+      const description_si = descSiInput?.value.trim() || null;
+      const is_active = Boolean(isActiveInput?.checked);
+
+      if (!code || !title_en || !title_si || !max_amount || max_amount <= 0) {
+        showToast("Please complete all required fields with a valid amount.", "warning");
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Creating...</span>';
+        }
+
+        await createBenefitType({
+          code,
+          title_en,
+          title_si,
+          description_en,
+          description_si,
+          max_amount,
+          is_active,
+        });
+
+        showToast(`Welfare program "${title_en}" created successfully!`, "success");
+        closeModal("addBenefitModal");
+        addForm.reset();
+        await loadBenefitTypesSettings();
+      } catch (err) {
+        console.error("Failed to create benefit type:", err);
+        showToast(err.message || "Failed to create welfare benefit program.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Create Program</span>';
+        }
+      }
+    });
+  }
+
+  // 2. Edit Benefit Form
+  const editForm = document.getElementById("editBenefitForm");
+  if (editForm) {
+    editForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("editBenefitId")?.value;
+      const title_en = document.getElementById("editBenefitTitleEn")?.value.trim();
+      const title_si = document.getElementById("editBenefitTitleSi")?.value.trim();
+      const max_amount = Number(document.getElementById("editBenefitMaxAmount")?.value);
+      const description_en = document.getElementById("editBenefitDescEn")?.value.trim() || null;
+      const description_si = document.getElementById("editBenefitDescSi")?.value.trim() || null;
+      const is_active = Boolean(document.getElementById("editBenefitIsActive")?.checked);
+      const submitBtn = document.getElementById("submitEditBenefitBtn");
+
+      if (!id || !title_en || !title_si || !max_amount || max_amount <= 0) {
+        showToast("Please complete all required fields with a valid amount.", "warning");
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Saving...</span>';
+        }
+
+        await updateBenefitType(id, {
+          title_en,
+          title_si,
+          description_en,
+          description_si,
+          max_amount,
+          is_active,
+        });
+
+        showToast(`Welfare program "${title_en}" updated successfully!`, "success");
+        closeModal("editBenefitModal");
+        await loadBenefitTypesSettings();
+      } catch (err) {
+        console.error("Failed to update benefit type:", err);
+        showToast(err.message || "Failed to update welfare benefit program.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">save</span><span>Save Changes</span>';
+        }
+      }
+    });
+  }
+}
+
+window.removeBenefitItem = async function (id) {
+  const benefit = allBenefitTypes.find((b) => b.id === id);
+  const name = benefit ? benefit.title_en : "this benefit program";
+
+  const confirmed = window.confirm(
+    `Are you sure you want to permanently remove "${name}"?\n\nIf members have existing applications under this facility, deletion will be blocked to preserve financial audit history. In that case, you can pause/deactivate it instead.`
+  );
+  if (!confirmed) return;
+
+  try {
+    await deleteBenefitType(id);
+    showToast(`Welfare program "${name}" removed successfully.`, "success");
+    await loadBenefitTypesSettings();
+  } catch (err) {
+    console.error("Failed to remove benefit item:", err);
+    showToast(err.message || "Failed to delete welfare benefit program.", "error");
+  }
+};
 
 window.toggleBenefitActive = async function (id, newStatus) {
   try {
@@ -1073,7 +1262,7 @@ window.saveBenefitRow = async function (id) {
   try {
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<span class="material-symbols-outlined text-[14px] animate-spin">refresh</span><span>Saving...</span>';
+      btn.innerHTML = '<span class="material-symbols-outlined text-[14px] animate-spin">refresh</span>';
     }
 
     await updateBenefitType(id, { max_amount: maxAmount });
@@ -1085,7 +1274,7 @@ window.saveBenefitRow = async function (id) {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined text-[15px]">save</span><span>Save</span>';
+      btn.innerHTML = '<span class="material-symbols-outlined text-[15px]">save</span>';
     }
   }
 };
