@@ -18,6 +18,8 @@ import {
   getAuditLogs,
   getSystemSetting,
   updateSystemSetting,
+  getAllBenefitTypes,
+  updateBenefitType,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
@@ -143,7 +145,11 @@ export function switchAdminTab(targetTab) {
   if (targetTab === "secretary") loadSecretaryData();
   if (targetTab === "claims") loadClaimsData();
   if (targetTab === "defaulters") loadDefaultersData();
-  if (targetTab === "cms") loadBankSettings();
+  if (targetTab === "cms") {
+    loadBankSettings();
+    loadDuesSettings();
+    loadBenefitTypesSettings();
+  }
   if (targetTab === "audit") loadAuditLogsData();
 }
 window.switchAdminTab = switchAdminTab;
@@ -449,6 +455,7 @@ function setupAdminForms() {
 
   // Bank Coordinates & QR Code Form
   setupBankSettingsHandlers();
+  setupDuesSettingsHandlers();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -900,3 +907,185 @@ function setupBankSettingsHandlers() {
     });
   }
 }
+
+// ================= MONTHLY DUES CONTRIBUTION SETTINGS =================
+
+async function loadDuesSettings() {
+  try {
+    const dueSetting = await getSystemSetting("monthly_due_amount");
+    const input = document.getElementById("settingMonthlyDueAmount");
+    if (input) {
+      input.value = dueSetting?.amount != null ? dueSetting.amount : 300;
+    }
+  } catch (err) {
+    console.error("Failed to load monthly dues setting:", err);
+  }
+}
+window.loadDuesSettings = loadDuesSettings;
+
+function setupDuesSettingsHandlers() {
+  const form = document.getElementById("duesSettingsForm");
+  const input = document.getElementById("settingMonthlyDueAmount");
+  const saveBtn = document.getElementById("saveDuesSettingsBtn");
+  const statusEl = document.getElementById("duesSettingsStatus");
+
+  if (!form || !input) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const amount = Number(input.value);
+    if (!amount || amount <= 0) {
+      showToast("Please enter a valid monthly due amount.", "warning");
+      return;
+    }
+
+    try {
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Saving...</span>';
+      }
+      if (statusEl) statusEl.textContent = "Updating monthly due in system settings...";
+
+      await updateSystemSetting(
+        "monthly_due_amount",
+        { amount, currency: "LKR" },
+        currentStaff?.id || null
+      );
+
+      showToast(`Default monthly dues successfully updated to Rs. ${amount.toLocaleString()} /=`, "success");
+      if (statusEl) {
+        statusEl.textContent = `Saved: Rs. ${amount.toLocaleString()} /= (${new Date().toLocaleTimeString()})`;
+      }
+    } catch (err) {
+      console.error("Failed to update monthly dues:", err);
+      showToast(err.message || "Failed to save monthly dues setting.", "error");
+      if (statusEl) statusEl.textContent = "Error saving changes.";
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">save</span><span>Save Monthly Dues</span>';
+      }
+    }
+  });
+}
+
+// ================= WELFARE BENEFITS & FACILITIES SETTINGS =================
+
+async function loadBenefitTypesSettings() {
+  const tbody = document.getElementById("benefitTypesTableBody");
+  if (!tbody) return;
+
+  try {
+    const types = await getAllBenefitTypes();
+    if (!types || types.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-on-surface-variant">No welfare benefit programs configured.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = types.map((b) => {
+      const isDeath = b.code === "DEATH_AID";
+      const isMedical = b.code === "MEDICAL_AID";
+      const isPension = b.code === "PENSION_PARTY";
+
+      const icon = isDeath ? "volunteer_activism" : isMedical ? "medical_services" : "celebration";
+      const statusBadge = b.is_active
+        ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+             <span class="material-symbols-outlined text-[14px]">check_circle</span>
+             <span>Active Facility</span>
+           </span>`
+        : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+             <span class="material-symbols-outlined text-[14px]">pause_circle</span>
+             <span>Currently Paused</span>
+           </span>`;
+
+      const helperText = isDeath 
+        ? "Currently the only active donation program (Rs. 20,000/= default)."
+        : isMedical 
+        ? "Medical and hospitalization assistance (toggle active when facility is ready)."
+        : isPension 
+        ? "Retirement and farewell contribution (toggle active when facility is ready)."
+        : (b.description_en || "");
+
+      return `
+        <tr class="hover:bg-surface/50 transition-colors" data-benefit-id="${b.id}">
+          <td class="py-3 px-3">
+            <div class="flex items-start gap-2.5">
+              <span class="material-symbols-outlined text-primary text-[22px] mt-0.5">${icon}</span>
+              <div>
+                <div class="font-bold text-on-surface text-xs sm:text-sm">${b.title_en}</div>
+                <div class="text-[11px] text-primary font-medium">${b.title_si || ""}</div>
+                <div class="text-[10px] text-on-surface-variant mt-0.5">${helperText}</div>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <div class="flex flex-col gap-1.5 items-start">
+              ${statusBadge}
+              <button type="button" onclick="toggleBenefitActive('${b.id}', ${!b.is_active})" class="text-[11px] font-bold underline ${b.is_active ? 'text-amber-700 hover:text-amber-800' : 'text-emerald-700 hover:text-emerald-800'} transition-colors cursor-pointer">
+                ${b.is_active ? "Pause Facility" : "Activate Facility"}
+              </button>
+            </div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <div class="flex items-center gap-1.5 max-w-[180px]">
+              <span class="text-xs font-bold text-on-surface-variant">Rs.</span>
+              <input type="number" id="benefitAmount_${b.id}" value="${Number(b.max_amount || 0)}" min="500" step="500" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            </div>
+          </td>
+          <td class="py-3 px-3 text-right whitespace-nowrap">
+            <button type="button" onclick="saveBenefitRow('${b.id}')" id="saveBenefitBtn_${b.id}" class="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-hover shadow-sm inline-flex items-center gap-1 transition-colors">
+              <span class="material-symbols-outlined text-[15px]">save</span>
+              <span>Save</span>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Failed to load benefit types in admin:", err);
+    tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-rose-600 font-bold">Error loading benefit programs.</td></tr>';
+  }
+}
+window.loadBenefitTypesSettings = loadBenefitTypesSettings;
+
+window.toggleBenefitActive = async function (id, newStatus) {
+  try {
+    await updateBenefitType(id, { is_active: newStatus });
+    showToast(`Welfare facility ${newStatus ? "activated" : "paused"} successfully.`, "success");
+    await loadBenefitTypesSettings();
+  } catch (err) {
+    console.error("Failed to toggle facility status:", err);
+    showToast(err.message || "Failed to change facility status.", "error");
+  }
+};
+
+window.saveBenefitRow = async function (id) {
+  const input = document.getElementById(`benefitAmount_${id}`);
+  const btn = document.getElementById(`saveBenefitBtn_${id}`);
+  if (!input) return;
+
+  const maxAmount = Number(input.value);
+  if (!maxAmount || maxAmount <= 0) {
+    showToast("Please enter a valid grant amount.", "warning");
+    return;
+  }
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[14px] animate-spin">refresh</span><span>Saving...</span>';
+    }
+
+    await updateBenefitType(id, { max_amount: maxAmount });
+    showToast(`Benefit grant limit updated to Rs. ${maxAmount.toLocaleString()} /=`, "success");
+    await loadBenefitTypesSettings();
+  } catch (err) {
+    console.error("Failed to update benefit row:", err);
+    showToast(err.message || "Failed to update benefit limit.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[15px]">save</span><span>Save</span>';
+    }
+  }
+};

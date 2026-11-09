@@ -123,6 +123,15 @@ async function refreshDashboardData() {
     }
 
     // C. Dues & Balance Info
+    const dueSetting = await getSystemSetting("monthly_due_amount");
+    if (dueSetting && dueSetting.amount) {
+      window.mriaMonthlyDueSetting = Number(dueSetting.amount);
+      const payInput = document.getElementById("paymentAmountInput");
+      if (payInput && (!payInput.value || payInput.value === "500" || payInput.value === "300")) {
+        payInput.value = window.mriaMonthlyDueSetting;
+      }
+    }
+
     currentDues = await getMemberDues(currentMember.id);
     currentBalanceInfo = await calculateMemberBalance(currentMember);
     renderMetrics(currentBalanceInfo, currentDues);
@@ -301,6 +310,17 @@ function renderMetrics(balanceInfo, dues) {
   const currentMonthDue = dues.find((d) => d.status === "pending");
   const monthStatusBadge = document.getElementById("currentMonthStatusBadge");
   const lastPaymentDateDisplay = document.getElementById("lastPaymentDateDisplay");
+  const monthAmountEl = document.getElementById("currentMonthAmountDisplay");
+
+  if (monthAmountEl) {
+    if (currentMonthDue) {
+      monthAmountEl.textContent = formatCurrency(currentMonthDue.amount);
+    } else if (window.mriaMonthlyDueSetting) {
+      monthAmountEl.textContent = formatCurrency(window.mriaMonthlyDueSetting);
+    } else {
+      monthAmountEl.textContent = formatCurrency(300);
+    }
+  }
 
   if (currentPayments.length > 0) {
     const lastPayment = currentPayments[0];
@@ -428,9 +448,20 @@ function populateBenefitTypesDropdown(types) {
     const title = isSi ? b.title_si : b.title_en;
     const opt = document.createElement("option");
     opt.value = b.id;
+    opt.dataset.maxAmount = b.max_amount;
     opt.textContent = `${title} (Max: ${formatCurrency(b.max_amount)})`;
     select.appendChild(opt);
   });
+
+  // If only one benefit is active (e.g. Death Donation 20,000/=), auto-select it and populate the amount input
+  if (types.length === 1) {
+    select.value = types[0].id;
+    const amountInput = document.getElementById("claimAmountInput");
+    if (amountInput) {
+      amountInput.value = types[0].max_amount;
+      amountInput.max = types[0].max_amount;
+    }
+  }
 }
 
 function populatePaymentMonths() {
@@ -733,6 +764,19 @@ function setupActionListeners() {
 
   // Claim form submission
   const claimForm = document.getElementById("claimForm");
+  const benefitTypeSelect = document.getElementById("benefitTypeSelect");
+  const claimAmountInput = document.getElementById("claimAmountInput");
+
+  if (benefitTypeSelect && claimAmountInput) {
+    benefitTypeSelect.addEventListener("change", () => {
+      const selected = benefitTypeSelect.selectedOptions[0];
+      if (selected && selected.dataset.maxAmount) {
+        claimAmountInput.value = selected.dataset.maxAmount;
+        claimAmountInput.max = selected.dataset.maxAmount;
+      }
+    });
+  }
+
   if (claimForm) {
     claimForm.addEventListener("submit", async (e) => {
       e.preventDefault();

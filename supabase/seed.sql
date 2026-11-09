@@ -29,7 +29,7 @@ INSERT INTO public.system_settings (key, value, description)
 VALUES 
 (
     'monthly_due_amount',
-    '{"amount": 500.00, "currency": "LKR"}',
+    '{"amount": 300.00, "currency": "LKR"}',
     'Standard monthly dues contribution per active member'
 ),
 (
@@ -56,23 +56,36 @@ INSERT INTO public.benefit_types (code, title_en, title_si, description_en, desc
 VALUES
 (
     'DEATH_AID',
-    'Death Aid (Bereavement Benefit)',
+    'Death Donation (Bereavement Aid)',
     'මරණාධාර සුබසාධන ප්‍රතිලාභය',
     'Financial bereavement aid provided for member or immediate family members upon demise.',
     'සාමාජිකයෙකුගේ හෝ ළඟම ඥාතියෙකුගේ අභාවයකදී ලබාදෙන මූල්‍ය ආධාර ප්‍රතිලාභය.',
-    50000.00,
+    20000.00,
     true
 ),
 (
     'MEDICAL_AID',
-    'Medical Assistance Aid',
-    'වෛද්‍ය ආධාර ප්‍රතිලාභය',
+    'Medical Assistance & Hospitalization Facilities',
+    'වෛද්‍ය සහ රෝහල්ගතවීම් ආධාර පහසුකම්',
     'Financial aid for hospitalization or critical illness treatments.',
     'රෝහල්ගතවීම් හෝ විශේෂිත වෛද්‍ය ප්‍රතිකාර සඳහා ලබාදෙන මූල්‍ය ආධාර.',
     25000.00,
-    true
+    false
+),
+(
+    'PENSION_PARTY',
+    'Pension & Retirement Farewell Benefit',
+    'විශ්‍රාම සාද සහ උපහාර සුබසාධනය',
+    'Financial assistance and society felicitation contribution for retiring members upon formal retirement.',
+    'සාමාජිකයෙකුගේ නිල විශ්‍රාම යාමේදී සංගමය මගින් ලබාදෙන විශ්‍රාම උපහාර සහ සාද ආධාර දීමනාව.',
+    15000.00,
+    false
 )
 ON CONFLICT (code) DO UPDATE SET
+    title_en = EXCLUDED.title_en,
+    title_si = EXCLUDED.title_si,
+    max_amount = EXCLUDED.max_amount,
+    is_active = EXCLUDED.is_active;
     title_en = EXCLUDED.title_en,
     title_si = EXCLUDED.title_si,
     max_amount = EXCLUDED.max_amount,

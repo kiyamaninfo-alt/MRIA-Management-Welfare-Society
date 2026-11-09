@@ -438,11 +438,15 @@
     <!-- ================= TAB 5: WELFARE BENEFIT CLAIMS ================= -->
     <div id="tab-content-claims" class="tab-content hidden space-y-4">
       <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
-        <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant mb-4">
           <div>
             <h3 class="font-bold text-base text-on-surface">Welfare Benefit Grants Review</h3>
             <p class="text-xs text-on-surface-variant">Committee application evaluations and treasury disbursements.</p>
           </div>
+          <button type="button" onclick="switchAdminTab('cms'); document.getElementById('benefitsManagementCard')?.scrollIntoView({ behavior: 'smooth' });" class="px-3.5 py-2 rounded-xl border border-outline-variant bg-surface hover:bg-white text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[16px]">tune</span>
+            <span>Configure Benefit Limits &amp; Facilities</span>
+          </button>
         </div>
 
         <div class="overflow-x-auto">
@@ -589,6 +593,99 @@
           </div>
 
         </form>
+      </div>
+
+      <!-- Monthly Contribution & Dues Settings -->
+      <div id="duesSettingsCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-4 border-b border-outline-variant">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[24px]">calendar_month</span>
+            <div>
+              <h4 class="font-bold text-sm sm:text-base text-on-surface">
+                Monthly Dues &amp; Contribution Rate
+              </h4>
+              <p class="text-xs text-on-surface-variant">
+                Configure the baseline monthly membership fee charged to active members.
+              </p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 bg-sky-50 text-sky-800 border border-sky-200 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
+            <span class="material-symbols-outlined text-[14px]">tune</span>
+            <span>Fee Control</span>
+          </span>
+        </div>
+
+        <form id="duesSettingsForm" class="max-w-xl space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-on-surface mb-1">
+              Default Monthly Payment (LKR)
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
+              <input type="number" id="settingMonthlyDueAmount" required min="50" step="50" value="300" placeholder="e.g. 300" class="w-full pl-12 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            </div>
+            <p class="text-[11px] text-on-surface-variant mt-1.5 leading-relaxed">
+              Standard default contribution is <strong>Rs. 300/=</strong>. Updating this value adjusts new billing periods and default payment inputs across all member dashboards.
+            </p>
+          </div>
+
+          <div class="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-outline-variant">
+            <span id="duesSettingsStatus" class="text-xs text-on-surface-variant italic"></span>
+            <button type="submit" id="saveDuesSettingsBtn" class="px-5 py-2.5 bg-primary text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-colors shadow-sm flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">save</span>
+              <span>Save Monthly Dues</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Welfare Benefits & Facilities Management -->
+      <div id="benefitsManagementCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-4 border-b border-outline-variant">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[24px]">volunteer_activism</span>
+            <div>
+              <h4 class="font-bold text-sm sm:text-base text-on-surface">
+                Welfare Benefit Programs &amp; Facilities
+              </h4>
+              <p class="text-xs text-on-surface-variant">
+                Control active welfare facilities and donation limits. Only active facilities are available for member applications.
+              </p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
+            <span class="material-symbols-outlined text-[14px]">health_and_safety</span>
+            <span>Programs Policy</span>
+          </span>
+        </div>
+
+        <div class="p-3.5 bg-sky-50 border border-sky-100 rounded-xl text-xs text-sky-950 space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-sky-900">
+            <span class="material-symbols-outlined text-[16px]">info</span>
+            <span>Current Welfare Facility Status</span>
+          </div>
+          <p class="text-[11px] leading-relaxed text-sky-800">
+            Currently, the Association is <strong>only paying Death Donation (Rs. 20,000/=)</strong>. Other facilities like Medical Assistance and Pension Parties are currently paused, but can be activated here immediately once funds and committee approvals become available.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Facility Program</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">Max Grant / Donation (LKR)</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="benefitTypesTableBody" class="divide-y divide-outline-variant">
+              <tr>
+                <td colspan="4" class="py-8 text-center text-on-surface-variant">Loading welfare benefit facilities...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Constitution Dual-Slot CMS -->

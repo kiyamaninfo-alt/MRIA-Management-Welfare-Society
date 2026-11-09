@@ -102,19 +102,65 @@ export async function submitPayment({
 }
 
 /**
- * Fetches active benefit types.
+ * Fetches active benefit types for member application.
  */
 export async function getBenefitTypes() {
   const { data, error } = await supabase
     .from("benefit_types")
     .select("*")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .order("code", { ascending: true });
 
   if (error) {
     console.error("Error fetching benefit types:", error);
     return [];
   }
   return data || [];
+}
+
+/**
+ * Fetches all benefit types (active & inactive) for administrative management.
+ */
+export async function getAllBenefitTypes() {
+  const { data, error } = await supabase
+    .from("benefit_types")
+    .select("*")
+    .order("code", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching all benefit types:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Updates a benefit type (e.g. max_amount, is_active status).
+ */
+export async function updateBenefitType(id, updates) {
+  const { data, error } = await supabase
+    .from("benefit_types")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Creates a new benefit type.
+ */
+export async function createBenefitType(payload) {
+  const { data, error } = await supabase
+    .from("benefit_types")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 /**
