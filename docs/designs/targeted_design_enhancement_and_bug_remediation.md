@@ -204,8 +204,8 @@ stateDiagram-v2
         [*] --> RevertDues: Revert member_dues to 'pending'
         RevertDues --> UnlinkReconciliation: Delete payment_dues_reconciliation
         UnlinkReconciliation --> OutflowCompensation: Insert treasury_transactions (outflow)
-        OutflowCompensation --> DecrementBalance: Decrement treasury_accounts balance
-        DecrementBalance --> ImmutableAudit: Write RECEIPT_VOIDED to audit_logs
+        OutflowCompensation --> DynamicBalanceAdjustment: Dynamic view treasury_account_balances offsets balance
+        DynamicBalanceAdjustment --> ImmutableAudit: Write RECEIPT_VOIDED to audit_logs
     }
 
     rejected --> [*]
@@ -216,11 +216,11 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    Start["Admin Triggers Delete Member"] --> CheckRecords{"Query transaction count: payments + dues + claims"}
+    Start["Admin Triggers Delete Member"] --> CheckRecords{"Query counts: payments + dues + claims + staff audit refs"}
     CheckRecords -- "Count == 0" --> HardDelete["Prompt EPF Confirmation -> Hard DELETE FROM members"]
     HardDelete --> AuditHardDelete["Write MEMBER_DELETED to audit_logs"]
     CheckRecords -- "Count > 0" --> RejectHardDelete["Block Hard Delete -> Prompt Soft Archival"]
-    RejectHardDelete --> SoftArchive["Update members: is_approved=false, role='archived'"]
+    RejectHardDelete --> SoftArchive["Update members: is_approved=false, is_archived=true (preserve role)"]
     SoftArchive --> AuditSoftArchive["Write MEMBER_ARCHIVED to audit_logs"]
     AuditHardDelete --> RefreshRoster["Refresh Member Directory Roster"]
     AuditSoftArchive --> RefreshRoster
@@ -318,8 +318,12 @@ flowchart TD
 #### Pillar 2: RBAC Deletions, Approvals & Immutable Audit Logging
 
 1. **Dual-Mode Member Deletion & Archival (Item 3):**
-   * PostgreSQL Stored Procedure:
+   * PostgreSQL Schema Adjustment & Stored Procedure:
      ```sql
+     -- Decouple lifecycle state from authorization role
+     ALTER TABLE public.members 
+     ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false;
+
      CREATE OR REPLACE FUNCTION public.delete_or_archive_member(
          p_member_id UUID,
          p_admin_id UUID,
@@ -333,22 +337,38 @@ flowchart TD
          v_pay_count INT;
          v_dues_count INT;
          v_claim_count INT;
+         v_staff_refs INT;
          v_member RECORD;
+         v_actor RECORD;
      BEGIN
          SELECT * INTO v_member FROM public.members WHERE id = p_member_id;
          IF NOT FOUND THEN
              RAISE EXCEPTION 'Member record not found';
          END IF;
 
+         -- Lookup executing admin details for complete immutable audit trail
+         SELECT email, full_name, epf_number INTO v_actor 
+         FROM public.members WHERE id = p_admin_id;
+
+         -- Count personal member transaction records
          SELECT COUNT(*) INTO v_pay_count FROM public.payments WHERE member_id = p_member_id;
          SELECT COUNT(*) INTO v_dues_count FROM public.member_dues WHERE member_id = p_member_id;
          SELECT COUNT(*) INTO v_claim_count FROM public.benefit_claims WHERE member_id = p_member_id;
 
-         IF (v_pay_count + v_dues_count + v_claim_count) > 0 THEN
-             -- Soft Archival Mode
+         -- Count staff audit references to prevent foreign key constraint crashes (23503 ON DELETE RESTRICT)
+         SELECT COUNT(*) INTO v_staff_refs FROM (
+             SELECT 1 FROM public.payments WHERE verified_by = p_member_id
+             UNION ALL
+             SELECT 1 FROM public.treasury_transactions WHERE recorded_by = p_member_id
+             UNION ALL
+             SELECT 1 FROM public.benefit_claims WHERE disbursed_by = p_member_id OR approved_by = p_member_id
+         ) s;
+
+         IF (v_pay_count + v_dues_count + v_claim_count + v_staff_refs) > 0 THEN
+             -- Soft Archival Mode: revoke access, set is_archived flag, preserve role history
              UPDATE public.members
              SET is_approved = false,
-                 role = 'archived',
+                 is_archived = true,
                  updated_at = NOW()
              WHERE id = p_member_id;
 
@@ -360,14 +380,15 @@ flowchart TD
                      'reason', p_reason,
                      'email', v_member.email,
                      'epf', v_member.epf_number,
-                     'transactions_preserved', (v_pay_count + v_dues_count + v_claim_count)
+                     'transactions_preserved', (v_pay_count + v_dues_count + v_claim_count),
+                     'staff_references_preserved', v_staff_refs
                  ),
-                 NULL, NULL, NULL
+                 v_actor.email, v_actor.full_name, v_actor.epf_number
              );
 
-             RETURN jsonb_build_object('action', 'archived', 'message', 'Member has existing records. Successfully archived.');
+             RETURN jsonb_build_object('action', 'archived', 'message', 'Member has existing records or staff history. Successfully archived.');
          ELSE
-             -- Hard Delete Mode
+             -- Hard Delete Mode: clean removal for zero-record profiles
              DELETE FROM public.members WHERE id = p_member_id;
 
              PERFORM public.log_user_activity(
@@ -379,7 +400,7 @@ flowchart TD
                      'email', v_member.email,
                      'epf', v_member.epf_number
                  ),
-                 NULL, NULL, NULL
+                 v_actor.email, v_actor.full_name, v_actor.epf_number
              );
 
              RETURN jsonb_build_object('action', 'deleted', 'message', 'Member had 0 records. Permanently deleted.');
@@ -406,6 +427,7 @@ flowchart TD
          v_payment RECORD;
          v_source_account TEXT;
          v_reversed_dues INT := 0;
+         v_actor RECORD;
      BEGIN
          SELECT * INTO v_payment FROM public.payments WHERE id = p_payment_id;
          IF NOT FOUND THEN
@@ -416,7 +438,16 @@ flowchart TD
              RAISE EXCEPTION 'Payment % is already voided', p_payment_id;
          END IF;
 
-         -- Update status and rejection reason
+         -- Ledger safety invariant: only formally verified receipts can be voided
+         IF v_payment.status != 'verified' THEN
+             RAISE EXCEPTION 'Only verified payment receipts can be voided (current status: %)', v_payment.status;
+         END IF;
+
+         -- Lookup executing officer details for immutable audit trail
+         SELECT email, full_name, epf_number INTO v_actor 
+         FROM public.members WHERE id = p_voided_by;
+
+         -- Update status and rejection/void reason
          UPDATE public.payments
          SET status = 'voided',
              rejection_reason = p_reason,
@@ -424,7 +455,7 @@ flowchart TD
              verified_at = NOW()
          WHERE id = p_payment_id;
 
-         -- Un-settle reconciled dues
+         -- Un-settle reconciled dues back to pending
          WITH reverted AS (
              UPDATE public.member_dues md
              SET status = 'pending',
@@ -438,12 +469,22 @@ flowchart TD
 
          DELETE FROM public.payment_dues_reconciliation WHERE payment_id = p_payment_id;
 
-         -- Compensating treasury outflow reversal
-         v_source_account := CASE 
-             WHEN v_payment.payment_method = 'cash' THEN 'cash_in_hand'
-             ELSE 'boc_savings'
-         END;
+         -- Resolve treasury account from original verified transaction
+         SELECT destination_account_id INTO v_source_account 
+         FROM public.treasury_transactions 
+         WHERE payment_id = p_payment_id 
+         LIMIT 1;
 
+         IF v_source_account IS NULL THEN
+             v_source_account := CASE 
+                 WHEN v_payment.payment_method = 'cash' THEN 'cash_in_hand'
+                 ELSE 'boc_savings'
+             END;
+         END IF;
+
+         -- Compensating treasury outflow reversal (append-only ledger)
+         -- Note: The dynamic SQL view treasury_account_balances aggregates tx.source_account_id as -amount,
+         -- so inserting this outflow immediately offsets account balances without mutating physical account rows.
          INSERT INTO public.treasury_transactions (
              transaction_date,
              transaction_type,
@@ -451,6 +492,7 @@ flowchart TD
              amount,
              reference_no,
              description,
+             payment_id,
              recorded_by
          ) VALUES (
              CURRENT_DATE,
@@ -459,10 +501,11 @@ flowchart TD
              v_payment.amount,
              'VOID-' || SUBSTRING(p_payment_id::text, 1, 8),
              'Voided Receipt Reversal: ' || COALESCE(p_reason, 'Erroneous Entry'),
+             p_payment_id,
              p_voided_by
          );
 
-         -- Record in immutable audit log
+         -- Record in immutable audit log with full actor attributes
          PERFORM public.log_user_activity(
              'RECEIPT_VOIDED',
              'PAYMENT',
@@ -471,9 +514,10 @@ flowchart TD
                  'reason', p_reason,
                  'amount', v_payment.amount,
                  'reversed_dues_count', v_reversed_dues,
-                 'source_account', v_source_account
+                 'source_account', v_source_account,
+                 'payment_type', v_payment.payment_type
              ),
-             NULL, NULL, NULL
+             v_actor.email, v_actor.full_name, v_actor.epf_number
          );
 
          RETURN jsonb_build_object(
@@ -496,31 +540,68 @@ flowchart TD
      * Label in English: "Contributions Paid to Date"
      * Value computation: Sum of all verified payments (`payment_type IN ('monthly_due', 'admission_fee', 'donation')`) for the active member in the current calendar year.
 
-2. **Net Standing Calculation (+/- Values) (Item 11):**
-   * Algorithm in `js/page-dashboard.js`:
+2. **Net Standing Calculation (+/- Values) & Month-End Cutoff (Item 11):**
+   * Centralized in `js/api.js` (`calculateMemberBalance`) and consumed in `js/page-dashboard.js`:
      ```javascript
-     function calculateNetDuesStanding(dues, payments) {
-       const today = new Date().toISOString().slice(0, 10);
-       const overdueDues = dues.filter((d) => d.status === "pending" && d.billing_month <= today);
-       const totalArrears = overdueDues.reduce((sum, d) => sum + Number(d.amount), 0);
+     export async function calculateMemberBalance(member) {
+       if (!member) return { totalPending: 0, priorArrears: 0, advanceBalance: 0, pendingDues: [], admissionFeeDue: 0, netStanding: 0 };
 
-       const futureSettled = dues.filter((d) => d.status === "settled" && d.billing_month > today);
-       const totalAdvance = futureSettled.reduce((sum, d) => sum + Number(d.amount), 0);
+       const dues = await getMemberDues(member.id);
+       const today = new Date();
+       const currentMonthStr = today.toISOString().slice(0, 7) + "-01";
 
-       const net = totalAdvance - totalArrears;
+       // Month-End Cutoff Rule: Current month is NOT overdue until month-end passes.
+       // Only prior billing months (< currentMonthStr) constitute overdue arrears.
+       const priorPendingDues = dues.filter(d => d.status === "pending" && d.billing_month < currentMonthStr);
+       const currentMonthDue = dues.find(d => d.billing_month === currentMonthStr && d.status === "pending");
+
+       let admissionFeeDue = 0;
+       if (!member.is_legacy_member) {
+         const { data: admissionPayment } = await supabase
+           .from("payments")
+           .select("id, status")
+           .eq("member_id", member.id)
+           .eq("payment_type", "admission_fee")
+           .eq("status", "verified")
+           .maybeSingle();
+
+         if (!admissionPayment) {
+           const setting = await getSystemSetting("admission_fee_amount");
+           admissionFeeDue = setting?.amount != null ? Number(setting.amount) : 500.00;
+         }
+       }
+
+       // Cumulative dues payments vs billed obligations for advance calculation
+       const { data: verifiedDues } = await supabase
+         .from("payments")
+         .select("amount")
+         .eq("member_id", member.id)
+         .eq("payment_type", "monthly_due")
+         .eq("status", "verified");
+
+       const totalDuesPaid = (verifiedDues || []).reduce((sum, p) => sum + Number(p.amount), 0);
+       const totalBilledUpToNow = dues.filter(d => d.billing_month <= currentMonthStr).length * 300;
+       const advanceBalance = Math.max(0, totalDuesPaid - totalBilledUpToNow);
+       const priorArrears = priorPendingDues.reduce((sum, d) => sum + Number(d.amount), 0) + admissionFeeDue;
+       const netStanding = advanceBalance > 0 ? advanceBalance : -priorArrears;
+
        return {
-         net,
-         isArrears: net < 0,
-         isAdvance: net > 0,
-         isSettled: net === 0,
-         displayAmount: Math.abs(net),
+         totalPending: priorArrears + (currentMonthDue ? Number(currentMonthDue.amount) : 0),
+         priorArrears,
+         advanceBalance,
+         admissionFeeDue,
+         pendingDues: dues.filter(d => d.status === "pending"),
+         netStanding,
+         isArrears: netStanding < 0,
+         isAdvance: netStanding > 0,
+         isSettled: netStanding === 0
        };
      }
      ```
-   * UI Representation:
-     * `net < 0`: `-Rs. ${displayAmount}` (text-rose-600, badge "Arrears / හිඟ මුදල්").
-     * `net > 0`: `+Rs. ${displayAmount}` (text-emerald-600, badge "Advance Paid / අත්තිකාරම් ගෙවීම්").
-     * `net === 0`: `Rs. 0.00` (text-slate-900, badge "All Settled / සම්පූර්ණයෙන්ම ගෙවා ඇත").
+   * UI Representation (formatted via `formatCurrency(amount, { showSign: true })` without manual `Rs. ` string concatenation):
+     * `netStanding < 0`: Card title: "ගෙවීමට ඇති හිඟ මුදල් (Overdue Arrears)", value: `-Rs. 500.00` (text-rose-600, badge "Arrears / හිඟ මුදල්").
+     * `netStanding > 0`: Card title: "අත්තිකාරම් ශේෂය (Advance Balance)", value: `+Rs. 500.00` (text-emerald-600, badge "Advance Paid / අත්තිකාරම් ගෙවීම්").
+     * `netStanding === 0`: Card title: "හිඟ මුදල් නොමැත (Up to Date)", value: `Rs. 0.00` (text-slate-900, badge "All Settled / සම්පූර්ණයෙන්ම ගෙවා ඇත").
 
 3. **FIFO Chronological Auto-Selection Fix (Item 12):**
    * In `populatePaymentMonths()`:
@@ -553,9 +634,11 @@ flowchart TD
 1. **Admin Notifications Center & Member Bell Icon (Item 8):**
    * Database Schema:
      ```sql
+     -- Strictly 1-to-1 targeted alerts (eliminates shared read-state bug on broadcasts)
+     -- General broadcast circulars remain managed by public.announcements with client-side dismissal.
      CREATE TABLE IF NOT EXISTS public.notifications (
          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-         recipient_id UUID REFERENCES public.members(id) ON DELETE CASCADE, -- NULL for broadcast
+         recipient_id UUID NOT NULL REFERENCES public.members(id) ON DELETE CASCADE,
          title_en TEXT NOT NULL,
          title_si TEXT NOT NULL,
          message_en TEXT NOT NULL,
@@ -567,8 +650,12 @@ flowchart TD
 
      ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-     CREATE POLICY "Members view own or broadcast notifications" ON public.notifications
-         FOR SELECT USING (recipient_id IS NULL OR recipient_id = (SELECT id FROM public.members WHERE user_id = auth.uid()));
+     CREATE POLICY "Members view own notifications" ON public.notifications
+         FOR SELECT USING (recipient_id = (SELECT id FROM public.members WHERE user_id = auth.uid()));
+
+     CREATE POLICY "Members update own notifications" ON public.notifications
+         FOR UPDATE USING (recipient_id = (SELECT id FROM public.members WHERE user_id = auth.uid()))
+         WITH CHECK (recipient_id = (SELECT id FROM public.members WHERE user_id = auth.uid()));
 
      CREATE POLICY "Staff insert notifications" ON public.notifications
          FOR INSERT WITH CHECK (
@@ -594,12 +681,15 @@ flowchart TD
      ADD COLUMN IF NOT EXISTS document_key VARCHAR(500);
      ```
    * R2 Upload Pipeline:
-     * Client selects or snaps document proof -> calls `uploadBankSlip(file, "claims")` (generalized to support claim uploads).
-     * Returns key `claims/YYYY-MM/{member_id}_{uuid}.{ext}`.
-     * Inserts into `benefit_claims.document_key`.
-   * Edge Function Authorization: Update `get-slip-url` to permit access if `payments.slip_key = slipKey` OR `benefit_claims.document_key = slipKey`.
+     * Client selects or snaps document proof -> calls `uploadStorageFile(file, "claims")` (generalized in `js/storage.js`).
+     * `supabase/functions/upload-slip/index.ts` accepts `folder: "slips" | "claims"` (defaulting to `"slips"`), formatting S3 key `${folder}/${yearMonth}/${member.id}_${uniqueId}.${ext}`.
+     * Inserts into `benefit_claims.document_key` via `submitBenefitClaim({ ..., documentKey })`.
+     * Edge Function Authorization: Update `supabase/functions/get-slip-url/index.ts` to enforce strict tenant ownership:
+       Permit presigned download if caller is staff (`admin`, `secretary`, `treasurer`, `manager`) **OR** `(payments.slip_key = slipKey AND payments.member_id = caller.id)` **OR** `(benefit_claims.document_key = slipKey AND benefit_claims.member_id = caller.id)`.
 
 3. **Read-Only Locked Dashboard Preview (Item 16):**
+   * Update `js/auth.js` to support `requireApproved: false` for preview routing.
+   * Update `js/page-unauthorized.js` to redirect applicants to `dashboard.html` upon registration submission.
    * In `js/page-dashboard.js`, allow unapproved users with pending registration records to access `dashboard.html`:
      * If `member && !member.is_approved`:
        * Render prominent sticky banner:
@@ -616,6 +706,7 @@ flowchart TD
          </div>
          ```
        * Disable all mutation buttons (`Make a Payment`, `Apply for Welfare Benefit`, drop areas).
+       * Hide `#dashboardNotificationCenter` and internal circulars to prevent data leakage prior to vetting.
        * Keep "Sign Out", "Download Constitution PDF", and "Contact Administration" active.
        * Render metrics as zero skeletons (`Rs. 0.00`).
 
@@ -627,6 +718,7 @@ flowchart TD
          sender_id UUID REFERENCES public.members(id) ON DELETE SET NULL,
          sender_name TEXT NOT NULL,
          sender_email TEXT NOT NULL,
+         sender_phone VARCHAR(20),
          sender_epf TEXT,
          subject TEXT NOT NULL,
          message TEXT NOT NULL,
@@ -639,8 +731,10 @@ flowchart TD
 
      ALTER TABLE public.admin_inquiries ENABLE ROW LEVEL SECURITY;
 
-     CREATE POLICY "Users insert inquiries" ON public.admin_inquiries
-         FOR INSERT WITH CHECK (true);
+     -- Authenticated members only (prevents anonymous spam/forgery)
+     CREATE POLICY "Authenticated members insert inquiries" ON public.admin_inquiries
+         FOR INSERT TO authenticated
+         WITH CHECK (auth.uid() IS NOT NULL);
 
      CREATE POLICY "Staff view inquiries" ON public.admin_inquiries
          FOR SELECT USING (
@@ -651,8 +745,17 @@ flowchart TD
              )
              OR sender_id = (SELECT id FROM public.members WHERE user_id = auth.uid())
          );
+
+     CREATE POLICY "Staff update inquiries" ON public.admin_inquiries
+         FOR UPDATE USING (
+             EXISTS (
+                 SELECT 1 FROM public.members m
+                 WHERE m.user_id = auth.uid()
+                   AND m.role IN ('admin', 'secretary', 'treasurer', 'manager')
+             )
+         );
      ```
-   * Frontend: In `js/ui.js`, update `openContactModal()` to submit directly to `supabase.from("admin_inquiries").insert(...)` and eliminate `window.location.href = mailto:...`.
+   * Frontend: In `js/ui.js`, update `openContactModal()` to submit directly to `supabase.from("admin_inquiries").insert(...)` with `sender_phone` and eliminate `window.location.href = mailto:...`.
 
 ---
 
@@ -669,11 +772,11 @@ flowchart TD
    * Bound to `window.addEventListener("beforeinstallprompt")`. On iOS Safari, display modal instructions ("Tap Share -> Add to Home Screen").
 
 2. **CSS-Isolated Hidden `<iframe>` Print Engine (Item 15):**
-   * Refactor `window.printReceipt()` in `js/receipt.js`:
+   * Refactor print engine in `js/receipt.js` to use local pre-cached `/assets/styles.css` and `iframe.onload`, unifying both payment receipts and grant vouchers:
      ```javascript
-     export function printReceipt() {
-       const receiptEl = document.getElementById("printableReceipt");
-       if (!receiptEl) return;
+     export function printIsolatedElement(elementId, documentTitle = "Voucher") {
+       const el = document.getElementById(elementId);
+       if (!el) return;
 
        const iframe = document.createElement("iframe");
        iframe.style.position = "fixed";
@@ -691,27 +794,42 @@ flowchart TD
          <html>
            <head>
              <meta charset="utf-8" />
-             <title>MRIA Welfare Receipt</title>
-             <script src="https://cdn.tailwindcss.com"></script>
+             <title>${documentTitle}</title>
+             <link rel="stylesheet" href="/assets/styles.css">
+             <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap">
              <style>
                @page { size: auto; margin: 10mm; }
-               body { background: white; margin: 0; padding: 10px; font-family: sans-serif; }
-               .print\\:hidden { display: none !important; }
+               body { background: white; margin: 0; padding: 10px; font-family: 'Inter', 'Noto Sans Sinhala', sans-serif; }
+               .print\:hidden { display: none !important; }
              </style>
            </head>
            <body>
-             ${receiptEl.outerHTML}
+             ${el.outerHTML}
            </body>
          </html>
        `);
        doc.close();
 
-       iframe.contentWindow.focus();
-       setTimeout(() => {
-         iframe.contentWindow.print();
-         document.body.removeChild(iframe);
-       }, 500);
+       iframe.onload = () => {
+         setTimeout(() => {
+           iframe.contentWindow.focus();
+           iframe.contentWindow.print();
+           setTimeout(() => {
+             if (document.body.contains(iframe)) {
+               document.body.removeChild(iframe);
+             }
+           }, 1000);
+         }, 100);
+       };
      }
+
+     window.printReceipt = function () {
+       printIsolatedElement("receiptVoucherPrintable", "MRIA_Payment_Receipt");
+     };
+
+     window.printGrantVoucher = function () {
+       printIsolatedElement("grantVoucherPrintable", "MRIA_Benefit_Grant_Voucher");
+     };
      ```
 
 3. **History Pagination (5 Initial + 25 Load More) (Item 18):**
@@ -783,11 +901,12 @@ flowchart TD
 * **Type / Scope:** Database Schema & Migration (PostgreSQL DDL/DML).
 * **Rationale:** Establishes all database entities and security definer functions required by the 18 requirements:
   * Adds `voided` value to `payment_status` enum.
-  * Creates `public.admin_inquiries` table with RLS policies allowing authenticated member inserts, member self-read, and staff read/resolution.
-  * Creates `public.notifications` table with RLS policies supporting broadcast (recipient NULL) and targeted member delivery.
+  * Adds `is_archived BOOLEAN NOT NULL DEFAULT false` to `public.members` (decoupling lifecycle archival from `app_role`).
+  * Creates `public.admin_inquiries` table with `sender_phone VARCHAR(20)` and RLS policies for authenticated inserts, member view, and staff update/resolution.
+  * Creates `public.notifications` table strictly for 1-to-1 member alerts (`recipient_id UUID NOT NULL REFERENCES public.members(id)`) with RLS select and update policies.
   * Adds `document_key VARCHAR(500)` column to `public.benefit_claims`.
-  * Implements `public.void_payment_receipt(p_payment_id, p_reason, p_voided_by)` atomic function to un-settle reconciled dues, record compensating outflows in `treasury_transactions`, update accounts, and append `audit_logs`.
-  * Implements `public.delete_or_archive_member(p_member_id, p_admin_id, p_reason)` atomic function to enforce hard deletion if transaction count is 0, or soft archival if transaction history exists.
+  * Implements `public.void_payment_receipt(p_payment_id, p_reason, p_voided_by)` with strict `status = 'verified'` precondition, original source account resolution, dues un-settling, compensating outflow insertion into `treasury_transactions`, and immutable audit logging with actor lookup.
+  * Implements `public.delete_or_archive_member(p_member_id, p_admin_id, p_reason)` with full transaction and staff reference checks, preserving officer role upon soft archival and capturing complete actor audit attributes.
 
 #### 2. `admin.html` (Modify)
 * **Type / Scope:** Administrative Console HTML Markup.
@@ -811,18 +930,29 @@ flowchart TD
   * History Tables: Adds pagination buttons `#btnLoadMorePayments` and `#btnLoadMoreClaims`.
   * Notifications Modal: Adds `#notificationsModal` container listing broadcast and member alerts.
 
-#### 4. `js/api.js` (Modify)
+#### 4. `js/auth.js` (Modify)
+* **Type / Scope:** Authentication Guard & Session Management Module.
+* **Rationale:**
+  * Updates `requireAuth({ requireApproved = true, allowPreview = false } = {})` to permit unapproved authenticated users to render `dashboard.html` in read-only locked preview mode without bouncing to `unauthorized.html`.
+
+#### 5. `js/page-unauthorized.js` (Modify)
+* **Type / Scope:** Registration Onboarding Controller.
+* **Rationale:**
+  * Updates registration request submission handler to redirect pending applicants directly to `dashboard.html` to enter the locked preview mode.
+
+#### 6. `js/api.js` (Modify)
 * **Type / Scope:** Supabase Client Data Access Module.
 * **Rationale:**
   * Exports `voidPaymentReceipt(paymentId, reason, voidedBy)` calling the PostgreSQL stored procedure.
   * Exports `deleteOrArchiveMember(memberId, adminId, reason)` calling the PostgreSQL stored procedure.
   * Exports `getNotifications(memberId)` and `markNotificationAsRead(notificationId)`.
   * Exports `sendNotification({ recipientId, titleEn, titleSi, messageEn, messageSi, priority })`.
-  * Exports `submitInquiry({ senderName, senderEmail, senderEpf, subject, message })`.
+  * Exports `submitInquiry({ senderId, senderName, senderEmail, senderPhone, senderEpf, subject, message })`.
   * Exports `getAdminInquiries()` and `resolveAdminInquiry(inquiryId, notes)`.
-  * Updates `calculateMemberBalance()` to return net standing (arrears vs advance) and cumulative YTD verified contributions.
+  * Updates `submitBenefitClaim({ memberId, benefitTypeId, claimAmount, notes, documentKey })` to persist `document_key`.
+  * Updates `calculateMemberBalance()` to implement Month-End Cutoff rule, calculating net arrears vs advance balance and cumulative YTD verified contributions.
 
-#### 5. `js/page-admin.js` (Modify)
+#### 7. `js/page-admin.js` (Modify)
 * **Type / Scope:** Admin Application Controller.
 * **Rationale:**
   * Connects `#btnDownloadCashVoucher` to `downloadReceiptFile()`.
@@ -830,39 +960,42 @@ flowchart TD
   * Updates Member Directory delete action to call `deleteOrArchiveMember()` with prompt confirmation.
   * Wires notification dispatch form in Admin CMS to `sendNotification()`.
   * Wires Inquiries triage drawer to display submissions and handle status updates via `resolveAdminInquiry()`.
+  * Adds "View Proof Document" button in Claims Review and Payout Desk calling `getSignedSlipUrl(claim.document_key)`.
   * Refactors Receipts Register rendering to display `voided` badges and updated tabular alignment.
 
-#### 6. `js/page-dashboard.js` (Modify)
+#### 8. `js/page-dashboard.js` (Modify)
 * **Type / Scope:** Member Dashboard Application Controller.
 * **Rationale:**
   * Binds PWA `beforeinstallprompt` to `#btnInstallApp` with fallback instructions for iOS Safari.
-  * Loads unread notifications, updates `#notificationUnreadBadge`, and renders the notifications list.
-  * Evaluates `member.is_approved`: if false, displays `#lockedDashboardBanner`, sets zero-state skeletons, disables mutation buttons, and preserves Sign Out, Constitution download, and Contact modal.
+  * Calls `requireAuth({ requireApproved: false })`.
+  * Evaluates `member.is_approved`: if false, displays `#lockedDashboardBanner`, hides `#dashboardNotificationCenter`, sets zero-state skeletons, disables mutation buttons, and preserves Sign Out, Constitution download, and Contact modal.
+  * Loads unread 1-to-1 notifications, updates `#notificationUnreadBadge`, and renders the notifications list.
   * Updates `populatePaymentMonths()` with ascending chronological sort to auto-select the earliest unpaid month.
-  * Updates `renderMetrics()` to render negative arrears vs positive advance balance with appropriate color coding.
+  * Updates `renderMetrics()` to render negative arrears vs positive advance balance using `formatCurrency({ showSign: true })`.
   * Updates Card 2 to display cumulative YTD verified payments.
   * Connects `#claimForm` file input to upload proof documents to Cloudflare R2 and store `document_key`.
-  * Implements client-side pagination slicing (5 initial + 25 on click) for payment and claim histories.
+  * Implements client-side pagination slicing (5 initial + 25 on click) for payment and claim histories, resetting limit on view change.
 
-#### 7. `js/receipt.js` (Modify)
+#### 9. `js/receipt.js` (Modify)
 * **Type / Scope:** Digital Receipt & Voucher Generator.
 * **Rationale:**
-  * Replaces direct `window.print()` with a hidden `<iframe>` print engine to isolate receipt markup from host page chrome.
+  * Implements `printIsolatedElement(elementId, documentTitle)` injecting local `/assets/styles.css` with `iframe.onload`.
+  * Unifies `window.printReceipt()` and `window.printGrantVoucher()` to eliminate full-page chrome bleed.
   * Adds "VOIDED / අවලංගු කරන ලදී" watermark and badge styling when `payment.status === 'voided'`.
 
-#### 8. `js/storage.js` (Modify)
+#### 10. `js/storage.js` (Modify)
 * **Type / Scope:** Object Storage Client.
 * **Rationale:**
-  * Generalizes `uploadBankSlip()` to support `claims` folder for claim proof documents.
-  * Generates keys formatted as `claims/YYYY-MM/{member_id}_{uuid}.{ext}`.
+  * Exports generalized `uploadStorageFile(file, folder = "slips")` passing the selected target folder to the upload Edge Function.
 
-#### 9. `js/ui.js` (Modify)
+#### 11. `js/ui.js` (Modify)
 * **Type / Scope:** Shared UI Utilities & Modals.
 * **Rationale:**
-  * Updates `openContactModal()` to submit directly to `admin_inquiries` via `api.js`, completely removing the `mailto:` redirect.
+  * Updates `openContactModal()` to submit directly to `admin_inquiries` with `sender_phone`, completely removing `mailto:`.
+  * Updates `formatCurrency(amount, { showSign = false } = {})` to support signed output (`+Rs. 500.00` / `-Rs. 500.00`).
   * Adds notification modal opener and dismissers.
 
-#### 10. `js/i18n.js` (Modify)
+#### 12. `js/i18n.js` (Modify)
 * **Type / Scope:** Bilingual Localization Dictionaries (`en` and `si`).
 * **Rationale:**
   * Adds dictionary keys for:
@@ -874,12 +1007,18 @@ flowchart TD
     * `install_app`: "යෙදුම ස්ථාපනය කරන්න" / "Install App".
     * `inquiry_submitted`: "ඔබගේ විමසීම සාර්ථකව යොමු කරන ලදී" / "Inquiry submitted successfully".
 
-#### 11. `supabase/functions/get-slip-url/index.ts` (Modify)
+#### 13. `supabase/functions/upload-slip/index.ts` (Modify)
+* **Type / Scope:** Cloudflare R2 Presigned Upload Edge Function.
+* **Rationale:**
+  * Updates request body parsing to accept `folder: "slips" | "claims"` (defaulting to `"slips"`).
+  * Builds R2 presigned PUT object key as `${folder}/${yearMonth}/${member.id}_${uniqueId}.${ext}`.
+
+#### 14. `supabase/functions/get-slip-url/index.ts` (Modify)
 * **Type / Scope:** Cloudflare R2 Presigned Download Edge Function.
 * **Rationale:**
-  * Updates authorization check to permit presigned download if `payments.slip_key = slipKey` OR `benefit_claims.document_key = slipKey`.
+  * Updates authorization check to permit presigned download if caller has staff role (`admin`, `secretary`, `treasurer`, `manager`), OR if non-staff member owns the document (`payments.slip_key = slipKey AND payments.member_id = caller.id` OR `benefit_claims.document_key = slipKey AND benefit_claims.member_id = caller.id`).
 
-#### 12. `assets/styles.css` (Modify - via Build)
+#### 15. `assets/styles.css` (Modify - via Build)
 * **Type / Scope:** Production CSS Stylesheet.
 * **Rationale:** Recompiled using `npm run build:css` to bundle Tailwind `tabular-nums` and newly added badge/print utility classes.
 

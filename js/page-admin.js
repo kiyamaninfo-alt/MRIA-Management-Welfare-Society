@@ -27,6 +27,11 @@ import {
   sendReceiptEmail,
   logUserActivity,
   getPaymentReceipts,
+  voidPaymentReceipt,
+  deleteOrArchiveMember,
+  sendNotification,
+  getAdminInquiries,
+  resolveAdminInquiry,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml, renderGrantVoucherHtml, shareGrantVoucher, downloadGrantVoucherFile } from "./receipt.js";
@@ -163,6 +168,8 @@ export function switchAdminTab(targetTab) {
     loadDuesSettings();
     loadAdmissionFeesSettings();
     loadBenefitTypesSettings();
+    loadAdminInquiries();
+    populateNotificationRecipients();
   }
   if (targetTab === "audit") loadAuditLogsData();
 }
@@ -173,6 +180,7 @@ async function loadInitialData() {
   window.allMembers = allMembers;
   await Promise.all([loadDuesSettings(), loadAdmissionFeesSettings(), loadBenefitTypesSettings()]);
   populateMemberDropdowns(allMembers);
+  populateNotificationRecipients();
   populateGrantBenefitTypes();
   await loadSlipApprovalQueue();
   await loadTreasuryData();
@@ -671,7 +679,7 @@ async function loadSlipApprovalQueue() {
             ${p.payment_method ? `<div class="text-[10px] text-sky-700 font-mono capitalize">${p.payment_method.replace(/_/g, " ")}</div>` : ""}
             ${p.notes ? `<div class="text-[11px] text-on-surface-variant italic max-w-[200px] truncate" title="${p.notes}">${p.notes}</div>` : ""}
           </td>
-          <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(p.amount)}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(p.amount)}</td>
           <td class="py-2.5 px-3">${slipBtn}</td>
           <td class="py-2.5 px-3 text-right">
             <div class="inline-flex items-center gap-2">
@@ -1040,9 +1048,11 @@ function setCashDateToToday() {
 export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
   const previewContainer = document.getElementById("cashReceiptPreview");
   const statusBadge = document.getElementById("receiptPreviewStatusBadge");
+  const dlBtn = document.getElementById("btnDownloadCashVoucher");
   if (!previewContainer) return;
 
   if (isCommitted && payment) {
+    if (dlBtn) dlBtn.classList.remove("hidden");
     if (statusBadge) {
       statusBadge.textContent = "Official Issued Receipt";
       statusBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200";
@@ -1053,6 +1063,8 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
     previewContainer.innerHTML = renderReceiptHtml(payment, memberName, currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer", false);
     return;
   }
+
+  if (dlBtn) dlBtn.classList.add("hidden");
 
   // Live draft preview
   if (statusBadge) {
@@ -1566,6 +1578,9 @@ function setupAdminForms() {
   setupBenefitModalsHandlers();
   setupReceiptsSearchAndFilters();
   setupGrantDeskForm();
+  setupVoidReceiptHandler();
+  setupInquiriesHandlers();
+  setupNotificationHandlers();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -2039,6 +2054,12 @@ function renderReceiptsTable() {
     list = list.filter((r) => r.payment_method === receiptsFilterMethod);
   }
 
+  // 3b. Filter by Status (Verified vs Voided)
+  const statusFilter = document.getElementById("receiptsFilterStatus")?.value || "all";
+  if (statusFilter && statusFilter !== "all") {
+    list = list.filter((r) => r.status === statusFilter);
+  }
+
   // 4. Sort
   list.sort((a, b) => {
     let comp = 0;
@@ -2160,10 +2181,11 @@ function renderReceiptsTable() {
               </div>
             </div>
           </td>
-          <td class="py-3 px-3 whitespace-nowrap">
-            <div class="font-extrabold text-xs sm:text-sm text-emerald-700">
+          <td class="py-3 px-3 whitespace-nowrap text-right">
+            <div class="font-extrabold text-xs sm:text-sm font-mono tabular-nums ${r.status === 'voided' ? 'line-through text-rose-500' : 'text-emerald-700'}">
               Rs. ${amountVal}
             </div>
+            ${r.status === 'voided' ? '<span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 mt-0.5">VOIDED</span>' : ''}
           </td>
           <td class="py-3 px-3 whitespace-nowrap">
             <div class="text-xs text-on-surface font-medium">${formattedDate}</div>
@@ -2181,15 +2203,27 @@ function renderReceiptsTable() {
             </span>
           </td>
           <td class="py-3 px-3 text-right whitespace-nowrap">
-            <button 
-              type="button" 
-              onclick="window.viewReceiptVoucher('${r.id}')" 
-              class="px-2.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
-              title="View, Print, or Download Official Voucher"
-            >
-              <span class="material-symbols-outlined text-[15px]">visibility</span>
-              <span>View Voucher</span>
-            </button>
+            <div class="inline-flex items-center gap-1.5 justify-end">
+              <button 
+                type="button" 
+                onclick="window.viewReceiptVoucher('${r.id}')" 
+                class="px-2.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                title="View, Print, or Download Official Voucher"
+              >
+                <span class="material-symbols-outlined text-[15px]">visibility</span>
+                <span>View Voucher</span>
+              </button>
+              ${r.status === 'verified' ? `
+              <button 
+                type="button" 
+                onclick="window.promptVoidReceipt('${r.id}')" 
+                class="px-2 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                title="Void Payment Receipt"
+              >
+                <span class="material-symbols-outlined text-[15px]">cancel</span>
+                <span>Void</span>
+              </button>` : ''}
+            </div>
           </td>
         </tr>
       `;
@@ -2339,15 +2373,25 @@ async function loadSecretaryData() {
           </td>
           <td class="py-2.5 px-3 uppercase font-semibold text-[11px] text-on-surface-variant">${m.role}</td>
           <td class="py-2.5 px-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] ${statusClass}">
-              ${isApproved ? "Approved" : "Pending Review"}
-            </span>
+            ${m.is_archived ? `
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-600 border border-slate-300 font-bold">
+                Archived
+              </span>
+            ` : `
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] ${statusClass}">
+                ${isApproved ? "Approved" : "Pending Review"}
+              </span>
+            `}
           </td>
           <td class="py-2.5 px-3 text-right">
-            <div class="inline-flex items-center gap-2">
+            <div class="inline-flex items-center gap-1.5 justify-end">
               ${approveAction}
               <button onclick="window.openEditMemberModal('${m.id}')" class="px-2.5 py-1 border border-outline-variant rounded-lg text-xs font-semibold hover:border-primary">
                 Edit
+              </button>
+              <button type="button" onclick="window.promptDeleteMember('${m.id}')" class="px-2 py-1 border border-rose-300 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-50 flex items-center gap-1 cursor-pointer" title="Delete or Archive Member">
+                <span class="material-symbols-outlined text-[13px]">delete</span>
+                <span>Delete</span>
               </button>
             </div>
           </td>
@@ -2381,6 +2425,23 @@ window.openEditMemberModal = function (memberId) {
   document.getElementById("editMemberNic").value = m.nic || "";
 
   openModal("editMemberModal");
+};
+
+window.promptDeleteMember = async function (memberId) {
+  const m = allMembers.find((item) => item.id === memberId);
+  if (!m) return;
+  const confirmed = confirm(
+    `Are you sure you want to delete or archive member ${m.full_name} (${m.epf_number || "EPF: N/A"})?\n\n- If this member has zero financial history, their record will be permanently deleted.\n- If this member has payment or grant history, they will be securely archived to preserve statutory accounting audits.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await deleteOrArchiveMember(memberId);
+    showToast(res.message || "Member record processed successfully.", "success");
+    await loadSecretaryData();
+  } catch (err) {
+    showToast(err.message || "Operation failed.", "error");
+  }
 };
 
 // ================= TAB 5: WELFARE CLAIMS & BENEFIT GRANTS =================
@@ -2917,6 +2978,12 @@ async function loadClaimsData() {
       const applicantEpf = m.epf_number || "N/A";
       const benefitTitle = bt.title_en || "Welfare Grant";
 
+      const proofBtn = c.document_key ? `
+        <button type="button" onclick="window.viewSlip('${c.document_key}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-on-surface font-semibold text-xs hover:bg-surface-variant shadow-xs cursor-pointer" title="View attached document proof">
+          <span class="material-symbols-outlined text-[14px]">attachment</span>
+          <span>Proof</span>
+        </button>` : "";
+
       let actions = "";
       if (c.status === "submitted") {
         actions = `
@@ -2953,14 +3020,14 @@ async function loadClaimsData() {
             <div class="text-[11px] text-on-surface-variant">EPF: ${applicantEpf}</div>
           </td>
           <td class="py-2.5 px-3 font-medium">${benefitTitle}</td>
-          <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(c.claim_amount)}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(c.claim_amount)}</td>
           <td class="py-2.5 px-3">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${c.status === "disbursed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : (c.status === "approved" ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-sky-50 text-sky-800 border border-sky-200")}">
               ${c.status.toUpperCase()}
             </span>
           </td>
           <td class="py-2.5 px-3 text-right">
-            <div class="inline-flex items-center gap-1.5">${actions}</div>
+            <div class="inline-flex items-center gap-1.5 justify-end">${proofBtn} ${actions}</div>
           </td>
         </tr>
       `;
@@ -3044,7 +3111,7 @@ async function loadDefaultersData() {
         <td class="py-2.5 px-3 font-mono font-bold text-rose-700">${d.epf_number || "N/A"}</td>
         <td class="py-2.5 px-3 font-semibold text-on-surface">${d.full_name}</td>
         <td class="py-2.5 px-3">${d.billing_month}</td>
-        <td class="py-2.5 px-3 font-mono font-bold text-rose-700">${formatCurrency(d.amount)}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-rose-700 text-right tabular-nums">${formatCurrency(d.amount)}</td>
         <td class="py-2.5 px-3 font-mono">${formatDate(d.due_date)}</td>
       </tr>
     `).join("");
@@ -4047,3 +4114,281 @@ window.saveBenefitRow = async function (id) {
     }
   }
 };
+
+// ================= VOID PAYMENT RECEIPT WORKFLOW =================
+
+window.promptVoidReceipt = function (paymentId) {
+  const payment = allLoadedReceipts.find((r) => r.id === paymentId);
+  if (!payment) {
+    showToast("Payment receipt not found in loaded records.", "error");
+    return;
+  }
+  const recNum = payment.id ? `MRIA-REC-${payment.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
+  const memberName = payment.members?.full_name || "Member";
+  const amountVal = formatCurrency(payment.amount);
+
+  const idInput = document.getElementById("voidPaymentId");
+  const numSpan = document.getElementById("voidReceiptNumber");
+  const memSpan = document.getElementById("voidReceiptMember");
+  const amtSpan = document.getElementById("voidReceiptAmount");
+  const reasonInput = document.getElementById("voidReceiptReason");
+
+  if (idInput) idInput.value = payment.id;
+  if (numSpan) numSpan.textContent = recNum;
+  if (memSpan) memSpan.textContent = memberName;
+  if (amtSpan) amtSpan.textContent = amountVal;
+  if (reasonInput) reasonInput.value = "";
+
+  openModal("voidReceiptModal");
+};
+
+function setupVoidReceiptHandler() {
+  const form = document.getElementById("voidReceiptForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const paymentId = document.getElementById("voidPaymentId")?.value;
+    const reason = document.getElementById("voidReceiptReason")?.value?.trim();
+
+    if (!paymentId || !reason || reason.length < 5) {
+      showToast("Please provide a valid cancellation reason (min 5 characters).", "warning");
+      return;
+    }
+
+    const btn = document.getElementById("btnExecuteVoidReceipt");
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Voiding Receipt...</span>';
+      }
+
+      await voidPaymentReceipt(paymentId, reason);
+      showToast("Payment receipt voided and ledger reversed successfully.", "success");
+      closeModal("voidReceiptModal");
+
+      // Update in-memory receipt row
+      const target = allLoadedReceipts.find((r) => r.id === paymentId);
+      if (target) {
+        target.status = "voided";
+        target.notes = (target.notes ? target.notes + " " : "") + `[VOIDED: ${reason}]`;
+      }
+      renderReceiptsTable();
+      await loadTreasuryData();
+    } catch (err) {
+      console.error("Void receipt error:", err);
+      showToast(err.message || "Failed to void payment receipt.", "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">delete_forever</span><span>Confirm &amp; Void Receipt</span>';
+      }
+    }
+  });
+}
+
+// ================= MEMBER INQUIRIES & HELP DESK =================
+
+let allAdminInquiries = [];
+window.allAdminInquiries = allAdminInquiries;
+
+async function loadAdminInquiries() {
+  const tbody = document.getElementById("adminInquiriesBody");
+  if (!tbody) return;
+
+  try {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">Loading member inquiries...</td></tr>';
+    allAdminInquiries = await getAdminInquiries();
+    window.allAdminInquiries = allAdminInquiries;
+    renderAdminInquiriesTable();
+  } catch (err) {
+    console.error("Inquiries load error:", err);
+    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-rose-600 font-semibold">${err.message || "Failed to load inquiries."}</td></tr>`;
+  }
+}
+window.loadAdminInquiries = loadAdminInquiries;
+
+function renderAdminInquiriesTable() {
+  const tbody = document.getElementById("adminInquiriesBody");
+  const filterVal = document.getElementById("inquiriesFilterSelect")?.value || "pending";
+  if (!tbody) return;
+
+  let list = (allAdminInquiries || []).slice();
+  if (filterVal && filterVal !== "all") {
+    list = list.filter((iq) => iq.status === filterVal);
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-on-surface-variant">No member inquiries matching filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map((iq) => {
+    const m = iq.members || {};
+    const senderName = m.full_name || m.email || "Member";
+    const senderEpf = m.epf_number || "N/A";
+    const senderPhone = iq.sender_phone || m.phone || "-";
+    const isResolved = iq.status === "resolved";
+
+    return `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-mono">${formatDate(iq.created_at)}</td>
+        <td class="py-2.5 px-3">
+          <div class="font-bold text-on-surface">${escapeHtml(senderName)}</div>
+          <div class="text-[11px] text-on-surface-variant">EPF: ${escapeHtml(senderEpf)} • Tel: ${escapeHtml(senderPhone)}</div>
+        </td>
+        <td class="py-2.5 px-3">
+          <div class="font-semibold text-on-surface text-xs">${escapeHtml(iq.subject)}</div>
+          <div class="text-[11px] text-on-surface-variant truncate max-w-xs">${escapeHtml(iq.message)}</div>
+        </td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${isResolved ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}">
+            ${iq.status.toUpperCase()}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right">
+          <button type="button" onclick="window.openResolveInquiryModal('${iq.id}')" class="px-2.5 py-1 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-hover shadow-xs cursor-pointer inline-flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">visibility</span>
+            <span>${isResolved ? "View" : "Review &amp; Resolve"}</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+window.filterAdminInquiries = function () {
+  renderAdminInquiriesTable();
+};
+
+window.openResolveInquiryModal = function (inquiryId) {
+  const iq = (allAdminInquiries || []).find((item) => item.id === inquiryId);
+  if (!iq) return;
+
+  const m = iq.members || {};
+  const idInput = document.getElementById("resolveInquiryId");
+  const nameEl = document.getElementById("inquirySenderName");
+  const dateEl = document.getElementById("inquiryDate");
+  const epfEl = document.getElementById("inquirySenderEpf");
+  const emailEl = document.getElementById("inquirySenderEmail");
+  const phoneLink = document.getElementById("inquirySenderPhoneLink");
+  const subjEl = document.getElementById("inquirySubject");
+  const msgEl = document.getElementById("inquiryMessageBody");
+  const notesInput = document.getElementById("inquiryResolutionNotes");
+  const resolveBtn = document.getElementById("btnExecuteResolveInquiry");
+
+  if (idInput) idInput.value = iq.id;
+  if (nameEl) nameEl.textContent = m.full_name || "Member";
+  if (dateEl) dateEl.textContent = formatDate(iq.created_at);
+  if (epfEl) epfEl.textContent = m.epf_number || "N/A";
+  if (emailEl) emailEl.textContent = m.email || "-";
+
+  const phoneNum = iq.sender_phone || m.phone || "-";
+  if (phoneLink) {
+    phoneLink.textContent = phoneNum;
+    phoneLink.href = phoneNum !== "-" ? `tel:${phoneNum}` : "#";
+  }
+
+  if (subjEl) subjEl.textContent = iq.subject || "-";
+  if (msgEl) msgEl.textContent = iq.message || "-";
+
+  if (notesInput) {
+    notesInput.value = iq.resolution_notes || "";
+    notesInput.disabled = iq.status === "resolved";
+  }
+
+  if (resolveBtn) {
+    resolveBtn.style.display = iq.status === "resolved" ? "none" : "inline-flex";
+  }
+
+  openModal("inquiryResolveModal");
+};
+
+function setupInquiriesHandlers() {
+  const resolveBtn = document.getElementById("btnExecuteResolveInquiry");
+  if (!resolveBtn) return;
+
+  resolveBtn.addEventListener("click", async () => {
+    const inquiryId = document.getElementById("resolveInquiryId")?.value;
+    const notes = document.getElementById("inquiryResolutionNotes")?.value?.trim() || "Resolved by administrator";
+
+    if (!inquiryId) return;
+
+    try {
+      resolveBtn.disabled = true;
+      resolveBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Resolving...</span>';
+      await resolveAdminInquiry(inquiryId, notes);
+      showToast("Member inquiry marked as resolved.", "success");
+      closeModal("inquiryResolveModal");
+      await loadAdminInquiries();
+    } catch (err) {
+      console.error("Resolve inquiry error:", err);
+      showToast(err.message || "Failed to resolve inquiry.", "error");
+    } finally {
+      resolveBtn.disabled = false;
+      resolveBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Mark as Resolved</span>';
+    }
+  });
+}
+
+// ================= MEMBER NOTIFICATIONS DISPATCH =================
+
+export function populateNotificationRecipients() {
+  const select = document.getElementById("notifRecipientSelect");
+  if (!select || !allMembers) return;
+
+  const approvedMembers = allMembers.filter((m) => m.is_approved && !m.is_archived);
+  select.innerHTML =
+    '<option value="" disabled selected>-- Select Recipient Member --</option>' +
+    approvedMembers
+      .map((m) => `<option value="${m.id}">${escapeHtml(m.full_name)} (EPF: ${m.epf_number || "N/A"})</option>`)
+      .join("");
+}
+
+function setupNotificationHandlers() {
+  const form = document.getElementById("dispatchNotificationForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const recipientId = document.getElementById("notifRecipientSelect")?.value;
+    const titleEn = document.getElementById("notifTitleEn")?.value?.trim();
+    const titleSi = document.getElementById("notifTitleSi")?.value?.trim();
+    const messageEn = document.getElementById("notifMessageEn")?.value?.trim();
+    const messageSi = document.getElementById("notifMessageSi")?.value?.trim();
+    const priority = document.querySelector('input[name="notifPriority"]:checked')?.value || "normal";
+
+    if (!recipientId || !titleEn || !messageEn) {
+      showToast("Please fill all required notification fields.", "warning");
+      return;
+    }
+
+    const btn = document.getElementById("btnSendNotification");
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Dispatching...</span>';
+      }
+
+      await sendNotification({
+        recipientId,
+        titleEn,
+        titleSi: titleSi || titleEn,
+        messageEn,
+        messageSi: messageSi || messageEn,
+        priority,
+      });
+
+      showToast("Notification successfully dispatched to member.", "success");
+      form.reset();
+    } catch (err) {
+      console.error("Notification dispatch error:", err);
+      showToast(err.message || "Failed to dispatch notification.", "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">send</span><span>Send Notification</span>';
+      }
+    }
+  });
+}

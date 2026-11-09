@@ -10,8 +10,10 @@ import {
   getTreasuryBalances,
   submitPayment,
   submitBenefitClaim,
+  getNotifications,
+  markNotificationAsRead,
 } from "./api.js";
-import { uploadBankSlip } from "./storage.js";
+import { uploadBankSlip, uploadStorageFile, getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
 import { initLanguage, t, getLanguage } from "./i18n.js";
 import {
@@ -33,25 +35,71 @@ let currentPayments = [];
 let currentClaims = [];
 let currentBalanceInfo = {};
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   initLanguage();
   initOfflineDetection();
   setupModalDismissers();
 
-  // 1. Authenticate and verify approved membership
-  const authState = await requireAuth({ requireApproved: true });
+  // 1. Authenticate user without throwing hard unauthorized redirect for pending applicants
+  const authState = await requireAuth({ requireApproved: false });
   if (!authState) return;
 
-  const { user, member } = authState;
+  const { user, member, isApproved } = authState;
   currentMember = member;
 
   // 2. Render user identity in header
-  renderUserIdentity(member);
+  renderUserIdentity(member || { full_name: user?.user_metadata?.full_name, email: user?.email, role: "member" });
 
-  // 3. Load all dashboard metrics and datasets
+  // 3. Check approval status for Locked Dashboard Preview mode (Item 16)
+  if (!isApproved || !member?.is_approved) {
+    const banner = document.getElementById("lockedDashboardBanner");
+    if (banner) banner.classList.remove("hidden");
+    const notifs = document.getElementById("dashboardNotificationCenter");
+    if (notifs) notifs.classList.add("hidden");
+
+    // Disable all mutation buttons
+    document.querySelectorAll(".mutation-btn").forEach((btn) => {
+      btn.disabled = true;
+      btn.classList.add("opacity-50", "cursor-not-allowed");
+      btn.title = "Awaiting account approval by Secretary";
+    });
+
+    // Zero-state skeleton metrics
+    const duesDisplay = document.getElementById("outstandingDuesDisplay");
+    const monthAmountEl = document.getElementById("currentMonthAmountDisplay");
+    const claimedEl = document.getElementById("benefitsClaimedDisplay");
+    if (duesDisplay) duesDisplay.textContent = "Rs. 0.00";
+    if (monthAmountEl) monthAmountEl.textContent = "Rs. 0.00";
+    if (claimedEl) claimedEl.textContent = "Rs. 0.00";
+
+    const duesBody = document.getElementById("duesTableBody");
+    const payBody = document.getElementById("paymentsTableBody");
+    const claimsBody = document.getElementById("claimsTableBody");
+    if (duesBody) duesBody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-on-surface-variant">Membership pending verification.</td></tr>';
+    if (payBody) payBody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">Membership pending verification.</td></tr>';
+    if (claimsBody) claimsBody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">Membership pending verification.</td></tr>';
+
+    setupInstallAppButton();
+    return;
+  }
+
+  // 4. Setup PWA install button (Item 9)
+  setupInstallAppButton();
+
+  // 5. Load all dashboard metrics and datasets
   await refreshDashboardData();
 
-  // 4. Attach event listeners
+  // 6. Attach event listeners
   setupActionListeners();
 });
 
@@ -133,12 +181,10 @@ async function refreshDashboardData() {
     }
 
     currentDues = await getMemberDues(currentMember.id);
+    currentPayments = await getMemberPayments(currentMember.id);
     currentBalanceInfo = await calculateMemberBalance(currentMember);
     renderMetrics(currentBalanceInfo, currentDues);
     renderDuesLedger(currentDues);
-
-    // D. Payment History
-    currentPayments = await getMemberPayments(currentMember.id);
     renderPaymentHistory(currentPayments);
 
     // E. Welfare Benefit Claims
@@ -146,9 +192,13 @@ async function refreshDashboardData() {
     populateBenefitTypesDropdown(benefitTypes);
     currentClaims = await getMemberClaims(currentMember.id);
     renderClaimsSummary(currentClaims);
+    renderClaimsHistory(currentClaims);
 
     // F. Treasury Reserves & Segregated Assets Overview
     await loadTreasuryReserves();
+
+    // G. Member 1-to-1 Notifications (Item 8)
+    await loadNotifications();
 
   } catch (err) {
     console.error("Failed to refresh dashboard data:", err);
@@ -196,6 +246,116 @@ async function loadTreasuryReserves() {
     console.debug("Treasury balances live fetch skipped / using defaults:", err);
   }
 }
+
+// ================= INSTALL PWA APP (Item 9) =================
+
+function setupInstallAppButton() {
+  const installBtn = document.getElementById("btnInstallApp");
+  let deferredPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn) installBtn.classList.remove("hidden");
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        installBtn.classList.add("hidden");
+      }
+      deferredPrompt = null;
+    });
+  }
+
+  window.addEventListener("appinstalled", () => {
+    if (installBtn) installBtn.classList.add("hidden");
+  });
+}
+
+// ================= MEMBER NOTIFICATIONS & ALERTS (Item 8) =================
+
+window.currentNotifications = [];
+
+async function loadNotifications() {
+  if (!currentMember?.id) return;
+  try {
+    const notifs = await getNotifications(currentMember.id);
+    window.currentNotifications = notifs || [];
+    const unread = (window.currentNotifications).filter((n) => !n.is_read).length;
+    const badge = document.getElementById("notificationUnreadBadge");
+    if (badge) {
+      if (unread > 0) {
+        badge.textContent = unread;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    }
+  } catch (err) {
+    console.warn("Notifications load error:", err);
+  }
+}
+
+window.openNotificationsModal = function () {
+  const listEl = document.getElementById("notificationsListContainer");
+  const notifs = window.currentNotifications || [];
+  const isSi = getLanguage() === "si";
+
+  if (!listEl) return;
+  if (notifs.length === 0) {
+    listEl.innerHTML = '<div class="py-8 text-center text-on-surface-variant text-xs">No notifications at this time.</div>';
+  } else {
+    listEl.innerHTML = notifs.map((n) => {
+      const title = isSi ? (n.title_si || n.title_en) : (n.title_en || n.title_si);
+      const msg = isSi ? (n.message_si || n.message_en) : (n.message_en || n.message_si);
+      const isUrgent = n.priority === "urgent";
+
+      return `
+        <div class="py-3 px-2 flex items-start justify-between gap-3 ${n.is_read ? "opacity-75" : "bg-sky-50/40 rounded-xl p-2.5"}">
+          <div class="space-y-1 min-w-0">
+            <div class="flex items-center gap-2">
+              ${isUrgent ? '<span class="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">URGENT</span>' : ''}
+              <h5 class="font-bold text-xs text-on-surface truncate">${escapeHtml(title)}</h5>
+              <span class="text-[10px] text-on-surface-variant font-mono">• ${formatDate(n.created_at)}</span>
+            </div>
+            <p class="text-xs text-on-surface-variant whitespace-pre-wrap leading-relaxed">${escapeHtml(msg)}</p>
+          </div>
+          ${!n.is_read ? `
+            <button type="button" onclick="window.markNotifRead('${n.id}')" class="shrink-0 px-2.5 py-1 bg-white hover:bg-slate-100 border border-outline-variant rounded-lg text-[11px] font-bold text-primary shadow-xs cursor-pointer">
+              Mark Read
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }).join("");
+  }
+  openModal("notificationsModal");
+};
+
+window.markNotifRead = async function (id) {
+  try {
+    await markNotificationAsRead(id);
+    const n = (window.currentNotifications || []).find((item) => item.id === id);
+    if (n) n.is_read = true;
+    const badge = document.getElementById("notificationUnreadBadge");
+    const unread = (window.currentNotifications || []).filter((item) => !item.is_read).length;
+    if (badge) {
+      if (unread > 0) {
+        badge.textContent = unread;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    }
+    window.openNotificationsModal();
+  } catch (err) {
+    showToast(err.message || "Failed to update notification.", "error");
+  }
+};
 
 /**
  * Top 3 Dismissible Dashboard Notification Center
@@ -283,21 +443,36 @@ export function dismissNotification(id) {
 window.dismissNotification = dismissNotification;
 
 function renderMetrics(balanceInfo, dues) {
-  // Outstanding Dues
+  // Card 1: Net Dues / Overdue Arrears / Advance Balance (Item 11)
   const duesDisplay = document.getElementById("outstandingDuesDisplay");
+  const duesLabel = document.getElementById("outstandingDuesLabel");
   const duesBadge = document.getElementById("duesBadge");
 
+  const netStanding = Number(balanceInfo.netStanding || 0);
+
   if (duesDisplay) {
-    duesDisplay.textContent = formatCurrency(balanceInfo.totalPending || 0);
-    if (balanceInfo.totalPending > 0) {
+    if (netStanding < 0) {
+      if (duesLabel) duesLabel.textContent = t("overdue_arrears") || "Overdue Arrears";
+      duesDisplay.textContent = formatCurrency(netStanding, { showSign: true });
       duesDisplay.classList.add("text-rose-600");
-      duesDisplay.classList.remove("text-on-surface");
+      duesDisplay.classList.remove("text-emerald-600", "text-on-surface");
       if (duesBadge) {
         duesBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-700";
         duesBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">warning</span><span>${t("pending")}</span>`;
       }
+    } else if (netStanding > 0) {
+      if (duesLabel) duesLabel.textContent = t("advance_balance") || "Advance Balance";
+      duesDisplay.textContent = formatCurrency(netStanding, { showSign: true });
+      duesDisplay.classList.add("text-emerald-600");
+      duesDisplay.classList.remove("text-rose-600", "text-on-surface");
+      if (duesBadge) {
+        duesBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
+        duesBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">savings</span><span>${t("advance_balance")}</span>`;
+      }
     } else {
-      duesDisplay.classList.remove("text-rose-600");
+      if (duesLabel) duesLabel.textContent = t("outstanding_dues") || "Outstanding Dues";
+      duesDisplay.textContent = formatCurrency(0);
+      duesDisplay.classList.remove("text-rose-600", "text-emerald-600");
       duesDisplay.classList.add("text-on-surface");
       if (duesBadge) {
         duesBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
@@ -306,37 +481,41 @@ function renderMetrics(balanceInfo, dues) {
     }
   }
 
-  // Current Month Due Card
-  const currentMonthDue = dues.find((d) => d.status === "pending");
+  // Card 2: Cumulative Contributions Paid to Date (Item 10)
+  const monthDueLabel = document.getElementById("currentMonthDueLabel");
+  const monthAmountEl = document.getElementById("currentMonthAmountDisplay");
   const monthStatusBadge = document.getElementById("currentMonthStatusBadge");
   const lastPaymentDateDisplay = document.getElementById("lastPaymentDateDisplay");
-  const monthAmountEl = document.getElementById("currentMonthAmountDisplay");
 
-  if (monthAmountEl) {
-    if (currentMonthDue) {
-      monthAmountEl.textContent = formatCurrency(currentMonthDue.amount);
-    } else if (window.mriaMonthlyDueSetting) {
-      monthAmountEl.textContent = formatCurrency(window.mriaMonthlyDueSetting);
-    } else {
-      monthAmountEl.textContent = formatCurrency(300);
-    }
+  if (monthDueLabel) {
+    monthDueLabel.textContent = t("cumulative_contributions") || "Contributions Paid to Date";
   }
 
-  if (currentPayments.length > 0) {
-    const lastPayment = currentPayments[0];
-    if (lastPaymentDateDisplay) {
-      lastPaymentDateDisplay.textContent = `Last: ${formatDate(lastPayment.verified_at || lastPayment.created_at)}`;
+  const ytdPaid = Number(
+    balanceInfo.totalDuesPaid ??
+    balanceInfo.totalPaid ??
+    balanceInfo.ytdContributions ??
+    balanceInfo.ytdPaid ??
+    0
+  );
+  if (monthAmountEl) {
+    monthAmountEl.textContent = formatCurrency(ytdPaid);
+  }
+
+  const latestPayment = (currentPayments && currentPayments.length > 0) ? currentPayments[0] : null;
+  const lastPaymentTimestamp = latestPayment?.paid_at || latestPayment?.verified_at || latestPayment?.created_at || balanceInfo.lastPaymentDate;
+
+  if (lastPaymentDateDisplay) {
+    if (lastPaymentTimestamp) {
+      lastPaymentDateDisplay.textContent = `Last: ${formatDate(lastPaymentTimestamp)}`;
+    } else {
+      lastPaymentDateDisplay.textContent = "Last: None";
     }
   }
 
   if (monthStatusBadge) {
-    if (!currentMonthDue) {
-      monthStatusBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
-      monthStatusBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">verified</span><span>${t("paid")}</span>`;
-    } else {
-      monthStatusBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-700";
-      monthStatusBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">schedule</span><span>${t("pending")}</span>`;
-    }
+    monthStatusBadge.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700";
+    monthStatusBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]">verified</span><span>Cumulative</span>`;
   }
 }
 
@@ -370,7 +549,7 @@ function renderDuesLedger(dues) {
     return `
       <tr class="hover:bg-sky-50/30 transition-colors">
         <td class="py-2.5 px-3 font-semibold text-on-surface">${due.billing_month}</td>
-        <td class="py-2.5 px-3 font-mono font-bold">${formatCurrency(due.amount)}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-right tabular-nums">${formatCurrency(due.amount)}</td>
         <td class="py-2.5 px-3">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPaid ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}">
             <span class="material-symbols-outlined text-[13px]">${isPaid ? "check_circle" : "schedule"}</span>
@@ -383,21 +562,48 @@ function renderDuesLedger(dues) {
   }).join("");
 }
 
+let paymentsRenderLimit = 5;
+
 function renderPaymentHistory(payments) {
   const tbody = document.getElementById("paymentsTableBody");
+  const countEl = document.getElementById("paymentsCountDisplay");
+  const loadMoreBtn = document.getElementById("btnLoadMorePayments");
   if (!tbody) return;
 
-  if (payments.length === 0) {
+  if (!payments || payments.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">${t("no_records")}</td></tr>`;
+    if (countEl) countEl.textContent = "Showing 0 transactions";
+    if (loadMoreBtn) loadMoreBtn.classList.add("hidden");
     return;
   }
 
-  tbody.innerHTML = payments.map((p) => {
+  const visibleList = payments.slice(0, paymentsRenderLimit);
+
+  if (countEl) {
+    countEl.textContent = `Showing ${visibleList.length} of ${payments.length} transactions`;
+  }
+
+  if (loadMoreBtn) {
+    if (visibleList.length < payments.length) {
+      loadMoreBtn.classList.remove("hidden");
+      loadMoreBtn.onclick = () => {
+        paymentsRenderLimit += 25;
+        renderPaymentHistory(payments);
+      };
+    } else {
+      loadMoreBtn.classList.add("hidden");
+    }
+  }
+
+  tbody.innerHTML = visibleList.map((p) => {
     const isVerified = p.status === "verified";
+    const isVoided = p.status === "voided";
     const statusClass = isVerified
       ? "bg-emerald-50 text-emerald-700"
       : p.status === "rejected"
       ? "bg-rose-50 text-rose-700"
+      : isVoided
+      ? "bg-rose-50 text-rose-800"
       : "bg-amber-50 text-amber-700";
 
     const voucherAction = isVerified
@@ -411,14 +617,14 @@ function renderPaymentHistory(payments) {
       <tr class="hover:bg-sky-50/30 transition-colors">
         <td class="py-2.5 px-3 font-mono">${formatDate(p.created_at)}</td>
         <td class="py-2.5 px-3">
-          <div class="font-medium text-on-surface capitalize">${(p.payment_type || "").replace(/_/g, " ")}</div>
-          ${p.payment_method ? `<div class="text-[10px] text-on-surface-variant font-mono capitalize">${p.payment_method.replace(/_/g, " ")}</div>` : ""}
-          ${p.notes ? `<div class="text-[10px] text-primary italic max-w-xs truncate" title="${p.notes}">${p.notes}</div>` : ""}
+          <div class="font-medium text-on-surface capitalize">${escapeHtml((p.payment_type || "").replace(/_/g, " "))}</div>
+          ${p.payment_method ? `<div class="text-[10px] text-on-surface-variant font-mono capitalize">${escapeHtml(p.payment_method.replace(/_/g, " "))}</div>` : ""}
+          ${p.notes ? `<div class="text-[10px] text-primary italic max-w-xs truncate" title="${escapeHtml(p.notes)}">${escapeHtml(p.notes)}</div>` : ""}
         </td>
-        <td class="py-2.5 px-3 font-mono font-bold">${formatCurrency(p.amount)}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-right tabular-nums ${isVoided ? "line-through text-rose-600" : ""}">${formatCurrency(p.amount)}</td>
         <td class="py-2.5 px-3">
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusClass}">
-            ${t(`status_${p.status}`) || p.status}
+            ${t(`status_${p.status}`) || p.status.toUpperCase()}
           </span>
         </td>
         <td class="py-2.5 px-3 text-right">${voucherAction}</td>
@@ -426,6 +632,89 @@ function renderPaymentHistory(payments) {
     `;
   }).join("");
 }
+
+let claimsRenderLimit = 5;
+
+function renderClaimsHistory(claims) {
+  const tbody = document.getElementById("claimsTableBody");
+  const countEl = document.getElementById("claimsCountDisplay");
+  const loadMoreBtn = document.getElementById("btnLoadMoreClaims");
+  if (!tbody) return;
+
+  if (!claims || claims.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-on-surface-variant">No welfare claims submitted yet.</td></tr>';
+    if (countEl) countEl.textContent = "Showing 0 applications";
+    if (loadMoreBtn) loadMoreBtn.classList.add("hidden");
+    return;
+  }
+
+  const visibleList = claims.slice(0, claimsRenderLimit);
+
+  if (countEl) {
+    countEl.textContent = `Showing ${visibleList.length} of ${claims.length} applications`;
+  }
+
+  if (loadMoreBtn) {
+    if (visibleList.length < claims.length) {
+      loadMoreBtn.classList.remove("hidden");
+      loadMoreBtn.onclick = () => {
+        claimsRenderLimit += 25;
+        renderClaimsHistory(claims);
+      };
+    } else {
+      loadMoreBtn.classList.add("hidden");
+    }
+  }
+
+  tbody.innerHTML = visibleList.map((c) => {
+    const bt = c.benefit_types || {};
+    const title = getLanguage() === "si" ? (bt.title_si || bt.title_en) : (bt.title_en || "Welfare Aid");
+    const isDisbursed = c.status === "disbursed";
+    const isApproved = c.status === "approved";
+    const statusClass = isDisbursed
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+      : isApproved
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : c.status === "rejected"
+      ? "bg-rose-50 text-rose-800 border-rose-200"
+      : "bg-sky-50 text-sky-800 border-sky-200";
+
+    const proofAction = c.document_key
+      ? `<button onclick="window.viewProofModal('${c.document_key}')" class="inline-flex items-center gap-1 text-primary hover:underline font-bold text-xs cursor-pointer">
+           <span class="material-symbols-outlined text-[15px]">attachment</span>
+           <span>Proof</span>
+         </button>`
+      : `<span class="text-on-surface-variant text-[11px]">-</span>`;
+
+    return `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-mono">${formatDate(c.created_at)}</td>
+        <td class="py-2.5 px-3">
+          <div class="font-medium text-on-surface">${escapeHtml(title)}</div>
+          ${c.notes ? `<div class="text-[10px] text-on-surface-variant italic truncate max-w-xs" title="${escapeHtml(c.notes)}">${escapeHtml(c.notes)}</div>` : ""}
+        </td>
+        <td class="py-2.5 px-3 font-mono font-bold text-right tabular-nums text-primary">${formatCurrency(c.claim_amount)}</td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">
+            ${c.status.toUpperCase()}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right">${proofAction}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+window.viewProofModal = async function (key) {
+  try {
+    const signedUrl = await getSignedSlipUrl(key);
+    if (signedUrl) {
+      window.open(signedUrl, "_blank");
+    }
+  } catch (err) {
+    showToast(err.message || "Failed to load proof document.", "error");
+  }
+};
 
 window.viewReceipt = function (paymentId) {
   const p = currentPayments.find((item) => item.id === paymentId);
@@ -470,6 +759,9 @@ function populatePaymentMonths() {
   select.innerHTML = "";
 
   const pendingMonths = (currentDues || []).filter((d) => d.status === "pending");
+  // Sort ascending so earliest unpaid month is first (FIFO, Item 12)
+  pendingMonths.sort((a, b) => a.billing_month.localeCompare(b.billing_month));
+
   if (pendingMonths.length > 0) {
     pendingMonths.forEach((d) => {
       const opt = document.createElement("option");
@@ -477,6 +769,8 @@ function populatePaymentMonths() {
       opt.textContent = `${d.billing_month.slice(0, 7)} (Unpaid Dues: ${formatCurrency(d.amount)})`;
       select.appendChild(opt);
     });
+    // Auto-select earliest unpaid month
+    select.value = pendingMonths[0].billing_month;
   }
 
   const now = new Date();
@@ -486,6 +780,9 @@ function populatePaymentMonths() {
     opt.value = currentMonthStr;
     opt.textContent = `${currentMonthStr.slice(0, 7)} (Current Month)`;
     select.appendChild(opt);
+    if (pendingMonths.length === 0) {
+      select.value = currentMonthStr;
+    }
   }
 
   const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -762,7 +1059,74 @@ function setupActionListeners() {
     });
   }
 
-  // Claim form submission
+  // Claim form submission & proof upload controls (Item 13)
+  let selectedClaimProofFile = null;
+  const btnClaimCamera = document.getElementById("btnOpenClaimCamera");
+  const btnClaimBrowse = document.getElementById("btnBrowseClaimFile");
+  const claimCamInput = document.getElementById("claimCameraInput");
+  const claimFileInput = document.getElementById("claimFileInput");
+  const claimDropArea = document.getElementById("claimDropArea");
+  const btnRemoveClaim = document.getElementById("btnRemoveClaimFile");
+
+  function setClaimFile(file) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Proof document must be under 5MB.", "warning");
+      return;
+    }
+    selectedClaimProofFile = file;
+    const emptyEl = document.getElementById("claimPreviewEmpty");
+    const filledEl = document.getElementById("claimPreviewFilled");
+    const nameEl = document.getElementById("claimFileName");
+    if (nameEl) nameEl.textContent = file.name;
+    if (emptyEl) emptyEl.classList.add("hidden");
+    if (filledEl) filledEl.classList.remove("hidden");
+  }
+
+  function resetClaimProofFile() {
+    selectedClaimProofFile = null;
+    if (claimCamInput) claimCamInput.value = "";
+    if (claimFileInput) claimFileInput.value = "";
+    const emptyEl = document.getElementById("claimPreviewEmpty");
+    const filledEl = document.getElementById("claimPreviewFilled");
+    if (emptyEl) emptyEl.classList.remove("hidden");
+    if (filledEl) filledEl.classList.add("hidden");
+  }
+
+  if (btnClaimCamera && claimCamInput) {
+    btnClaimCamera.addEventListener("click", () => claimCamInput.click());
+    claimCamInput.addEventListener("change", (e) => setClaimFile(e.target.files[0]));
+  }
+  if (btnClaimBrowse && claimFileInput) {
+    btnClaimBrowse.addEventListener("click", () => claimFileInput.click());
+    claimFileInput.addEventListener("change", (e) => setClaimFile(e.target.files[0]));
+  }
+  if (btnRemoveClaim) {
+    btnRemoveClaim.addEventListener("click", (e) => {
+      e.stopPropagation();
+      resetClaimProofFile();
+    });
+  }
+  if (claimDropArea) {
+    claimDropArea.addEventListener("click", () => {
+      if (!selectedClaimProofFile && claimFileInput) claimFileInput.click();
+    });
+    claimDropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      claimDropArea.classList.add("bg-sky-100/60");
+    });
+    claimDropArea.addEventListener("dragleave", () => {
+      claimDropArea.classList.remove("bg-sky-100/60");
+    });
+    claimDropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      claimDropArea.classList.remove("bg-sky-100/60");
+      if (e.dataTransfer?.files?.[0]) {
+        setClaimFile(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
   const claimForm = document.getElementById("claimForm");
   const benefitTypeSelect = document.getElementById("benefitTypeSelect");
   const claimAmountInput = document.getElementById("claimAmountInput");
@@ -802,16 +1166,25 @@ function setupActionListeners() {
           submitBtn.textContent = "Submitting Application...";
         }
 
+        let documentKey = null;
+        if (selectedClaimProofFile) {
+          if (submitBtn) submitBtn.textContent = "Uploading Proof Document...";
+          documentKey = await uploadStorageFile(selectedClaimProofFile, "claims");
+        }
+
+        if (submitBtn) submitBtn.textContent = "Submitting Application...";
         await submitBenefitClaim({
           memberId: currentMember.id,
           benefitTypeId: benefitTypeSelect.value,
           claimAmount,
           notes: notesInput ? notesInput.value : null,
+          documentKey,
         });
 
         showToast(t("claim_submitted_success"), "success");
         closeModal("claim-modal");
         claimForm.reset();
+        resetClaimProofFile();
 
         await refreshDashboardData();
       } catch (err) {

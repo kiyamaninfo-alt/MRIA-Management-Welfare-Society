@@ -73,7 +73,7 @@ serve(async (req) => {
     const isStaff = ["admin", "manager", "secretary", "treasurer", "committee_member", "official"].includes(member.role);
 
     if (!isStaff) {
-      // General member can only view slips for their own payments
+      // General member can only view slips for their own payments or proof attachments for their own claims
       const { data: ownPayment } = await supabaseAdmin
         .from("payments")
         .select("id")
@@ -81,8 +81,20 @@ serve(async (req) => {
         .eq("slip_key", slipKey)
         .maybeSingle();
 
-      if (!ownPayment) {
-        return new Response(JSON.stringify({ error: "Access denied to requested slip" }), {
+      let hasAccess = Boolean(ownPayment);
+
+      if (!hasAccess) {
+        const { data: ownClaim } = await supabaseAdmin
+          .from("benefit_claims")
+          .select("id")
+          .eq("member_id", member.id)
+          .eq("document_key", slipKey)
+          .maybeSingle();
+        hasAccess = Boolean(ownClaim);
+      }
+
+      if (!hasAccess) {
+        return new Response(JSON.stringify({ error: "Access denied to requested document" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

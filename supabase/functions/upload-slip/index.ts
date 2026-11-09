@@ -55,7 +55,7 @@ serve(async (req) => {
       });
     }
 
-    const { fileName, fileType, fileSize } = await req.json();
+    const { fileName, fileType, fileSize, folder } = await req.json();
 
     // Validation
     const allowedMime = ["image/jpeg", "image/png", "application/pdf"];
@@ -73,10 +73,11 @@ serve(async (req) => {
       });
     }
 
+    const targetFolder = folder === "claims" ? "claims" : "slips";
     const ext = fileName ? fileName.split(".").pop() : "jpg";
     const yearMonth = new Date().toISOString().slice(0, 7);
     const uniqueId = crypto.randomUUID();
-    const slipKey = `slips/${yearMonth}/${member.id}_${uniqueId}.${ext}`;
+    const slipKey = `${targetFolder}/${yearMonth}/${member.id}_${uniqueId}.${ext}`;
 
     const s3 = new S3Client({
       region: "auto",
@@ -97,7 +98,7 @@ serve(async (req) => {
     const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
 
     return new Response(
-      JSON.stringify({ uploadUrl, slipKey }),
+      JSON.stringify({ uploadUrl, slipKey, key: slipKey }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

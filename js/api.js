@@ -24,11 +24,38 @@ export async function getMemberDues(memberId) {
  * Calculates total pending balance for a member.
  */
 export async function calculateMemberBalance(member) {
-  if (!member) return { totalPending: 0, pendingDues: [], admissionFeeDue: 0 };
+  if (!member) {
+    return {
+      totalPending: 0,
+      priorArrears: 0,
+      advanceBalance: 0,
+      netStanding: 0,
+      pendingDues: [],
+      admissionFeeDue: 0,
+      ytdContributions: 0,
+      ytdPaid: 0,
+      totalPaid: 0,
+      totalDuesPaid: 0,
+      cumulativePaid: 0,
+      lastPaymentDate: null,
+      isArrears: false,
+      isAdvance: false,
+      isSettled: true,
+    };
+  }
 
   const dues = await getMemberDues(member.id);
-  const pendingDues = dues.filter((d) => d.status === "pending");
-  const duesTotal = pendingDues.reduce((sum, d) => sum + Number(d.amount), 0);
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  // 1. Month-End Cutoff Rule:
+  // Arrears strictly prior to current month (< currentMonthStr)
+  const priorPendingDues = dues.filter(
+    (d) => d.status === "pending" && d.billing_month < currentMonthStr
+  );
+  const currentMonthDue = dues.find(
+    (d) => d.status === "pending" && d.billing_month === currentMonthStr
+  );
 
   let admissionFeeDue = 0;
   if (!member.is_legacy_member) {
@@ -47,10 +74,57 @@ export async function calculateMemberBalance(member) {
     }
   }
 
+  // 2. Fetch all verified payments for this member
+  const { data: verifiedPayments } = await supabase
+    .from("payments")
+    .select("amount, payment_type, created_at, verified_at, paid_at")
+    .eq("member_id", member.id)
+    .eq("status", "verified")
+    .order("created_at", { ascending: false });
+
+  const paymentsList = verifiedPayments || [];
+
+  // YTD contributions in the current calendar year
+  const currentYear = now.getFullYear();
+  const ytdContributions = paymentsList
+    .filter((p) => {
+      const d = new Date(p.verified_at || p.created_at || p.paid_at);
+      return d.getFullYear() === currentYear;
+    })
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  // Cumulative dues payments vs total billed dues up to current month
+  const totalDuesPaid = paymentsList
+    .filter((p) => p.payment_type === "monthly_due")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const totalVerifiedPaid = paymentsList.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const duesSetting = await getSystemSetting("monthly_due_amount");
+  const monthlyRate = duesSetting?.amount != null ? Number(duesSetting.amount) : 300.00;
+
+  const totalBilledUpToNow = dues.filter((d) => d.billing_month <= currentMonthStr).length * monthlyRate;
+  const advanceBalance = Math.max(0, totalDuesPaid - totalBilledUpToNow);
+
+  const priorArrears = priorPendingDues.reduce((sum, d) => sum + Number(d.amount), 0) + admissionFeeDue;
+  const netStanding = advanceBalance > 0 ? advanceBalance : -priorArrears;
+
   return {
-    totalPending: duesTotal + admissionFeeDue,
-    pendingDues,
+    totalPending: priorArrears + (currentMonthDue ? Number(currentMonthDue.amount) : 0),
+    priorArrears,
+    advanceBalance,
     admissionFeeDue,
+    ytdContributions,
+    ytdPaid: ytdContributions,
+    totalPaid: totalVerifiedPaid,
+    totalDuesPaid,
+    cumulativePaid: totalDuesPaid,
+    lastPaymentDate: paymentsList.length > 0 ? (paymentsList[0].paid_at || paymentsList[0].verified_at || paymentsList[0].created_at) : null,
+    pendingDues: dues.filter((d) => d.status === "pending"),
+    netStanding,
+    isArrears: netStanding < 0,
+    isAdvance: netStanding > 0,
+    isSettled: netStanding === 0,
   };
 }
 
@@ -217,7 +291,7 @@ export async function getMemberClaims(memberId) {
 /**
  * Submits a welfare benefit claim and triggers async committee email notification.
  */
-export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount, notes }) {
+export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount, notes, documentKey = null }) {
   // 1. Insert claim into DB
   const { data, error } = await supabase
     .from("benefit_claims")
@@ -228,6 +302,7 @@ export async function submitBenefitClaim({ memberId, benefitTypeId, claimAmount,
         claim_amount: Number(claimAmount),
         status: "submitted",
         notes,
+        document_key: documentKey,
       },
     ])
     .select()
@@ -1010,6 +1085,160 @@ export async function publishAnnouncement({
         created_by: createdByMemberId,
       },
     ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Voids a verified payment receipt and records a compensating ledger outflow.
+ */
+export async function voidPaymentReceipt(paymentId, reason, voidedBy) {
+  const { data, error } = await supabase.rpc("void_payment_receipt", {
+    p_payment_id: paymentId,
+    p_reason: reason,
+    p_voided_by: voidedBy,
+  });
+
+  if (error) {
+    console.error("Error voiding payment receipt:", error);
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Dual-mode member deletion or soft archival based on transaction history.
+ */
+export async function deleteOrArchiveMember(memberId, adminId, reason = "Administrative clean up") {
+  const { data, error } = await supabase.rpc("delete_or_archive_member", {
+    p_member_id: memberId,
+    p_admin_id: adminId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    console.error("Error deleting or archiving member:", error);
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Fetches 1-to-1 notifications for a given member.
+ */
+export async function getNotifications(memberId) {
+  if (!memberId) return [];
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("recipient_id", memberId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Notice loading notifications:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Marks a notification as read.
+ */
+export async function markNotificationAsRead(notificationId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("id", notificationId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Sends a 1-to-1 notification to a member (Admin/Staff).
+ */
+export async function sendNotification({ recipientId, titleEn, titleSi, messageEn, messageSi, priority = "normal" }) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .insert([
+      {
+        recipient_id: recipientId,
+        title_en: titleEn,
+        title_si: titleSi,
+        message_en: messageEn,
+        message_si: messageSi,
+        priority,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Submits an in-app inquiry to the administration.
+ */
+export async function submitInquiry({ senderId = null, senderName, senderEmail, senderPhone = null, senderEpf = null, subject, message }) {
+  const { data, error } = await supabase
+    .from("admin_inquiries")
+    .insert([
+      {
+        sender_id: senderId,
+        sender_name: senderName,
+        sender_email: senderEmail,
+        sender_phone: senderPhone,
+        sender_epf: senderEpf,
+        subject,
+        message,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetches all admin inquiries for administrative triage.
+ */
+export async function getAdminInquiries() {
+  const { data, error } = await supabase
+    .from("admin_inquiries")
+    .select("*, members:members!admin_inquiries_sender_id_fkey(full_name, epf_number, email, phone)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Notice loading admin inquiries with join:", error.message);
+    const fallback = await supabase
+      .from("admin_inquiries")
+      .select("*")
+      .order("created_at", { ascending: false });
+    return fallback.data || [];
+  }
+  return data || [];
+}
+
+/**
+ * Resolves an admin inquiry.
+ */
+export async function resolveAdminInquiry(inquiryId, notes, resolvedBy) {
+  const { data, error } = await supabase
+    .from("admin_inquiries")
+    .update({
+      status: "resolved",
+      resolution_notes: notes,
+      resolved_by: resolvedBy,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", inquiryId)
     .select()
     .single();
 

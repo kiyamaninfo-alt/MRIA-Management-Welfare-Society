@@ -64,13 +64,25 @@
           </div>
         </div>
 
-        <!-- Admin Console Link (shown for authorized roles) -->
+        <!-- Admin Portal Link (shown for authorized roles) -->
         <div id="adminPortalLinkContainer" class="hidden">
           <a href="/admin.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-100 text-primary border border-sky-200 text-xs font-bold hover:bg-sky-200 transition-colors shadow-sm">
             <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
             <span data-i18n="admin_console">Admin Console</span>
           </a>
         </div>
+
+        <!-- Install App Button (Item 9) -->
+        <button id="btnInstallApp" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer">
+          <span class="material-symbols-outlined text-[16px]">install_mobile</span>
+          <span data-i18n="install_app">Install App</span>
+        </button>
+
+        <!-- Member Notifications Bell (Item 8) -->
+        <button id="notificationBellBtn" onclick="window.openNotificationsModal()" class="relative p-2 rounded-xl border border-outline-variant hover:border-primary text-on-surface hover:text-primary transition-all shadow-sm bg-white cursor-pointer" title="Member Notifications">
+          <span class="material-symbols-outlined text-[20px] block">notifications</span>
+          <span id="notificationUnreadBadge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.2 text-[10px] font-extrabold bg-rose-600 text-white rounded-full ring-2 ring-white">0</span>
+        </button>
 
         <!-- Language Switcher -->
         <button id="langToggleBtn" class="lang-toggle-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-outline-variant hover:border-primary text-xs font-semibold bg-white transition-all shadow-sm">
@@ -99,6 +111,31 @@
   <!-- MAIN DASHBOARD CONTENT -->
   <main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
+    <!-- LOCKED DASHBOARD PREVIEW BANNER (Item 16: For Unapproved Users) -->
+    <div id="lockedDashboardBanner" class="hidden p-4 sm:p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+      <div class="flex items-start sm:items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+          <span class="material-symbols-outlined text-[24px]">lock</span>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm sm:text-base text-amber-950">
+            Dashboard will become active once Secretary approves your account
+          </h3>
+          <p class="text-xs text-amber-800 mt-0.5">
+            ඔබගේ ලියාපදිංචි ඉල්ලීම සමාලෝචනය වෙමින් පවතී. ලේකම්වරයා විසින් අනුමත කළ පසු ගෙවීම් සහ සුබසාධන පහසුකම් සක්‍රීය වේ.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+        <button type="button" onclick="downloadConstitutionPdf()" class="px-3.5 py-1.5 rounded-xl border border-amber-600 text-amber-900 bg-white font-bold text-xs hover:bg-amber-50 transition-colors shadow-xs cursor-pointer">
+          Constitution (PDF)
+        </button>
+        <button type="button" onclick="openContactModal()" class="px-3.5 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer">
+          Contact Admin
+        </button>
+      </div>
+    </div>
+
     <!-- 1. DISMISSIBLE DASHBOARD NOTIFICATION CENTER (TOP 3 ALERTS) -->
     <section id="dashboardNotificationCenter" class="space-y-3">
       <!-- Alerts dynamically injected here -->
@@ -117,18 +154,18 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         
-        <!-- Card 1: Outstanding Pending Dues (CLICKABLE FOR BREAKDOWN POPUP) -->
+        <!-- Card 1: Outstanding Pending Dues / Advance Balance (Item 11) -->
         <div id="outstandingDuesCard" class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm hover:border-primary hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group">
           <div>
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="outstanding_dues">
+              <span id="outstandingDuesLabel" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="outstanding_dues">
                 Outstanding Dues
               </span>
               <span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">
                 account_balance_wallet
               </span>
             </div>
-            <div id="outstandingDuesDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1">
+            <div id="outstandingDuesDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1 font-mono tabular-nums">
               Rs. 0.00
             </div>
           </div>
@@ -144,23 +181,23 @@
           </div>
         </div>
 
-        <!-- Card 2: Current Month Due -->
+        <!-- Card 2: Cumulative Contributions Paid to Date (Item 10) -->
         <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div>
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="current_month_status">
-                Current Month Due
+              <span id="currentMonthDueLabel" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="cumulative_contributions">
+                Contributions Paid to Date
               </span>
               <span class="material-symbols-outlined text-primary">calendar_month</span>
             </div>
-            <div id="currentMonthAmountDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1">
-              Rs. 300.00
+            <div id="currentMonthAmountDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1 font-mono tabular-nums">
+              Rs. 0.00
             </div>
           </div>
           <div class="pt-3 border-t border-outline-variant flex items-center justify-between text-xs">
             <span id="currentMonthStatusBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700">
               <span class="material-symbols-outlined text-[14px]">verified</span>
-              <span data-i18n="paid">Settled</span>
+              <span data-i18n="status_active">Cumulative</span>
             </span>
             <span id="lastPaymentDateDisplay" class="text-on-surface-variant font-medium">
               Last: -
@@ -297,7 +334,7 @@
               <thead>
                 <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
                   <th class="py-2.5 px-3" data-i18n="billing_month">Billing Month</th>
-                  <th class="py-2.5 px-3" data-i18n="amount">Amount</th>
+                  <th class="py-2.5 px-3 text-right" data-i18n="amount">Amount</th>
                   <th class="py-2.5 px-3" data-i18n="status">Status</th>
                   <th class="py-2.5 px-3 text-right" data-i18n="date">Date</th>
                 </tr>
@@ -338,7 +375,7 @@
             <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
               <th class="py-2.5 px-3" data-i18n="date">Date</th>
               <th class="py-2.5 px-3" data-i18n="payment_type">Type</th>
-              <th class="py-2.5 px-3" data-i18n="amount">Amount</th>
+              <th class="py-2.5 px-3 text-right" data-i18n="amount">Amount</th>
               <th class="py-2.5 px-3" data-i18n="status">Status</th>
               <th class="py-2.5 px-3 text-right" data-i18n="actions">Voucher</th>
             </tr>
@@ -346,6 +383,59 @@
           <tbody id="paymentsTableBody" class="divide-y divide-outline-variant">
             <tr>
               <td colspan="5" class="py-8 text-center text-on-surface-variant">Loading payments...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Container (Item 18) -->
+      <div id="paymentsPaginationContainer" class="mt-4 pt-3 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+        <span id="paymentsCountDisplay">Showing 0 transactions</span>
+        <button type="button" id="btnLoadMorePayments" class="hidden px-3.5 py-1.5 rounded-xl border border-outline-variant hover:border-primary text-primary font-bold text-xs bg-surface hover:bg-white transition-all shadow-xs cursor-pointer">
+          Load More (+25)
+        </button>
+      </div>
+    </section>
+
+    <!-- 5B. WELFARE BENEFIT CLAIM SUBMISSIONS HISTORY (Item 18) -->
+    <section class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface" data-i18n="claim_history">
+            Welfare Benefit Applications
+          </h4>
+          <p class="text-xs text-on-surface-variant mt-0.5">
+            Track submitted emergency welfare grants, committee approvals, and disbursement status.
+          </p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+              <th class="py-2.5 px-3" data-i18n="date">Date</th>
+              <th class="py-2.5 px-3">Benefit Type</th>
+              <th class="py-2.5 px-3 text-right" data-i18n="amount">Requested</th>
+              <th class="py-2.5 px-3" data-i18n="status">Status</th>
+              <th class="py-2.5 px-3 text-right">Proof / Voucher</th>
+            </tr>
+          </thead>
+          <tbody id="claimsTableBody" class="divide-y divide-outline-variant">
+            <tr>
+              <td colspan="5" class="py-8 text-center text-on-surface-variant">Loading welfare applications...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="claimsPaginationContainer" class="mt-4 pt-3 border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+        <span id="claimsCountDisplay">Showing 0 applications</span>
+        <button type="button" id="btnLoadMoreClaims" class="hidden px-3.5 py-1.5 rounded-xl border border-outline-variant hover:border-primary text-primary font-bold text-xs bg-surface hover:bg-white transition-all shadow-xs cursor-pointer">
+          Load More (+25)
+        </button>
+      </div>
+    </section>
             </tr>
           </tbody>
         </table>
@@ -597,6 +687,35 @@
           <textarea id="claimNotesInput" rows="3" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium" placeholder="Provide hospital reference, death registration number, or relevant justification..."></textarea>
         </div>
 
+        <!-- Document Proof Attachment Dropzone (Item 13) -->
+        <div>
+          <label class="block text-xs font-bold text-on-surface mb-1.5">
+            Proof Document / සහතික ලේඛනය (JPEG, PNG, or PDF max 5MB)
+          </label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <button type="button" id="btnOpenClaimCamera" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-sky-50 border border-primary/30 hover:border-primary text-primary rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">photo_camera</span>
+              <span>Open Camera</span>
+            </button>
+            <button type="button" id="btnBrowseClaimFile" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-white border border-outline-variant hover:bg-slate-50 text-on-surface rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">folder_open</span>
+              <span>Browse File</span>
+            </button>
+          </div>
+          <input type="file" id="claimCameraInput" accept="image/*" capture="environment" class="hidden" />
+          <input type="file" id="claimFileInput" accept="image/jpeg,image/png,application/pdf" class="hidden" />
+          <div id="claimDropArea" class="border-2 border-dashed border-sky-200 rounded-xl p-3 text-center bg-sky-50/30 hover:bg-sky-50/70 transition-colors cursor-pointer">
+            <div id="claimPreviewEmpty" class="space-y-1">
+              <span class="material-symbols-outlined text-2xl text-primary">attach_file</span>
+              <p class="text-[11px] text-on-surface-variant" id="claimFileChosenLabel">Attach bill, medical slip, or death certificate (optional)</p>
+            </div>
+            <div id="claimPreviewFilled" class="hidden flex items-center justify-between p-1">
+              <span class="text-xs font-bold text-primary truncate max-w-[200px]" id="claimFileName">-</span>
+              <button type="button" id="btnRemoveClaimFile" class="text-xs text-rose-600 font-bold hover:underline cursor-pointer">Remove</button>
+            </div>
+          </div>
+        </div>
+
         <p class="text-[11px] text-on-surface-variant bg-sky-50 p-2.5 rounded-lg border border-sky-100">
           Upon submission, an automated notification is instantly dispatched to committee officials for review.
         </p>
@@ -610,6 +729,24 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS MODAL (Item 8) -->
+  <div id="notificationsModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[22px]">notifications</span>
+          <h4 class="font-bold text-sm sm:text-base text-on-surface" data-i18n="notifications_title">Notifications &amp; Alerts</h4>
+        </div>
+        <button type="button" onclick="closeModal('notificationsModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="notificationsListContainer" class="flex-grow overflow-y-auto divide-y divide-outline-variant min-h-[150px] max-h-[400px]">
+        <div class="py-8 text-center text-on-surface-variant text-xs">Loading notifications...</div>
+      </div>
     </div>
   </div>
 

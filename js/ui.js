@@ -68,7 +68,7 @@ export function setupModalDismissers() {
 }
 
 /**
- * Interactive Contact Administration Modal targeting krishaja@gmail.com
+ * Interactive In-App Contact Administration Modal submitting to admin_inquiries table
  */
 export function openContactModal(userEmail = "", userName = "") {
   let modal = document.getElementById("contactAdminModal");
@@ -78,39 +78,45 @@ export function openContactModal(userEmail = "", userName = "") {
     modal.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4";
     modal.innerHTML = `
       <div class="bg-surface rounded-2xl max-w-md w-full p-6 shadow-2xl border border-outline-variant relative">
-        <button id="closeContactModalBtn" class="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface">
+        <button id="closeContactModalBtn" type="button" class="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface cursor-pointer">
           <span class="material-symbols-outlined">close</span>
         </button>
         <div class="flex items-center gap-3 mb-4">
           <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            <span class="material-symbols-outlined">mail</span>
+            <span class="material-symbols-outlined">support_agent</span>
           </div>
           <div>
             <h3 class="font-bold text-title text-on-surface" data-i18n="contact_modal_title">Contact Administration</h3>
-            <p class="text-caption text-on-surface-variant">krishaja@gmail.com</p>
+            <p class="text-caption text-on-surface-variant">In-App Internal Inquiry Desk</p>
           </div>
         </div>
         <p class="text-caption text-on-surface-variant mb-4" data-i18n="contact_recipient_info">
-          Inquiries are directed to the Welfare Administration (krishaja@gmail.com).
+          Direct your inquiries or support requests to the MRIA Welfare Executive Committee.
         </p>
         <form id="contactAdminForm" class="space-y-3">
           <div>
             <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="full_name">Your Name</label>
             <input type="text" id="contactSenderName" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
           </div>
-          <div>
-            <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="email_address">Your Email</label>
-            <input type="email" id="contactSenderEmail" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="email_address">Email</label>
+              <input type="email" id="contactSenderEmail" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+            </div>
+            <div>
+              <label class="block text-caption font-medium text-on-surface mb-1">Phone (දුරකථන)</label>
+              <input type="tel" id="contactSenderPhone" placeholder="07XXXXXXXX" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" />
+            </div>
           </div>
           <div>
             <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="contact_subject">Subject</label>
-            <input type="text" id="contactSubject" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
+            <input type="text" id="contactSubject" placeholder="Inquiry topic..." class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
           </div>
           <div>
             <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="contact_message">Message</label>
-            <textarea id="contactMessage" rows="4" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required></textarea>
+            <textarea id="contactMessage" rows="4" placeholder="Type your message here..." class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required></textarea>
           </div>
-          <button type="submit" class="w-full py-2.5 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors flex items-center justify-center gap-2">
+          <button id="submitContactInquiryBtn" type="submit" class="w-full py-2.5 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs">
             <span class="material-symbols-outlined text-[18px]">send</span>
             <span data-i18n="send_inquiry">Send Inquiry</span>
           </button>
@@ -127,33 +133,77 @@ export function openContactModal(userEmail = "", userName = "") {
       e.preventDefault();
       const senderName = document.getElementById("contactSenderName")?.value.trim() || "";
       const senderEmail = document.getElementById("contactSenderEmail")?.value.trim() || "";
+      const senderPhone = document.getElementById("contactSenderPhone")?.value.trim() || null;
       const subjectText = document.getElementById("contactSubject")?.value.trim() || "";
       const messageText = document.getElementById("contactMessage")?.value.trim() || "";
+      const btn = document.getElementById("submitContactInquiryBtn");
 
-      try {
-        await supabase.rpc("log_user_activity", {
-          p_action: "CONTACT_ADMIN_MESSAGE",
-          p_entity_type: "INQUIRY",
-          p_entity_id: senderEmail,
-          p_details: {
-            subject: subjectText,
-            message_length: messageText.length,
-            message_preview: messageText.slice(0, 300),
-            recipient: CONFIG.ADMIN_EMAIL,
-          },
-          p_actor_email: senderEmail,
-          p_actor_name: senderName,
-        });
-      } catch (err) {
-        console.warn("Could not log contact message event:", err);
+      if (!senderName || !senderEmail || !subjectText || !messageText) {
+        showToast("Please fill in all required fields.", "warning");
+        return;
       }
 
-      const subject = encodeURIComponent(subjectText);
-      const message = encodeURIComponent(messageText);
-      const mailtoUrl = `mailto:${CONFIG.ADMIN_EMAIL}?subject=${subject}&body=${message}`;
-      window.location.href = mailtoUrl;
-      showToast(t("inquiry_sent"), "success");
-      closeModal("contactAdminModal");
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Submitting...</span>`;
+        }
+
+        // Fetch current active member or user if available
+        let senderId = null;
+        let senderEpf = null;
+        const cachedStr = localStorage.getItem("mria_cached_member");
+        if (cachedStr) {
+          try {
+            const m = JSON.parse(cachedStr);
+            senderId = m.id;
+            senderEpf = m.epf_number;
+          } catch (_) {}
+        }
+
+        const { error } = await supabase.from("admin_inquiries").insert([
+          {
+            sender_id: senderId,
+            sender_name: senderName,
+            sender_email: senderEmail,
+            sender_phone: senderPhone,
+            sender_epf: senderEpf,
+            subject: subjectText,
+            message: messageText,
+            status: "pending",
+          },
+        ]);
+
+        if (error) throw error;
+
+        // Log user activity
+        try {
+          await supabase.rpc("log_user_activity", {
+            p_action: "CONTACT_ADMIN_INQUIRY",
+            p_entity_type: "INQUIRY",
+            p_entity_id: senderEmail,
+            p_details: {
+              subject: subjectText,
+              message_preview: messageText.slice(0, 300),
+              sender_phone: senderPhone,
+            },
+            p_actor_email: senderEmail,
+            p_actor_name: senderName,
+          });
+        } catch (_) {}
+
+        showToast(t("inquiry_submitted") || "Your inquiry has been submitted directly to administration.", "success");
+        closeModal("contactAdminModal");
+        document.getElementById("contactAdminForm").reset();
+      } catch (err) {
+        console.error("Failed to submit inquiry:", err);
+        showToast(err.message || "Failed to submit inquiry.", "error");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">send</span><span>Send Inquiry</span>`;
+        }
+      }
     });
   }
 
@@ -288,8 +338,20 @@ export function initOfflineDetection() {
   updateStatus();
 }
 
-export function formatCurrency(amount) {
-  return `Rs. ${Number(amount || 0).toLocaleString("en-LK", {
+export function formatCurrency(amount, { showSign = false } = {}) {
+  const num = Number(amount || 0);
+  const formatted = Math.abs(num).toLocaleString("en-LK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  if (showSign) {
+    if (num > 0) return `+Rs. ${formatted}`;
+    if (num < 0) return `-Rs. ${formatted}`;
+    return "Rs. 0.00";
+  }
+
+  return `Rs. ${num.toLocaleString("en-LK", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

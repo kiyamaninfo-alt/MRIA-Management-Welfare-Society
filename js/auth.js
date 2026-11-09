@@ -247,7 +247,7 @@ export async function checkAuthAndWhitelist({ requireApproved = true, allowedRol
   // If approved member visited unauthorized.html, send them to dashboard
   if (isUnauthorizedPage && member.is_approved) {
     window.location.href = "/dashboard.html";
-    return { user, member, isApproved: true };
+    return { user, member, isApproved: Boolean(member?.is_approved) };
   }
 
   // Check role authorization for protected pages (e.g. admin.html)
@@ -259,7 +259,7 @@ export async function checkAuthAndWhitelist({ requireApproved = true, allowedRol
     }
   }
 
-  return { user, member, isApproved: true };
+  return { user, member, isApproved: Boolean(member?.is_approved) };
 }
 
 export const requireAuth = checkAuthAndWhitelist;

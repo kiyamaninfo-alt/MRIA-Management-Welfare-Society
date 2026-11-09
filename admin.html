@@ -178,7 +178,7 @@
                 <th class="py-2.5 px-3">Date</th>
                 <th class="py-2.5 px-3">Member Details</th>
                 <th class="py-2.5 px-3">Category</th>
-                <th class="py-2.5 px-3">Amount</th>
+                <th class="py-2.5 px-3 text-right">Amount</th>
                 <th class="py-2.5 px-3">Slip Proof</th>
                 <th class="py-2.5 px-3 text-right">Actions</th>
               </tr>
@@ -349,9 +349,21 @@
                 Digital Receipt Voucher Preview
               </h4>
             </div>
-            <span id="receiptPreviewStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-              Live Draft Preview
-            </span>
+            <div class="flex items-center gap-2">
+              <button 
+                type="button" 
+                id="btnDownloadCashVoucher" 
+                onclick="window.downloadReceiptFile && window.downloadReceiptFile()"
+                class="hidden px-2.5 py-1 bg-surface hover:bg-slate-100 text-on-surface text-xs font-bold rounded-lg border border-outline-variant inline-flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                title="Download HTML Voucher"
+              >
+                <span class="material-symbols-outlined text-[15px]">download</span>
+                <span>Download</span>
+              </button>
+              <span id="receiptPreviewStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                Live Draft Preview
+              </span>
+            </div>
           </div>
           <div id="cashReceiptPreview" class="min-h-[300px]">
           </div>
@@ -612,67 +624,76 @@
           </div>
         </div>
 
-        <!-- Search & Filter Controls Toolbar -->
-        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+        <!-- Search & Filter Controls Toolbar (Compact Responsive Flexbox) -->
+        <div class="flex flex-wrap items-center gap-2 pt-1">
           <!-- Live Search Bar -->
-          <div class="sm:col-span-4 relative">
-            <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
+          <div class="relative flex-1 min-w-[220px] max-w-sm">
+            <span class="material-symbols-outlined absolute left-2.5 top-2 text-on-surface-variant text-[17px]">search</span>
             <input 
               type="text" 
               id="receiptsSearchInput" 
-              placeholder="Search Name, EPF, Receipt No, Notes..." 
-              class="w-full pl-9 pr-8 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+              placeholder="Search Name, EPF, Receipt No..." 
+              class="w-full pl-8 pr-7 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
             />
             <button 
               type="button" 
               id="receiptsClearSearchBtn" 
               onclick="window.clearReceiptsSearch()" 
-              class="hidden absolute right-2.5 top-2 text-on-surface-variant hover:text-on-surface cursor-pointer"
+              class="hidden absolute right-2 top-1.5 text-on-surface-variant hover:text-on-surface cursor-pointer"
               title="Clear search"
             >
-              <span class="material-symbols-outlined text-[18px]">close</span>
+              <span class="material-symbols-outlined text-[16px]">close</span>
             </button>
           </div>
 
           <!-- Category Filter -->
-          <div class="sm:col-span-3">
-            <select id="receiptsCategoryFilter" onchange="window.filterReceiptsCategory(this.value)" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
-              <option value="all">All Categories (සියලු කාණ්ඩ)</option>
-              <option value="monthly_due">Monthly Due (මාසික දායක)</option>
-              <option value="admission_fee">Admission Fee (ඇතුල්වීම්)</option>
-              <option value="donation">Donation / Aid (ආධාර)</option>
+          <div class="w-auto min-w-[140px]">
+            <select id="receiptsCategoryFilter" onchange="window.filterReceiptsCategory(this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+              <option value="all">All Categories</option>
+              <option value="monthly_due">Monthly Due</option>
+              <option value="admission_fee">Admission Fee</option>
+              <option value="donation">Donation / Aid</option>
             </select>
           </div>
 
           <!-- Method Filter -->
-          <div class="sm:col-span-2">
-            <select id="receiptsMethodFilter" onchange="window.filterReceiptsMethod(this.value)" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
-              <option value="all">All Methods (සියලු ක්‍රම)</option>
-              <option value="cash">Direct Cash (මුදල්)</option>
-              <option value="bank_transfer">Bank Transfer (බැංකු)</option>
-              <option value="qr_payment">LankaQR (QR ගෙවීම්)</option>
-              <option value="slip">Slip Deposit (තැන්පතු)</option>
+          <div class="w-auto min-w-[125px]">
+            <select id="receiptsMethodFilter" onchange="window.filterReceiptsMethod(this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+              <option value="all">All Methods</option>
+              <option value="cash">Direct Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="qr_payment">LankaQR</option>
+              <option value="slip">Slip Deposit</option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="w-auto min-w-[120px]">
+            <select id="receiptsStatusFilter" onchange="window.filterReceiptsStatus && window.filterReceiptsStatus(this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+              <option value="all">All Statuses</option>
+              <option value="verified" selected>Verified Only</option>
+              <option value="voided">Voided Only</option>
             </select>
           </div>
 
           <!-- Sort Selector -->
-          <div class="sm:col-span-3 flex items-center gap-1.5">
-            <select id="receiptsSortSelect" onchange="window.changeReceiptsSort(this.value)" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
-              <option value="date">Sort: Date &amp; Time (දිනය)</option>
-              <option value="name">Sort: Member Name (නම)</option>
-              <option value="receipt_num">Sort: Receipt Number (අංකය)</option>
-              <option value="amount">Sort: Amount (මුදල)</option>
-              <option value="category">Sort: Category (කාණ්ඩය)</option>
-              <option value="method">Sort: Payment Method (ක්‍රමය)</option>
+          <div class="flex items-center gap-1 min-w-[160px]">
+            <select id="receiptsSortSelect" onchange="window.changeReceiptsSort(this.value)" class="px-2 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+              <option value="date">Date &amp; Time</option>
+              <option value="name">Member Name</option>
+              <option value="receipt_num">Receipt No</option>
+              <option value="amount">Amount</option>
+              <option value="category">Category</option>
+              <option value="method">Method</option>
             </select>
             <button 
               type="button" 
               id="receiptsSortDirBtn" 
               onclick="window.toggleReceiptsSortDirection()" 
-              class="p-2 border border-outline-variant rounded-xl bg-surface hover:bg-white text-on-surface transition-colors cursor-pointer shrink-0" 
+              class="p-1.5 border border-outline-variant rounded-lg bg-surface hover:bg-slate-100 text-on-surface transition-colors cursor-pointer shrink-0" 
               title="Toggle Ascending / Descending"
             >
-              <span id="receiptsSortDirIcon" class="material-symbols-outlined text-[18px]">arrow_downward</span>
+              <span id="receiptsSortDirIcon" class="material-symbols-outlined text-[16px]">arrow_downward</span>
             </button>
           </div>
         </div>
@@ -694,8 +715,8 @@
                     <span class="material-symbols-outlined text-[14px] opacity-70" id="sortIcon_name">unfold_more</span>
                   </div>
                 </th>
-                <th class="py-2.5 px-3 cursor-pointer hover:text-primary transition-colors" onclick="window.changeReceiptsSort('amount')">
-                  <div class="flex items-center gap-1">
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:text-primary transition-colors" onclick="window.changeReceiptsSort('amount')">
+                  <div class="flex items-center justify-end gap-1">
                     <span>Amount (LKR)</span>
                     <span class="material-symbols-outlined text-[14px] opacity-70" id="sortIcon_amount">unfold_more</span>
                   </div>
@@ -967,10 +988,11 @@
             <!-- Payment Method & Disbursement Date / Time -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-on-surface mb-1">
-                  Payment Method (ගෙවූ ආකාරය)
-                  <span class="text-rose-500">*</span>
-                </label>
+                <div class="flex items-center justify-between mb-1 min-h-[18px]">
+                  <label class="block text-xs font-bold text-on-surface">
+                    Payment Method (ගෙවූ ආකාරය) <span class="text-rose-500">*</span>
+                  </label>
+                </div>
                 <select id="grantMethodSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors cursor-pointer">
                   <option value="cash" selected>Direct Cash (අතින් දුන් මුදල්)</option>
                   <option value="bank_transfer">Bank Transfer / Direct Deposit (බැංකු තැන්පතු)</option>
@@ -979,11 +1001,11 @@
               </div>
 
               <div>
-                <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center justify-between mb-1 min-h-[18px]">
                   <label class="block text-xs font-bold text-on-surface">
-                    Disbursement Date &amp; Time
+                    Disbursement Date &amp; Time <span class="text-rose-500">*</span>
                   </label>
-                  <span class="text-[10px] font-bold text-primary flex items-center gap-1">
+                  <span class="text-[10px] font-bold text-primary inline-flex items-center gap-0.5">
                     <span class="material-symbols-outlined text-[13px]">schedule</span>
                     <span>SL Time (Asia/Colombo)</span>
                   </span>
@@ -1052,7 +1074,7 @@
                 <th class="py-2.5 px-3">Date</th>
                 <th class="py-2.5 px-3">Applicant (EPF)</th>
                 <th class="py-2.5 px-3">Benefit Type</th>
-                <th class="py-2.5 px-3">Requested</th>
+                <th class="py-2.5 px-3 text-right">Requested</th>
                 <th class="py-2.5 px-3">Status</th>
                 <th class="py-2.5 px-3 text-right">Actions</th>
               </tr>
@@ -1083,7 +1105,7 @@
                 <th class="py-2.5 px-3">EPF No</th>
                 <th class="py-2.5 px-3">Member Name</th>
                 <th class="py-2.5 px-3">Billing Month</th>
-                <th class="py-2.5 px-3">Arrears Amount</th>
+                <th class="py-2.5 px-3 text-right">Arrears Amount</th>
                 <th class="py-2.5 px-3">Due Date</th>
               </tr>
             </thead>
@@ -1218,9 +1240,9 @@
             <label class="block text-xs font-bold text-on-surface mb-1">
               Default Monthly Payment (LKR)
             </label>
-            <div class="relative">
-              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-on-surface-variant">Rs.</span>
-              <input type="number" id="settingMonthlyDueAmount" required min="50" step="50" value="300" placeholder="e.g. 300" class="w-full pl-12 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+            <div class="relative max-w-sm">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-on-surface-variant pointer-events-none">Rs.</span>
+              <input type="number" id="settingMonthlyDueAmount" required min="50" step="50" value="300" placeholder="e.g. 300" class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-bold text-primary focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
             </div>
             <p class="text-[11px] text-on-surface-variant mt-1.5 leading-relaxed">
               Standard default contribution is <strong>Rs. 300/=</strong>. Updating this value adjusts new billing periods and cash desk dues.
@@ -1364,6 +1386,107 @@
           </div>
 
         </div>
+      </div>
+
+      <!-- In-App Member Inquiries Desk -->
+      <div id="adminInquiriesCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-outline-variant">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[24px]">contact_support</span>
+            <div>
+              <h4 class="font-bold text-sm sm:text-base text-on-surface">Member Inquiries &amp; Help Desk</h4>
+              <p class="text-xs text-on-surface-variant">Review and resolve messages sent through the in-app Contact Administration form.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="inquiriesFilterSelect" onchange="window.filterAdminInquiries(this.value)" class="px-2.5 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
+              <option value="all">All Inquiries</option>
+              <option value="pending" selected>Pending Only</option>
+              <option value="resolved">Resolved Only</option>
+            </select>
+            <button type="button" onclick="window.loadAdminInquiries && window.loadAdminInquiries()" class="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface hover:bg-slate-100 text-xs font-bold text-on-surface flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[15px]">refresh</span>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider text-[11px] bg-surface/50">
+                <th class="py-2.5 px-3">Date</th>
+                <th class="py-2.5 px-3">Sender (Member)</th>
+                <th class="py-2.5 px-3">Subject</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminInquiriesBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="5" class="py-8 text-center text-on-surface-variant">Loading member inquiries...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Direct Member Notifications Dispatch Console -->
+      <div id="adminNotificationsCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-outline-variant">
+          <span class="material-symbols-outlined text-primary text-[24px]">notification_add</span>
+          <div>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface">Dispatch Member Notification</h4>
+            <p class="text-xs text-on-surface-variant">Send a targeted in-app notification to an active member.</p>
+          </div>
+        </div>
+
+        <form id="dispatchNotificationForm" class="space-y-3.5 max-w-2xl text-xs">
+          <div>
+            <label class="block font-bold text-on-surface mb-1">Recipient Member <span class="text-rose-500">*</span></label>
+            <select id="notifRecipientSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none cursor-pointer" required>
+              <option value="" disabled selected>-- Select Member --</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-on-surface mb-1">Title (English) <span class="text-rose-500">*</span></label>
+              <input type="text" id="notifTitleEn" placeholder="e.g. Welfare Claim Update" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none" required />
+            </div>
+            <div>
+              <label class="block font-bold text-on-surface mb-1">Title (Sinhala) <span class="text-rose-500">*</span></label>
+              <input type="text" id="notifTitleSi" placeholder="e.g. සුබසාධන ආධාර පණිවිඩය" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-on-surface mb-1">Message (English) <span class="text-rose-500">*</span></label>
+              <textarea id="notifMessageEn" rows="3" placeholder="Message content in English..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none" required></textarea>
+            </div>
+            <div>
+              <label class="block font-bold text-on-surface mb-1">Message (Sinhala) <span class="text-rose-500">*</span></label>
+              <textarea id="notifMessageSi" rows="3" placeholder="Message content in Sinhala..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none" required></textarea>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <div class="flex items-center gap-2">
+              <label class="font-bold text-on-surface">Priority:</label>
+              <label class="inline-flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="notifPriority" value="normal" checked class="text-primary focus:ring-primary" />
+                <span>Normal</span>
+              </label>
+              <label class="inline-flex items-center gap-1 cursor-pointer ml-2">
+                <input type="radio" name="notifPriority" value="urgent" class="text-rose-600 focus:ring-rose-500" />
+                <span class="text-rose-600 font-bold">Urgent (හදිසි)</span>
+              </label>
+            </div>
+            <button type="submit" id="btnSendNotification" class="px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">send</span>
+              <span>Send Notification</span>
+            </button>
+          </div>
+        </form>
       </div>
 
     </div>
@@ -1915,6 +2038,128 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- VOID PAYMENT RECEIPT MODAL (TREASURER) -->
+  <div id="voidReceiptModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-rose-600 text-[24px]">cancel</span>
+          <div>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface">Void Payment Receipt</h4>
+            <p class="text-[11px] text-on-surface-variant">රිසිට්පත අවලංගු කිරීම සහ ගිණුම් ප්‍රතිවර්තනය</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('voidReceiptModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="voidReceiptForm" class="space-y-4 text-xs">
+        <input type="hidden" id="voidPaymentId" />
+
+        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-rose-800">
+            <span class="material-symbols-outlined text-[16px]">warning</span>
+            <span>Immutable Ledger Reversal Action</span>
+          </div>
+          <p class="text-[11px] text-rose-700 leading-relaxed">
+            Voiding will change status to <strong>VOIDED</strong>, generate a compensating outflow entry in Society Treasury, decrement the receiving account balance, un-settle reconciled member dues (returning them to UNPAID), and record an immutable audit log.
+          </p>
+        </div>
+
+        <div class="p-3 bg-surface rounded-xl border border-outline-variant space-y-1">
+          <div class="flex justify-between">
+            <span class="text-on-surface-variant">Receipt No:</span>
+            <span id="voidReceiptNumber" class="font-mono font-bold text-on-surface">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-on-surface-variant">Member:</span>
+            <span id="voidReceiptMember" class="font-semibold text-on-surface">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-on-surface-variant">Amount:</span>
+            <span id="voidReceiptAmount" class="font-mono font-bold text-rose-600">-</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">
+            Reason for Cancellation / අහෝසි කිරීමට හේතුව <span class="text-rose-600">*</span>
+          </label>
+          <textarea id="voidReceiptReason" required minlength="5" rows="3" placeholder="Provide an official justification (e.g., duplicate entry, wrong member selected, wrong deposit slip attached)..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-colors"></textarea>
+          <span class="text-[10px] text-on-surface-variant">Mandatory justification logged in statutory audit trails.</span>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('voidReceiptModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" id="btnExecuteVoidReceipt" class="mutation-btn px-5 py-2 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">delete_forever</span>
+            <span>Confirm &amp; Void Receipt</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- RESOLVE INQUIRY MODAL (ADMIN) -->
+  <div id="inquiryResolveModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant mb-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[24px]">support_agent</span>
+          <div>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface">Member Inquiry Details</h4>
+            <p class="text-[11px] text-on-surface-variant">සාමාජික විමසීම් තොරතුරු සහ විසඳුම් සටහන</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('inquiryResolveModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <input type="hidden" id="resolveInquiryId" />
+
+        <div class="p-3 bg-surface rounded-xl border border-outline-variant space-y-1.5">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-on-surface" id="inquirySenderName">-</span>
+            <span class="text-[11px] text-on-surface-variant" id="inquiryDate">-</span>
+          </div>
+          <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-on-surface-variant">
+            <span>EPF: <strong id="inquirySenderEpf">-</strong></span>
+            <span>Email: <strong id="inquirySenderEmail">-</strong></span>
+            <span>Phone: <a id="inquirySenderPhoneLink" href="#" class="text-primary hover:underline font-bold">-</a></span>
+          </div>
+          <div class="pt-2 border-t border-outline-variant/60">
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Subject</span>
+            <div class="font-bold text-on-surface text-sm" id="inquirySubject">-</div>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Message</span>
+            <div class="p-2.5 rounded-lg bg-white border border-outline-variant text-on-surface whitespace-pre-wrap leading-relaxed" id="inquiryMessageBody">-</div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1">Resolution Notes / Action Taken</label>
+          <textarea id="inquiryResolutionNotes" rows="3" placeholder="Enter notes on how this inquiry was addressed or resolved..." class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('inquiryResolveModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">
+            Close
+          </button>
+          <button type="button" id="btnExecuteResolveInquiry" class="mutation-btn px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            <span>Mark as Resolved</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

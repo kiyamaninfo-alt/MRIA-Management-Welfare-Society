@@ -263,16 +263,66 @@ export function downloadGrantVoucherFile() {
   URL.revokeObjectURL(url);
 }
 
+export function printIsolatedElement(elementId, documentTitle = "Voucher") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${documentTitle}</title>
+        <link rel="stylesheet" href="/assets/styles.css">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap">
+        <style>
+          @page { size: auto; margin: 10mm; }
+          body { background: white; margin: 0; padding: 10px; font-family: 'Inter', 'Noto Sans Sinhala', sans-serif; }
+          .print\\:hidden { display: none !important; }
+        </style>
+      </head>
+      <body>
+        ${el.outerHTML}
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  iframe.onload = () => {
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1000);
+    }, 100);
+  };
+}
+
 if (typeof window !== "undefined") {
   window.shareReceipt = shareReceipt;
   window.downloadReceiptFile = downloadReceiptFile;
   window.shareGrantVoucher = shareGrantVoucher;
   window.downloadGrantVoucherFile = downloadGrantVoucherFile;
+  window.printIsolatedElement = printIsolatedElement;
   window.printReceipt = function () {
-    window.print();
+    printIsolatedElement("printableReceipt", "MRIA_Payment_Receipt");
   };
   window.printGrantVoucher = function () {
-    window.print();
+    printIsolatedElement("printableGrantVoucher", "MRIA_Benefit_Grant_Voucher");
   };
   window.shareCurrentReceipt = function () {
     if (window.__lastReceiptData) {
@@ -504,10 +554,13 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
   });
   const payerName = memberName || (isSi ? "සාමාජිකයා තෝරන්න" : "Select a Member");
 
+  const isVoided = paymentObj.status === "voided";
   const title = isSi ? "MRIA කළමනාකාර සුබසාධක සංගමය" : "MRIA Management Welfare Association";
-  const subtitle = isActuallyDraft
-    ? (isSi ? "සජීවී පෙරදසුන (තවම සටහන් කර නැත)" : "Live Draft Preview (Not yet submitted)")
-    : (isSi ? "නිල ඩිජිටල් රිසිට්පත" : "Official Digital Voucher & Receipt");
+  const subtitle = isVoided
+    ? (isSi ? "අවලංගු කළ රිසිට්පත (VOIDED)" : "Official Voucher - VOIDED")
+    : (isActuallyDraft
+      ? (isSi ? "සජීවී පෙරදසුන (තවම සටහන් කර නැත)" : "Live Draft Preview (Not yet submitted)")
+      : (isSi ? "නිල ඩිජිටල් රිසිට්පත" : "Official Digital Voucher & Receipt"));
   const recLabel = isSi ? "රිසිට්පත් අංකය:" : "Receipt No:";
   const dateLabel = isSi ? "දිනය හා වේලාව:" : "Date & Time:";
   const payerLabel = isSi ? "මුදල් ගෙවූ සාමාජිකයා:" : "Received From:";
@@ -525,9 +578,11 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
   const categoryDisplay = isSi ? (categoryNamesSi[paymentTypeKey] || paymentTypeKey) : (categoryNamesEn[paymentTypeKey] || paymentTypeKey);
   const methodDisplay = isSi ? (methodNamesSi[paymentMethodKey] || paymentMethodKey) : (methodNamesEn[paymentMethodKey] || paymentMethodKey);
 
-  const statusBadgeClass = isActuallyDraft
-    ? "bg-amber-50 text-amber-800 border-amber-200"
-    : "bg-emerald-50 text-emerald-700 border-emerald-200";
+  const statusBadgeClass = isVoided
+    ? "bg-rose-50 text-rose-800 border-rose-300 font-extrabold"
+    : (isActuallyDraft
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-emerald-50 text-emerald-700 border-emerald-200");
 
   return `
     <div id="printableReceipt" class="p-6 bg-white border border-slate-200 rounded-2xl max-w-md mx-auto font-sans text-slate-800 shadow-sm print:border-none print:shadow-none ${isSi ? "lang-si" : ""}">
@@ -538,6 +593,15 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
           ${subtitle}
         </span>
       </div>
+
+      ${isVoided ? `
+        <div class="my-3 p-3 bg-rose-50 border-2 border-dashed border-rose-400 rounded-xl text-center">
+          <div class="text-xs font-black tracking-widest text-rose-700 uppercase">
+            ⚠️ ${isSi ? "මෙම රිසිට්පත අවලංගු කර ඇත (VOIDED)" : "THIS RECEIPT HAS BEEN VOIDED"}
+          </div>
+          ${paymentObj.rejection_reason ? `<div class="text-[11px] text-rose-800 mt-1">Reason: ${paymentObj.rejection_reason}</div>` : ""}
+        </div>
+      ` : ""}
 
       <!-- Receipt Meta -->
       <div class="py-4 space-y-2 text-xs sm:text-sm border-b border-slate-100">

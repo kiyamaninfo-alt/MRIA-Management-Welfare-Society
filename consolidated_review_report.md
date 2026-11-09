@@ -1,9 +1,9 @@
-# Consolidated Review Report: MRIA Management Welfare Association PWA
+# Consolidated Review Report: Targeted Design Enhancement & Bug Remediation
 
-**Target Document:** [`docs/designs/mria_management_welfare_association_pwa.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/mria_management_welfare_association_pwa.md)  
-**Total Lines Audited:** 582  
-**Semantic Boundary:** Feature Range: `1..464` | Detailed Range: `465..582`  
-**Review Pipeline:** Uninterrupted Full Flow across all EGM Goldfish lenses:
+**Target Document:** [`docs/designs/targeted_design_enhancement_and_bug_remediation.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/targeted_design_enhancement_and_bug_remediation.md)  
+**Total Lines Audited:** 940  
+**Semantic Boundary:** Feature Specifications: `Lines 1..777` | Detailed Implementation Plan: `Lines 778..940`  
+**Review Pipeline:** Uninterrupted Full Flow across all EGM Goldfish Review Lenses:
 * Stage 5: Initial Zoom-Out (`egm-zoom-out`)
 * Stage 6: Comprehension Test (`egm-comprehension`)
 * Stage 7: Critic Review (`egm-design`, `egm-structural`, `egm-style`)
@@ -14,123 +14,109 @@
 
 ## 1. Executive Summary & Verdict
 
-The architectural specification provides a strong, user-centric foundation tailored to the local operational needs of the MRIA Welfare Association. However, the comprehensive review across all seven auditing perspectives identified **8 Blocker severity issues**, **17 Major severity issues**, and **14 Nit severity issues** that would cause runtime failures, security bypasses, or implementation deadlocks if execution began immediately.
+### Final Review Verdict: **APPROVED WITH MANDATORY ARCHITECTURAL STREAMLINING**
 
-**Key Structural Themes:**
-1. **Database & Authorization Defects:** Recursive RLS evaluation, client-side whitelist bypasses, and an unmapped payment reconciliation trigger.
-2. **Architectural Over-Engineering:** Secondary cloud provider (Cloudflare R2) and serverless function layers where native Supabase features (`storage.objects` and `pg_cron`) eliminate 50% of external moving parts.
-3. **Browser ES6 & Asset Omissions:** Unresolvable bare specifiers (`@supabase/supabase-js`) in pure Vanilla JS and missing static assets causing Service Worker installation failure.
-4. **Timezone & Defaulter Mechanics:** 5.5-hour UTC vs. Sri Lanka (UTC+05:30) date skew, and treating computed read-views as active state mutations.
-5. **Template & Risk Completeness:** Missing mandatory "Risks & Mitigations" and "Rollout & Rollback" operational specifications.
+The technical specification comprehensively addresses the 18 user-requested enhancements and defect remediations across all 5 functional pillars of the MRIA Management Welfare Association PWA. However, through the multi-lens Goldfish review pipeline, **6 Blocker severity issues**, **9 Major severity issues**, and **6 Nit severity issues** were identified. 
+
+Crucially, the intermediate zoom-out and implementation audits prevented two major architectural anti-patterns:
+1. **Enum Pollution:** Rather than mutating the `app_role` PostgreSQL enum to add `'archived'` (which destroys staff role history and breaks frontend routing), the architecture adopts an explicit `is_archived BOOLEAN` flag on `public.members`.
+2. **Duplicate Notification Subsystems:** Rather than creating a multi-table messaging system with broken 1-to-many read states for broadcasts, `public.notifications` is strictly scoped to 1-to-1 targeted alerts (`recipient_id UUID NOT NULL`), while public circulars remain managed by the existing `announcements` engine.
+
+All findings have been synthesized, deduplicated, and mapped to concrete, actionable code and schema fixes below.
 
 ---
 
 ## 2. Prioritized Consolidated Action Items
 
-### 🔴 Blockers (Must Resolve Before Implementation)
+### 🔴 Blockers (Must Resolve in Design Before Implementation)
 
 | ID | Issue Description | Root Cause / Risk | Recommended Remediation |
 | :--- | :--- | :--- | :--- |
-| **BLK-01** | **RLS Policy Infinite Recursion** | Subquery on `public.members` inside policies protecting `public.members` triggers PostgreSQL `54001: stack depth limit exceeded`. | Introduce a `SECURITY DEFINER` helper function (`public.is_admin()`, `public.has_role()`) to evaluate roles without re-querying the protected table. |
-| **BLK-02** | **Missing Payment Reconciliation Logic** | Sequence Diagram B relies on a trigger to mark dues as paid, but the trigger and allocation rules (FIFO, partial payments, overpayments) are missing from the schema and code specs. | Specify the exact SQL stored procedure/trigger (`reconcile_payment`) and define FIFO allocation rules for overdue months. |
-| **BLK-03** | **Client-Side Whitelist Security Bypass** | Unregistered users are only redirected in browser JS; public tables grant `SELECT` to `authenticated`, allowing unapproved Google users to query data via API. | Update all RLS policies granting `authenticated` to strictly check `EXISTS (SELECT 1 FROM public.members WHERE user_id = auth.uid() AND is_approved = true)`. |
-| **BLK-04** | **Bare Module Specifier `@supabase/supabase-js`** | Vanilla ES6 modules in browser without a bundler cannot resolve `@supabase/supabase-js`, throwing fatal runtime errors. | Provide an `<script type="importmap">` in HTML views mapping `@supabase/supabase-js` to an ESM CDN (`https://esm.sh/@supabase/supabase-js@2.46.1`). |
-| **BLK-05** | **Missing PWA Shell Assets Breaking Service Worker** | `manifest.json` and `sw.js` reference icons and Bank QR images, but these files are omitted from target files; `cache.addAll()` fails with 404, breaking PWA installation. | Add `./assets/icon-192.png`, `./assets/icon-512.png`, and `./assets/default-bank-qr.png` to the Target Files list. |
-| **BLK-06** | **Schema Foreign Key Contradiction in Verification Plan** | Verification Plan 1 asserts `member_id = auth.uid()`, but `member_dues.member_id` is an internal UUID referencing `public.members.id`, not `auth.users.id`. | Correct Line 561 to assert `member_id = (SELECT id FROM public.members WHERE user_id = auth.uid())`. |
-| **BLK-07** | **Multi-Cloud Over-Engineering (Cloudflare R2)** | Introducing R2 requires S3 SDKs, external keys, and two custom Edge Functions; native Supabase Storage provides private buckets and 15-minute signed URLs in zero extra code. | Standardize on native Supabase Storage (`supabase.storage.from('slips').createSignedUrl(...)`), eliminating external cloud dependencies and Deno functions. |
-| **BLK-08** | **Inconsistent Defaulter Roster RBAC Permissions** | Goals and CUJ 5 omit `treasurer` from viewing defaulters, while RLS matrix and security NFR include `treasurer`. | Harmonize all sections to uniformly authorize `admin, manager, official, and treasurer`. |
+| **BLK-01** | **Database Runtime Exception on Archival (`app_role` Enum Violation)** | `delete_or_archive_member` executes `role = 'archived'`. Because `'archived'` is not in the `app_role` enum, PostgreSQL throws error `22P02: invalid input value for enum app_role`. Mutating the enum destroys statutory officer history. | Retain `role` intact. Add `is_archived BOOLEAN NOT NULL DEFAULT false` to `public.members`. Procedure sets `is_approved = false, is_archived = true, updated_at = NOW()`. |
+| **BLK-02** | **Receipt Voiding Missing `status = 'verified'` Guard & Source Account Lookup** | `void_payment_receipt` can be invoked on unverified or rejected payments, creating erroneous compensating outflows. It also uses a hardcoded `CASE` statement rather than checking the original transaction account. | Add guard: `IF v_payment.status != 'verified' THEN RAISE EXCEPTION 'Only verified receipts can be voided'; END IF;`. Query original `destination_account_id` from `treasury_transactions WHERE payment_id = p_payment_id`. |
+| **BLK-03** | **Foreign Key Constraint Crash on Staff Deletion (`delete_or_archive_member`)** | The procedure only counts records where `member_id = p_member_id`. If a staff member recorded cash, verified slips, or approved claims, deleting them throws PostgreSQL foreign key error `23503 (ON DELETE RESTRICT)`. | Expand check to include staff audit references (`payments.verified_by`, `treasury_transactions.recorded_by`, `benefit_claims.disbursed_by`). If references exist, enforce soft archival. |
+| **BLK-04** | **Missing Auth Flow Target Files Causing Redirect Loop on Locked Preview** | `js/auth.js` bounces unapproved users to `/unauthorized.html` immediately. `page-unauthorized.js` does not redirect applicants. Neither file is in Target Files. | Add `js/auth.js` and `js/page-unauthorized.js` to Target Files. Support `requireApproved: false` for dashboard preview, and redirect applicants to `dashboard.html` upon form submission. |
+| **BLK-05** | **Cloudflare R2 Edge Function Disconnect & Claim Document Privacy Leak** | `upload-slip/index.ts` hardcodes `slips/...` and is omitted from Target Files. `get-slip-url/index.ts` allows any authenticated user to download confidential medical/bereavement proof documents. | Add `upload-slip/index.ts` to Target Files to support `folder: "slips" \| "claims"`. Update `get-slip-url/index.ts` to enforce tenant ownership: non-staff can only download their own claims documents. |
+| **BLK-06** | **Offline PWA Violation & Race Condition in Print Engine** | `printReceipt()` creates an iframe injecting external Tailwind CDN script via `setTimeout(..., 500)`. Fails completely when offline and races on slow devices. | Inject local cached `/assets/styles.css` and Noto Sans Sinhala font into the iframe, and trigger printing via `iframe.onload`. Unify under a single reusable `printIsolatedElement(elementId, title)` helper. |
 
 ---
 
-### 🟡 Majors (High Priority Architecture & Quality Fixes)
+### 🟡 Majors (High Priority Architecture & Implementation Fixes)
 
 | ID | Issue Description | Root Cause / Risk | Recommended Remediation |
 | :--- | :--- | :--- | :--- |
-| **MAJ-01** | **Dual Role Architecture Discrepancy** | Schema has both `members.role` column and `public.user_roles` table, creating conflicting sources of truth. | Deprecate `user_roles` if single-role tenancy is intended, or state that `user_roles` is reserved for future expansion. |
-| **MAJ-02** | **Time-Zone Limbo (UTC vs. Asia/Colombo UTC+05:30)** | Running scheduled cron at 00:00:00 UTC triggers at 05:30 AM Sri Lanka time, creating a 5.5-hour date skew on month-end cutoffs. | Anchor all calendar logic to `TIMEZONE('Asia/Colombo', now())` and schedule cron at `30 18 * * *` UTC (midnight local time). |
-| **MAJ-03** | **Hardcoded Personal Email in DDL Triggers** | `krishaja@gmail.com` and `0759555924` are hardcoded inside database migration triggers and Edge Functions. | Move administrator bootstrap seeding to `supabase/seed.sql` or environment variables; remove hardcoded PII from DDL. |
-| **MAJ-04** | **Missing Defaulter State Machine / View** | The spec describes defaulters as an altered state, but neither `members` nor `member_dues` has a defaulter column. | Replace state transition concept with an explicit PostgreSQL computed view (`CREATE VIEW v_defaulters`). |
-| **MAJ-05** | **Cron Architecture Contradiction** | Section 1 specifies in-database `pg_cron`, while Section 3 introduces an Edge Function `monthly-dues-cron`. | Standardize on native database `pg_cron` scheduling inside migration scripts. |
-| **MAJ-06** | **Contradictory Offline Balance Caching** | Goals state balances are viewable offline, but NFR specifies `Network-Only` caching. | Specify `Network-First` with fallback to cached balances and a visible "Offline Data as of [Date]" indicator. |
-| **MAJ-07** | **Omission of `supabase/config.toml` & Deno Config** | Missing `supabase/config.toml` breaks `supabase db reset`, and missing `deno.json` prevents dependency resolution. | Catalog `./supabase/config.toml` and `./supabase/functions/deno.json` in Target Files. |
-| **MAJ-08** | **Missing CORS Preflight Handling** | Cross-origin fetch requests from PWA will fail without explicit `OPTIONS` handling in Edge Functions. | Add `./supabase/functions/_shared/cors.ts` to Target Files. |
-| **MAJ-09** | **Undefined Tailwind CSS Pipeline & Delivery Model** | Plan refers to "compiled Tailwind CSS" but omits stylesheet paths, build tooling, or CDN delivery details. | Catalog `./css/style.css` and define the standalone Tailwind build step. |
-| **MAJ-10** | **Client-Side Environment Variable Distribution** | Browser ES6 cannot parse `.env` at runtime; mechanism for populating `js/config.js` is undocumented. | Document that `js/config.js` contains client-side public constants. |
-| **MAJ-11** | **Absence of Local Development Server Instructions** | Browsers strictly refuse to register Service Workers over `file://`. | Add local web server instructions (`python3 -m http.server 8080`) to setup documentation. |
-| **MAJ-12** | **Unresolved Bereavement Aid Workflow & Eligibility Gating** | Open Question 2 remains unanswered; no validation prevents members in default from claiming aid. | Formally define the approval lifecycle and gate claim submissions to members in good financial standing. |
-| **MAJ-13** | **Undefined Member Onboarding Workflow in `admin.html`** | Whitelist requires pre-existing `members` row, but `admin.html` omits a member creation/approval view. | Add a member registration and whitelist management table to `admin.html`. |
-| **MAJ-14** | **Undefined Concept of "Legacy Member"** | `is_legacy_member` is used in schema, but never defined in problem statement or overview. | Define legacy member criteria and admission fee exemption rules in Overview. |
-| **MAJ-15** | **Missing Required Section: "Risks & Mitigations"** | Document lacks failure mode analysis for Edge Function timeouts, upload drops, and network flutter. | Add a dedicated `## Risks & Mitigations` section mapping failure modes to defensive strategies. |
-| **MAJ-16** | **Missing Template Requirement: "Rollout & Rollback"** | Non-Functional Requirements omits migration deployment ordering, backward compatibility, and rollback commands. | Add `### 4. Rollout & Rollback` with sequential migration steps and rollback procedures. |
-| **MAJ-17** | **Structural Asymmetry between Schema and RLS Matrix** | Schema defines `public.user_roles` and `public.payment_dues_reconciliation`, but RLS policy matrix omits them. | Explicitly define RLS policies for all declared tables or eliminate unneeded entities. |
+| **MAJ-01** | **Arrears Calculation Contradicts Month-End (31st) Cutoff Rule** | `calculateNetDuesStanding` evaluates `d.billing_month <= today`, falsely flagging the active current month as overdue midway through the month. | Filter arrears strictly for prior months (`billing_month < date_trunc('month', now())`). Current month dues only become overdue arrears after the month-end cutoff. |
+| **MAJ-02** | **Ambiguous Shared Read-State on Broadcast Notifications** | `public.notifications` contains a single `is_read BOOLEAN` column. Marking a broadcast (`recipient_id IS NULL`) as read marks it read for all association members. | Scope `public.notifications` strictly to 1-to-1 targeted alerts (`recipient_id UUID NOT NULL`). Public association circulars remain handled by `announcements` with local storage dismissal. |
+| **MAJ-03** | **Missing RLS `FOR UPDATE` Policies for Notifications and Inquiries** | `public.notifications` and `public.admin_inquiries` lack `FOR UPDATE` policies, causing `markNotificationAsRead` and `resolveAdminInquiry` to fail with error `42501 (insufficient_privilege)`. | Add `FOR UPDATE` policies in migration: members can update their own notifications; staff can update inquiry resolution status. |
+| **MAJ-04** | **Insecure Public `INSERT` Policy on `admin_inquiries`** | `CREATE POLICY ... FOR INSERT WITH CHECK (true)` allows anonymous callers to flood the database using the anon key. | Restrict insertion to authenticated users: `FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL)`. |
+| **MAJ-05** | **Omission of `submitBenefitClaim` Update in `js/api.js`** | `submitBenefitClaim` in `api.js` is not updated to accept `documentKey`, causing uploaded R2 proof document keys to be dropped during claim submission. | Update `submitBenefitClaim({ memberId, benefitTypeId, claimAmount, notes, documentKey })` to insert `document_key: documentKey`. |
+| **MAJ-06** | **Welfare Grant Voucher Excluded from Print Isolation** | `window.printGrantVoucher()` in `js/receipt.js` still executes `window.print()`, suffering from full-page chrome bleed. | Wire both `window.printReceipt()` and `window.printGrantVoucher()` through the shared `printIsolatedElement()` routine. |
+| **MAJ-07** | **Unspecified "View Proof Document" Button in Admin UI Markup** | The verification plan tests viewing claim attachments, but the markup and wiring for the button in Claims Queue and Payout Desk are missing from the spec. | Add explicit button markup and wiring in `admin.html` and `js/page-admin.js` calling `getSignedSlipUrl(claim.document_key)`. |
+| **MAJ-08** | **Announcement Circulars Leaked in Locked Preview** | Unapproved OAuth users can view internal society announcements before membership vetting. | In locked preview mode on `dashboard.html`, hide `#dashboardNotificationCenter` and show a placeholder banner. |
+| **MAJ-09** | **Currency Prefix Duplication in UI Views** | Concatenating `-Rs. ${formatCurrency(amount)}` creates redundant prefixes (e.g. `-Rs. Rs. 500.00`). | Add `{ showSign: true }` parameter to `formatCurrency()` in `js/ui.js` and eliminate manual `Rs. ` string concatenation. |
 
 ---
 
-### 🟢 Nits (Code Quality, Style & Minor Improvements)
+### 🟢 Nits (Code Quality, Formatting & Naming Consistency)
 
 | ID | Issue Description | Recommended Remediation |
 | :--- | :--- | :--- |
-| **NIT-01** | Pseudo-academic jargon in design tokens (fractional pixels `~9.88px`, "Mathematical Scale"). | Simplify to clean engineering tokens (`10px`, `16px`, `26px`, `42px`, `68px`). |
-| **NIT-02** | Poetic networking metaphors ("when network handshakes flutter") and loaded buzzwords. | Use objective terminology ("intermittent network connections", "standard HTML5/ES6 architecture"). |
-| **NIT-03** | Missing DOM element selector conventions. | Define standard IDs (`#slip-file-input`, `#cash-collection-form`, `#i18n-toggle`) for UI wiring. |
-| **NIT-04** | Inconsistent status types (`TEXT CHECK` vs `ENUM`) and missing rejection metadata. | Create `due_status` ENUM and add `rejection_reason TEXT` to `payments`. |
-| **NIT-05** | Missing automated test files. | Add `./supabase/tests/database.test.sql` (pgTAP) to the Target Files manifest. |
-| **NIT-06** | Missing local Edge Function secrets template. | Add `./supabase/.env.local.example`. |
-| **NIT-07** | Undefined association roles (`manager` vs `official`). | Document real-world operational boundaries for each role. |
-| **NIT-08** | Undefined acronyms ("EGM", "Stitch MCP"). | Provide inline definition or documentation links. |
-| **NIT-09** | Missing blank lines before fenced code blocks (MD022 / MD031). | Add standard blank line separation between headers and code blocks. |
-| **NIT-10** | Multiple consecutive blank lines (MD012). | Consolidate consecutive blank lines before major headers. |
-| **NIT-11** | Heading indexing divergence in Alternatives (`### Alternative 1` vs `### Alternative A`). | Align with alphabetic ordering convention (`Alternative A`). |
-| **NIT-12** | Typographical punctuation asymmetry in bold tags (`**Given**:` vs `**Given:**`). | Normalize bold punctuation tags uniformly across document. |
-| **NIT-13** | Backtick nesting inside strong emphasis tags (`* **`code`:**`). | Disentangle nested backtick tags (`* \`code\` (description):`). |
-| **NIT-14** | Plaintext inline code for external URL & workspace file references. | Convert to functional Markdown links (`[WhatsApp Link](https://wa.me/...)`). |
+| **NIT-01** | Null actor attributes in `log_user_activity` within stored procedures. | Query actor name, email, and EPF from `public.members` prior to calling `log_user_activity`. |
+| **NIT-02** | Missing `sender_phone` column in `public.admin_inquiries`. | Add `sender_phone VARCHAR(20)` to schema and contact modal form for SMS/voice callback. |
+| **NIT-03** | Missing `sender_id` parameter in `submitInquiry` API signature. | Pass `senderId` to `submitInquiry` and populate `sender_id` in database row. |
+| **NIT-04** | Pagination limits do not reset when switching tabs or filters. | Encapsulate pagination counters (`paymentsRenderLimit`, `claimsRenderLimit`) and reset to 5 on filter changes. |
+| **NIT-05** | Unused `payments` parameter in `calculateNetDuesStanding`. | Remove unused parameter or consolidate dues calculation inside `calculateMemberBalance` in `js/api.js`. |
+| **NIT-06** | Storage helper naming reflects only bank slips (`uploadBankSlip`). | Generalize method name to `uploadStorageFile(file, folder = 'slips')` in `js/storage.js`. |
 
 ---
 
-## 3. Traceability Matrix
+## 3. Comprehensive Traceability Matrix
 
-| Consolidated ID | Primary Auditing Lens | Original Stage Report | Impact Area |
-| :--- | :--- | :--- | :--- |
-| **BLK-01** | `egm-design`, `egm-implementation-readiness` | `critic_report.md` §1.1, `implementation_readiness_report.md` §2.2 | PostgreSQL RLS / Authorization |
-| **BLK-02** | `egm-design`, `egm-comprehension`, `egm-implementation-readiness` | `critic_report.md` §1.2, `comprehension_report.md` §2, `implementation_readiness_report.md` §1.1 | Financial Ledger & Reconciliations |
-| **BLK-03** | `egm-design` | `critic_report.md` §1.3 | Security & Access Whitelist |
-| **BLK-04** | `egm-implementation-readiness`, `egm-codebase-details` | `implementation_readiness_report.md` §1.2, `codebase_details` §2 | Client PWA Architecture |
-| **BLK-05** | `egm-implementation-readiness`, `egm-codebase-details` | `implementation_readiness_report.md` §1.4, `codebase_details` §3 | Service Worker & Offline Caching |
-| **BLK-06** | `egm-codebase-details`, `egm-comprehension` | `codebase_details` §1, `comprehension_report.md` §9 | Verification & Test Automation |
-| **BLK-07** | `egm-zoom-out` | `zoom_out_report.md` §1, `intermediate_zoom_out_report.md` §1.1 | Cloud Architecture & Storage |
-| **BLK-08** | `egm-style` | `critic_report.md` §1.4 | RBAC Consistency |
-| **MAJ-01** | `egm-zoom-out`, `egm-comprehension`, `egm-style` | `zoom_out_report.md` §2, `comprehension_report.md` §3, `critic_report.md` §1.3 | Relational Schema Model |
-| **MAJ-02** | `egm-design` | `critic_report.md` §2.3 | Scheduling & Calendar Invariants |
-| **MAJ-03** | `egm-zoom-out`, `egm-design` | `zoom_out_report.md` §5, `critic_report.md` §2.2 | Security & DDL Decoupling |
-| **MAJ-04** | `egm-zoom-out`, `egm-design`, `egm-comprehension` | `zoom_out_report.md` §8, `critic_report.md` §2.4, `comprehension_report.md` §4 | Database State Machine vs Views |
-| **MAJ-05** | `egm-zoom-out`, `egm-implementation-readiness` | `zoom_out_report.md` §4, `implementation_readiness_report.md` §1.3 | Database Cron Infrastructure |
-| **MAJ-06** | `egm-design` | `critic_report.md` §2.5 | PWA Caching Strategy |
-| **MAJ-07** | `egm-codebase-details` | `implementation_readiness_report.md` §2.4, §2.5 | Tooling & Local Development |
-| **MAJ-08** | `egm-codebase-details` | `implementation_readiness_report.md` §2.6 | Cross-Origin Networking |
-| **MAJ-09** | `egm-codebase-details` | `implementation_readiness_report.md` §2.7 | CSS Distribution |
-| **MAJ-10** | `egm-codebase-details` | `implementation_readiness_report.md` §2.8 | Client Configuration |
-| **MAJ-11** | `egm-codebase-details` | `implementation_readiness_report.md` §2.9 | Local Testing Environment |
-| **MAJ-12** | `egm-zoom-out`, `egm-design` | `zoom_out_report.md` §6, `critic_report.md` §2.6 | Welfare Benefits Subsystem |
-| **MAJ-13** | `egm-comprehension` | `comprehension_report.md` §1 | Member Onboarding UX |
-| **MAJ-14** | `egm-comprehension` | `comprehension_report.md` §5 | Business Domain Terminology |
-| **MAJ-15** | `egm-structural` | `critic_report.md` §4.1 | Risk Engineering & Boundaries |
-| **MAJ-16** | `egm-structural` | `critic_report.md` §4.2 | Operations & Deployability |
-| **MAJ-17** | `egm-structural` | `critic_report.md` §4.3 | Security & Policy Completeness |
-| **NIT-01..14** | `egm-style`, `egm-structural`, `egm-implementation-readiness` | `critic_report.md` §2.7, §3.1–3.4, §4.4; `implementation_readiness_report.md` §3.1–3.4 | Code Quality, Style, & Formatting |
+| Review Stage | Subagent Lens | Raw Finding | Consolidated Action ID | Resolution in Design |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stage 5: Initial Zoom Out** | `egm-zoom-out` | Archival overwriting `role = 'archived'` destroys officer history | **BLK-01** | Use `is_archived BOOLEAN` on `members` |
+| **Stage 5: Initial Zoom Out** | `egm-zoom-out` | Broadcast notification `is_read` column is shared across all members | **MAJ-02** | Make `notifications.recipient_id NOT NULL` |
+| **Stage 5: Initial Zoom Out** | `egm-zoom-out` | Print iframe injects Tailwind CDN, breaking offline PWA functionality | **BLK-06** | Inject local `/assets/styles.css` with `iframe.onload` |
+| **Stage 5: Initial Zoom Out** | `egm-zoom-out` | Current month flagged as overdue arrears on day 1 | **MAJ-01** | Enforce Month-End (31st) Cutoff date rule |
+| **Stage 6: Comprehension** | `egm-comprehension` | Stored procedure executes `role = 'archived'`, throwing enum error `22P02` | **BLK-01** | Addressed in BLK-01 (`is_archived` column) |
+| **Stage 6: Comprehension** | `egm-comprehension` | Unclear balance decrement in `treasury_accounts` vs `treasury_transactions` | **Ledger Parity** | Clarified append-only ledger via view |
+| **Stage 6: Comprehension** | `egm-comprehension` | `js/auth.js` omitted from Target Files, causing redirect loop | **BLK-04** | Added `js/auth.js` and `page-unauthorized.js` |
+| **Stage 6: Comprehension** | `egm-comprehension` | `uploadBankSlip` signature lacks folder parameter for claim documents | **BLK-05, NIT-06** | Generalize helper to `uploadStorageFile` |
+| **Stage 7: Critic Review** | `egm-structural` | `void_payment_receipt` can void unverified drafts and desync ledger | **BLK-02** | Add `status = 'verified'` precondition check |
+| **Stage 7: Critic Review** | `egm-design` | RLS policy on `admin_inquiries` allows public anonymous spam | **MAJ-04** | Restrict INSERT policy to `authenticated` |
+| **Stage 7: Critic Review** | `egm-design` | Unscoped claims attachment presigned URL allows unauthorized access | **BLK-05** | Add ownership check in `get-slip-url` |
+| **Stage 7: Critic Review** | `egm-style` | Redundant currency prefixes (`-Rs. Rs. 500.00`) | **MAJ-09** | Update `formatCurrency({ showSign: true })` |
+| **Stage 8: Intermediate Zoom Out**| `egm-zoom-out` | Anti-pattern: adding `'archived'` to `app_role` breaks tab RBAC mapping | **BLK-01** | Rejected enum mutation; adopted boolean flag |
+| **Stage 8: Intermediate Zoom Out**| `egm-zoom-out` | Anti-pattern: multi-table notification joins for 150-member society | **MAJ-02** | Dedicated 1-to-1 table; announcements handle circulars |
+| **Stage 8: Intermediate Zoom Out**| `egm-zoom-out` | Society announcements leaked to unvetted Google OAuth users | **MAJ-08** | Hide announcement board in locked preview |
+| **Stage 9: Readiness Test** | `egm-codebase-details`| `upload-slip/index.ts` hardcodes slip key path and is missing from files | **BLK-05** | Added to Target Files with folder routing |
+| **Stage 9: Readiness Test** | `egm-codebase-details`| Missing RLS `FOR UPDATE` on `notifications` and `admin_inquiries` | **MAJ-03** | Added `FOR UPDATE` policies in migration |
+| **Stage 9: Readiness Test** | `egm-codebase-details`| Staff foreign key violations when deleting test staff members | **BLK-03** | Count staff references in `delete_or_archive_member` |
+| **Stage 9: Readiness Test** | `egm-readiness` | `submitBenefitClaim` in `api.js` drops `documentKey` parameter | **MAJ-05** | Update `submitBenefitClaim` signature and query |
+| **Stage 9: Readiness Test** | `egm-readiness` | Welfare grant voucher still uses `window.print()` with page bleed | **MAJ-06** | Unify `printGrantVoucher` with `printReceipt` |
+| **Stage 9: Readiness Test** | `egm-readiness` | "View Proof Document" button missing from Admin Claims markup | **MAJ-07** | Added markup & wiring to `admin.html` & `page-admin.js` |
 
 ---
 
-## 4. Next Step Recommendation
+## 4. Final Remediation Directives
 
-All raw stage review files have been preserved and updated:
-* [zoom_out_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/zoom_out_report.md)
-* [comprehension_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/comprehension_report.md)
-* [critic_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/critic_report.md)
-* [intermediate_zoom_out_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/intermediate_zoom_out_report.md)
-* [implementation_readiness_report.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/implementation_readiness_report.md)
-
-To resolve these findings and apply automated remediations directly to [mria_management_welfare_association_pwa.md](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/mria_management_welfare_association_pwa.md), run:
-
-```bash
-egm-resolve docs/designs/mria_management_welfare_association_pwa.md
-```
+The architectural design in [`docs/designs/targeted_design_enhancement_and_bug_remediation.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/targeted_design_enhancement_and_bug_remediation.md) and [`design_draft.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/design_draft.md) will be updated with:
+1. **Clean Database Migration (`20261109000006_enhanced_governance_remediations.sql`):**
+   - Add `is_archived BOOLEAN NOT NULL DEFAULT false` to `members` (leaving `app_role` untouched).
+   - Implement `delete_or_archive_member` with comprehensive staff reference checks and actor lookup.
+   - Implement `void_payment_receipt` with `status = 'verified'` precondition, accurate source account lookup, and dues un-settling.
+   - Define `public.notifications` strictly for 1-to-1 alerts (`recipient_id UUID NOT NULL`).
+   - Add RLS `UPDATE` policies for notifications and inquiries, and enforce `TO authenticated` on inquiry inserts.
+2. **Centralized Financial Logic in `js/api.js`:**
+   - Enhance `calculateMemberBalance()` to handle positive advance balances and negative arrears under the Month-End (31st) Cutoff rule.
+   - Update `submitBenefitClaim` to persist `document_key`.
+3. **Robust Storage & Presigned URLs:**
+   - Update `supabase/functions/upload-slip/index.ts` to accept `folder: "slips" | "claims"`.
+   - Update `supabase/functions/get-slip-url/index.ts` to enforce tenant ownership for claim documents.
+4. **Offline PWA Print Engine in `js/receipt.js`:**
+   - Reusable `printIsolatedElement(elementId, title)` injecting local cached `/assets/styles.css` with `iframe.onload`.
+   - Unify both receipt printing and grant voucher printing.
+5. **Auth & Locked Dashboard Preview:**
+   - Update `js/auth.js` to support `requireApproved: false`.
+   - Update `js/page-unauthorized.js` to redirect pending applicants to `dashboard.html`.
+   - In `dashboard.html` / `js/page-dashboard.js`, render the locked preview with zeroed balances, hidden announcements, and enabled Sign Out / PDF downloads / Contact Admin.

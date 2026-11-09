@@ -32,12 +32,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const submitBtn = document.getElementById("submitRegBtn");
   const successNotice = document.getElementById("regSuccessNotice");
 
-  // If user already applied and is pending approval, hide form and show pending message
+  // If user already applied and is pending approval, redirect to dashboard in locked preview mode
   if (member && !member.is_approved) {
-    if (regForm) regForm.classList.add("hidden");
-    if (successNotice) {
-      successNotice.classList.remove("hidden");
-    }
+    window.location.href = "/dashboard.html";
+    return;
   }
 
   // Prefill Full Name if available in user metadata
@@ -94,7 +92,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (successNotice) {
           successNotice.classList.remove("hidden");
         }
-        showToast(t("registration_submitted"), "success");
+        showToast(t("registration_submitted") || "Registration submitted! Redirecting to preview...", "success");
+        setTimeout(() => {
+          window.location.href = "/dashboard.html";
+        }, 1200);
       } catch (err) {
         console.error("Registration error:", err);
         let msg = err.message || "Failed to submit registration request.";

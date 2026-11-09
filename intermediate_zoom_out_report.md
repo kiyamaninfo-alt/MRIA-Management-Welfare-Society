@@ -1,161 +1,185 @@
-# Stage 8: Intermediate Zoom Out Review & Skeptical Architectural Audit
-
-* **Target Document:** [`docs/designs/mria_management_welfare_association_pwa.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/mria_management_welfare_association_pwa.md) (Lines 1 to 502)
-* **Auditor:** Skeptical Architect (Zoom Out Goldfish)
-* **Context Integrated:** 
-  - [`zoom_out_report.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/zoom_out_report.md) (Stage 5)
-  - [`comprehension_report.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/comprehension_report.md) (Stage 6)
-  - [`critic_report.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/critic_report.md) (Stage 7)
-  - Existing Database & Migrations: [`20261108000001_initial_schema.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000001_initial_schema.sql), [`20261108000002_rls_policies.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000002_rls_policies.sql), [`20261108000003_triggers_and_functions.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000003_triggers_and_functions.sql), [`js/api.js`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/js/api.js).
+# Stage 8: Intermediate Zoom Out Review Report
+**Target Document:** `docs/designs/targeted_design_enhancement_and_bug_remediation.md`  
+**Reviewer:** Skeptical Architect (Zoom Out Goldfish)  
+**Standard:** High-Altitude Architectural Simplicity, YAGNI, Codebase Reuse, and Long-Term Maintainability  
+**Context Considered:** Stage 5 Initial Zoom Out, Stage 6 Comprehension Audit, Stage 7 Critic Review  
+**Final Architectural Verdict:** **Sound with Mandatory Streamlining & Anti-Bloat Refinements**
 
 ---
 
-## 1. High-Altitude Simplicity & Runaway Complexity Evaluation
+## 1. Executive Summary
 
-### The Complexity Spiral Diagnosis
-The design document sets out to solve valid, well-defined operational problems: linguistic contamination, public phone leakage, statutory airport roster credentials (EPF / Designation), and treasury segregation.
+At 30,000 feet, the proposed remediation plan addresses 18 legitimate operational defects across the Mattala Rajapaksa International Airport (MRIA) Management Welfare Association PWA. However, between the original specification and the subsequent Comprehension and Critic review rounds, the design accumulated **speculative abstractions, enum pollution, duplicate messaging subsystems, and ledger misconceptions**.
 
-However, from a skeptical architectural viewpoint, the design is suffering from **runaway accidental complexity**. It is treating an internal welfare society of ~50–100 airport managers as if it were a high-concurrency multi-tenant enterprise fintech platform. 
-
-This over-engineering has triggered a cascading **complexity spiral**:
-1. **Speculative Requirement**: Designing a custom dynamic CMS table (`cms_documents`) with private Cloudflare R2 S3 storage just to serve two static Constitution PDFs that change once every few years at an AGM.
-2. **Synthetic Blocker**: Because private R2 buckets were chosen over simple static assets or public Supabase Storage, the design failed to specify presigned URL generation, triggering a Blocker finding in Stage 6 (Comprehension).
-3. **Escalating Complexity**: Reviewers in Stage 7 then recommended adding *another* backend Edge Function (`get-storage-url`) to issue presigned S3 URLs, compounding the maintenance burden.
-4. **Third-Party Fragility**: Adding an external transactional email provider (Resend), Deno TypeScript Edge Functions, custom SPF/DKIM DNS prerequisites, and client-side fire-and-forget triggering introduces three external failure points into emergency bereavement claims.
-
-### Re-Anchoring to Existing Codebase Assets
-Codebase inspection reveals that **core capabilities the design proposes to build already exist** in the repository:
-* **FIFO Dues Allocation**: Already implemented as trigger `on_payment_verified_reconcile` and function `reconcile_verified_payment()` in [`20261108000003_triggers_and_functions.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000003_triggers_and_functions.sql#L32-L74).
-* **Monthly Dues Generation**: Already automated via pg_cron in [`20261108000003_triggers_and_functions.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000003_triggers_and_functions.sql#L76-L109).
-* **Bilingual Notice System**: Table `public.announcements` already exists with `title_en`, `title_si`, `content_en`, `content_si`, and `priority` in [`20261108000001_initial_schema.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000001_initial_schema.sql#L94-L100).
-* **Benefit Claims & Types**: Tables `public.benefit_types` and `public.benefit_claims` already exist with full status lifecycles.
-
-The design document obscures these existing assets by re-describing them as novel greenfield subsystems rather than surgical schema evolutions.
+The MRIA PWA is a single-society administrative system supporting ~150 airport staff members. It does not require enterprise-scale distributed messaging or redundant database entities. By pruning artificial complexity, reusing established patterns in `js/api.js`, `js/auth.js`, and `js/receipt.js`, and correcting flawed assumptions about the database schema, we can achieve 100% of the functional requirements with **significantly less code, zero offline regressions, and rock-solid architectural integrity**.
 
 ---
 
-## 2. Structural Coherence of Prior Stage Blockers (Stages 5–7)
+## 2. Severity Breakdown
 
-The blockers and critical issues identified in Stages 5, 6, and 7 are **structurally coherent, mathematically verified, and mutually reinforcing**. Below is the architectural synthesis:
-
-| Prior Finding | Coherence & Technical Truth | Architectural Verdict |
-| :--- | :--- | :--- |
-| **Privilege Escalation on `members`** *(Stage 5 #1, Stage 7 #3)* | **Structurally Coherent (100% Blocker)**: The RLS matrix grants role `member` "Own Profile (R/W)" without column-level restrictions. In Supabase/PostgreSQL, this allows any authenticated employee to issue `PATCH /rest/v1/members` with `{ "role": "admin", "is_approved": true }`. Existing migration 2 correctly had SELECT-only for members. | **Must Fix**: Retain SELECT-only RLS policy; restrict profile editing to safe contact fields via a strict `BEFORE UPDATE` trigger or `SECURITY DEFINER` RPC. |
-| **Schema PK Regression Breaking Pre-seeding** *(Stage 5 #2, Stage 7 #1)* | **Structurally Coherent (100% Blocker)**: Line 175 re-declares `id UUID PRIMARY KEY REFERENCES auth.users(id)`. This prevents the Secretary from pre-seeding any airport staff before they authenticate with Google OAuth. Furthermore, it destroys foreign keys on `payments.member_id`, `member_dues.member_id`, and `benefit_claims.member_id`. | **Must Fix**: Keep `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` and nullable `user_id UUID UNIQUE REFERENCES auth.users(id)` as already working in migration 1 & 3. |
-| **PostgreSQL Non-Atomic Migration Crash** *(Stage 7 #2)* | **Structurally Coherent (100% Blocker)**: `20261108000004_comprehensive_overhaul.sql` runs `ALTER TYPE app_role ADD VALUE 'committee_member'` and uses it in `UPDATE members` within the same transactional script. PostgreSQL strictly raises: `ERROR: unsafe use of new value ... of enum type`. | **Must Fix**: Split into two migration files: DDL enum addition in step 1, data update in step 2. |
-| **Audit Immutability Truncate Hole** *(Stage 7 #4)* | **Structurally Coherent (100% Blocker)**: The immutability trigger attached to `audit_logs` is `FOR EACH ROW`. In PostgreSQL, row triggers do not intercept `TRUNCATE`. | **Must Fix**: Add statement-level trigger `BEFORE TRUNCATE ON public.audit_logs`. |
-| **Disconnected Treasury Dual-Bookkeeping** *(Stage 5 #3, Stage 7 #5)* | **Structurally Coherent (100% Blocker)**: Directing client-side JavaScript to write to `payments` and then independently write to `treasury_transactions` guarantees ledger desynchronization on network drops. There is no relational integrity connecting treasury movements to receipts or claims. | **Must Fix**: Inflows must be trigger-generated upon `payments.status = 'verified'`; outflows must be trigger-generated upon claim disbursement; add optional `payment_id` and `claim_id` foreign keys to `treasury_transactions`. |
-| **R2 Presigned URL Generation Gap** *(Stage 6 #1, Stage 7 #9)* | **Structurally Coherent (Symptom of YAGNI)**: The design requires presigned URLs for private R2 buckets, but specifies no backend endpoint. Stage 7 proposed another Edge Function. The Skeptical Architect diagnosis: The entire private R2 architecture for Constitution PDFs is a YAGNI dead-end. | **Must Simplify**: Eliminate private R2 and custom `cms_documents` tables. Store Constitution PDFs in the static web assets directory or a public Supabase Storage bucket. |
+| Severity | Count | Summary |
+| :--- | :---: | :--- |
+| 🔴 **Blocker** | **5** | Role enum pollution; Broadcast notification shared read-state; Print engine offline CDN; R2 upload Edge Function pipeline & privacy; Auth redirect loop |
+| 🟡 **Major** | **5** | Ledger parity clarification; Dues balance reuse & month-end cutoff; Inquiries RLS open INSERT; Announcement privacy leak in locked preview; Currency prefix duplication |
+| 🟢 **Nit** | **4** | Storage client method generalization; Inquiries phone field; Pagination reset on filter switch; Trimming low-altitude HTML weeds |
 
 ---
 
-## 3. Statutory Viability Assessment
+## 3. High-Altitude Itemized Findings & Simplification Guidance
 
-To be statutorily viable under Sri Lankan association governance (AASL welfare standards & Societies Ordinance compliance), the platform must guarantee:
-1. **Financial Non-Repudiation**: Every rupee collected in cash or bank transfer must be immutably tied to a member receipt and reflected in the asset ledger. The design currently **fails this** due to client-side uncoordinated dual writes.
-2. **Identity Integrity**: Official airport credentials (EPF Number, Airport Designation) must be verifiable against the airport administrative roster before voting or welfare rights vest. The hybrid onboarding flow (Secretary verification + registration request) is **statutorily sound**, provided nullable constraints prevent migration crashes on existing rows.
-3. **Forensic Audit Defensibility**: Historical dues waivers, approval actions, and role promotions must be tamper-proof. The proposed `audit_logs` trigger provides this, but **fails operationally** if `user_email NOT NULL` causes scheduled pg_cron dues generation to abort.
-4. **Reliable Emergency Aid Dispatch**: Members submitting urgent bereavement or medical aid cannot depend on an unverified third-party email domain. The system must maintain an **in-app notification queue** alongside any external SMTP alerts.
-
----
-
-## 4. Prioritized Skeptical Findings (Zoom Out & YAGNI)
-
-### Finding 1: Uncoordinated Dual Bookkeeping Threatens Statutory Auditability
-* **Severity:** **Blocker**
-* **Affected Scope:** Section 2.D (Lines 237–270), CUJ 3 (Lines 81–90), Implementation Step 1 & 6 (Lines 469, 500)
-* **Simplicity Rationale:**
-  The design establishes `treasury_transactions` as a standalone ledger completely severed from `public.payments` and `public.benefit_claims`. In CUJ 3, the browser client is tasked with writing a payment and then separately recording a treasury transaction. If an airport tarmac connection drops mid-flight, the member dues ledger records payment while the Treasury balance does not.
-  
-  Worse, when the Treasurer approves a bank transfer slip (`verifyPayment`), the design specifies no automated entry into `treasury_transactions`. The Bank of Ceylon operating balance will permanently deviate from reality.
-  
-  **Architectural Prescription**:
-  Eliminate client-side bookkeeping coordination entirely. Attach a PostgreSQL trigger on `payments` (`AFTER UPDATE OF status` to `'verified'`) that automatically writes an `inflow` record into `treasury_transactions` (`boc_savings` for bank transfers, `cash_in_hand` for cash). Attach a trigger on `benefit_claims` (`AFTER UPDATE OF status` to `'disbursed'`) to record an `outflow`.
+### 🔴 Blocker 1: Role Enum Pollution vs. Lifecycle State Separation in Member Archival
+* **Affected Scope:** Pillar 2, Item 3 (Lines 320–389), Migration Plan (Line 785), Critic Blocker 2.
+* **The Complexity Trap:**
+  The design proposes `UPDATE members SET is_approved = false, role = 'archived'`. The Critic noted that `'archived'` is not a valid enum value in `app_role` (`'admin', 'manager', 'official', 'treasurer', 'member'`) and recommended running `ALTER TYPE app_role ADD VALUE 'archived'`.
+* **Skeptical Architect Assessment (Contrarian / YAGNI):**
+  Adding `'archived'` to `app_role` is an **anti-pattern**. An authorization role answers *what permissions an identity holds*; archival is a *lifecycle status*. Overwriting `role`:
+  1. Permanently destroys the statutory role history of officers (e.g., whether the user was an Admin, Treasurer, or Secretary) upon suspension or leave.
+  2. Breaks frontend permission tables like `ROLE_TABS[role]` in `js/page-admin.js`, where `ROLE_TABS['archived']` evaluates to `undefined`.
+* **Pragmatic Architectural Guidance:**
+  Do **NOT** alter the PostgreSQL enum `app_role`. Retain `role` intact. Instead, add a boolean flag `is_archived BOOLEAN NOT NULL DEFAULT false` to `public.members`:
+  ```sql
+  UPDATE public.members
+  SET is_approved = false,
+      is_archived = true,
+      updated_at = NOW()
+  WHERE id = p_member_id;
+  ```
+  This cleanly decouples authentication/authorization from lifecycle management without risky enum mutations.
 
 ---
 
-### Finding 2: YAGNI Over-Engineering on "Statutory Governance CMS" and Private R2
-* **Severity:** **Blocker**
-* **Affected Scope:** Section 2.E (Lines 273–286), Goals (Line 41), Implementation Manifest (Lines 442, 458), Critic Finding #9, Comprehension Finding #1
-* **Simplicity Rationale:**
-  The association constitution is amended solely at an Annual General Meeting (AGM) via formal voting. Building an entire database table (`cms_documents`), Cloudflare R2 bucket integration, S3 presigned URL generation Edge Functions, and administrative upload modals to serve two static documents (`constitution_si.pdf` and `constitution_en.pdf`) is extreme YAGNI over-engineering.
-  
-  This over-engineering created the architectural gap flagged in Stage 6 and 7 (missing presigned URL endpoint). Adding a custom presigned-URL Edge Function is treating the symptom of an unnecessary architecture.
-  
-  **Architectural Prescription**:
-  Radically simplify: Store `constitution_si.pdf` and `constitution_en.pdf` as static files in the PWA repository (`/assets/docs/`) or in a standard public Supabase Storage bucket (`mria-documents`). Eliminate `cms_documents` and the dedicated R2 presigned URL pipeline entirely.
+### 🔴 Blocker 2: Shared Read-State Flaw & Messaging Subsystem Duplication
+* **Affected Scope:** Pillar 4, Item 8 (Lines 553–589), Target Files 1, 3, 4, 5 (Lines 787, 807, 819–820).
+* **The Complexity Trap:**
+  The design introduces an entirely separate table `public.notifications` alongside the existing `public.announcements`. In `notifications`, `is_read BOOLEAN` is stored directly on broadcast rows (`recipient_id IS NULL`). When *any single member* marks the broadcast read, it marks it read for all 150 members in the database.
+* **Skeptical Architect Assessment (Contrarian / YAGNI):**
+  The codebase **already has an active announcement system** (`announcements` table, `getAnnouncements()`, `publishAnnouncement()`, and `#dashboardNotificationCenter` with client-side dismissal). Building a parallel notifications table with broken 1-to-many boolean state is textbook over-engineering.
+* **Pragmatic Architectural Guidance:**
+  Disentangle broadcasts from personal alerts:
+  * **Option A (Cleanest - Dedicated 1-to-1 Alerts):** Declare `public.notifications.recipient_id UUID NOT NULL REFERENCES public.members(id)`. This table is strictly for **1-to-1 targeted alerts** (e.g., "Your medical claim #104 has been disbursed", "Please re-upload bank slip"). Because `recipient_id` is never NULL, `is_read BOOLEAN` belongs exclusively to that member, and the shared-state bug completely disappears! Broadcast notices remain handled by `announcements`.
+  * **Option B (Zero New Tables):** Add `recipient_id UUID REFERENCES members(id)` to the existing `announcements` table. If `recipient_id IS NULL`, it is a public circular (read status managed via `localStorage` as it is today); if `recipient_id` is populated, it is a personal alert.
+  * **Directive:** Adopt Option A. Keep `announcements` for public broadcasts and make `notifications` strictly 1-to-1 (`recipient_id NOT NULL`). This eliminates join tables and avoids parallel broadcast channels.
 
 ---
 
-### Finding 3: Catastrophic Privilege Escalation via Open Profile Mutation
-* **Severity:** **Blocker**
-* **Affected Scope:** Section 3: *Granular Row Level Security (RLS) Policy Matrix* (Line 295)
-* **Simplicity Rationale:**
-  Line 295 specifies that `member` has **"Own Profile (R/W)"** on `public.members`. A standard Supabase RLS update policy (`auth.uid() = user_id`) permits the client to mutate any column in their row. Any member can invoke `supabase.from('members').update({ role: 'admin', is_approved: true })` from DevTools, granting themselves full administrative access and treasury mutation rights.
-  
-  **Architectural Prescription**:
-  Maintain the existing SELECT-only policy for `member`. If self-service contact updates (phone, address) are required, restrict mutations via a `BEFORE UPDATE` trigger that explicitly blocks modifications to `role`, `is_approved`, `epf_number`, and `designation`, or use a secured `SECURITY DEFINER` RPC function.
+### 🔴 Blocker 3: Offline PWA Violation & Print Isolation Fragmentation
+* **Affected Scope:** Pillar 5, Item 15 (Lines 671–715), Critic Major 5, Comprehension Finding 6.
+* **The Complexity Trap:**
+  `printReceipt()` dynamically creates an `<iframe>`, writes `<script src="https://cdn.tailwindcss.com"></script>`, and calls `print()` after a 500ms `setTimeout`.
+* **Skeptical Architect Assessment (Contrarian / YAGNI):**
+  1. **Offline Violation:** In an offline PWA managed by `sw.js`, loading a 350KB external CDN script will fail when offline or in degraded airport hangar reception, producing unstyled printouts.
+  2. **Race Condition:** 500ms is too fast on low-end mobile devices and too slow on desktops.
+  3. **Fragmented Implementations:** In `js/receipt.js`, there is a parallel function `window.printGrantVoucher = function () { window.print(); }` (Line 274) which still bleeds full-page navigation chrome.
+* **Pragmatic Architectural Guidance:**
+  In `js/receipt.js`, create a single generic helper `printIsolatedElement(elementId, documentTitle)`:
+  1. Inject `<link rel="stylesheet" href="/assets/styles.css">` (which is already compiled locally and pre-cached in `sw.js`).
+  2. Include the Google font link for Sinhala: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap">`.
+  3. Wire both `window.printReceipt()` and `window.printGrantVoucher()` through this same isolated helper using `iframe.onload` rather than `setTimeout`.
 
 ---
 
-### Finding 4: Pre-Seeding Identity Deadlock (`members.id REFERENCES auth.users(id)`)
-* **Severity:** **Blocker**
-* **Affected Scope:** Section 2.B (Line 175), Goals (Line 36), CUJ 1 (Lines 61–69)
-* **Simplicity Rationale:**
-  Declaring `members.id REFERENCES auth.users(id)` breaks the existing, proven schema architecture. Pre-seeding requires the Secretary to create member records before employees log in via Google OAuth. Prior to initial OAuth sign-in, no `auth.users` record exists.
-  
-  **Architectural Prescription**:
-  Retain the existing pattern from [`20261108000001_initial_schema.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000001_initial_schema.sql#L13-L26):
-  `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, and `user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL`. The existing `handle_auth_user_created()` trigger in [`20261108000003_triggers_and_functions.sql`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/supabase/migrations/20261108000003_triggers_and_functions.sql#L5-L29) already handles the automatic binding on sign-in.
+### 🔴 Blocker 4: Cloudflare R2 Upload Pipeline Disconnect & Claim Medical Privacy
+* **Affected Scope:** Pillar 4, Item 13 (Lines 590–601), Implementation Plan File 11 (Lines 877–881), Critic Major 6.
+* **The Complexity Trap:**
+  The design specifies calling `uploadBankSlip(file, "claims")` and modifying `get-slip-url/index.ts`. However:
+  1. `supabase/functions/upload-slip/index.ts` is omitted from the plan and hardcodes `const slipKey = slips/${yearMonth}/${member.id}_${uniqueId}.${ext};`. It completely ignores any client-supplied folder argument.
+  2. The proposed change to `get-slip-url` (`payments.slip_key = slipKey OR benefit_claims.document_key = slipKey`) omits caller verification, allowing any authenticated user to download confidential death certificates and medical invoices belonging to other employees.
+* **Pragmatic Architectural Guidance:**
+  1. Add `supabase/functions/upload-slip/index.ts` to the migration plan. Update it to parse `folder = body.folder === 'claims' ? 'claims' : 'slips'`.
+  2. In `supabase/functions/get-slip-url/index.ts`, enforce strict ownership checks:
+     Allow presigned download if caller is staff (`admin`, `secretary`, `treasurer`, `official`), **OR** if `benefit_claims.member_id = caller.member_id`.
 
 ---
 
-### Finding 5: Transactional Migration Crash on Enum Mutation (`app_role`)
-* **Severity:** **Blocker**
-* **Affected Scope:** Section 2.A (Lines 161–171)
-* **Simplicity Rationale:**
-  PostgreSQL enforces that a new enum value added via `ALTER TYPE ... ADD VALUE` cannot be utilized in a subsequent DML statement (`UPDATE public.members SET role = 'committee_member'`) within the same transaction. Because Supabase migrations run within transactions, the script will crash on deployment.
-  
-  **Architectural Prescription**:
-  Split into two migration files:
-  1. `20261108000004_add_app_roles.sql`: executes `ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'secretary';` and `'committee_member';`.
-  2. `20261108000005_comprehensive_overhaul.sql`: executes the data migration and subsequent DDL.
+### 🔴 Blocker 5: Authentication Redirect Loop on Locked Dashboard Preview
+* **Affected Scope:** Pillar 4, Item 16 (Lines 602–621), Target File 6 (Lines 835–846).
+* **The Complexity Trap:**
+  Item 16 proposes showing a locked dashboard preview for unapproved OAuth users. However, `js/auth.js` is omitted from the Target Files. In `js/page-dashboard.js`, line 42 calls `requireAuth({ requireApproved: true })`. `js/auth.js` intercepts this and immediately bounces unapproved users to `/unauthorized.html` before any dashboard DOM can render.
+* **Pragmatic Architectural Guidance:**
+  Add `js/auth.js` to the Target Files:
+  1. In `js/page-dashboard.js`, call `requireAuth({ requireApproved: false })`.
+  2. If `authState.member && !authState.member.is_approved`, render `#lockedDashboardBanner`, zero-out financial balances, and disable mutation buttons.
+  3. If `authState.user && !authState.member` (unregistered OAuth sign-in), redirect to `unauthorized.html`.
 
 ---
 
-### Finding 6: Audit Trigger Constraints Aborting Automated Monthly Dues Cron
-* **Severity:** **Major**
-* **Affected Scope:** Section 2.C: *Immutable Audit Trail Schema* (Line 194) & Migration 3 (`generate_monthly_dues_for_period`)
-* **Simplicity Rationale:**
-  `audit_logs.user_email` is declared `NOT NULL`. When the pg_cron scheduled routine `generate_monthly_dues_for_period()` executes on the 1st of each month, it runs in the background where `auth.uid()` and JWT session data are `NULL`. If an automated audit trigger logs these inserts without a fallback, PostgreSQL throws a constraint violation and aborts the entire monthly dues generation for the entire airport membership.
-  
-  **Architectural Prescription**:
-  Declare `user_email VARCHAR(255) NOT NULL DEFAULT 'SYSTEM'` and resolve the actor as `COALESCE(auth.jwt() ->> 'email', 'SYSTEM')`.
+### 🟡 Major 1: Clarifying Double-Entry Ledger Parity (Append-Only vs. Mutable Balance Updates)
+* **Affected Scope:** Pillar 2, Item 4 (Lines 391–487), Critic Blocker 1, Comprehension Finding 3.
+* **Skeptical Architect Assessment (Contrarian / YAGNI):**
+  Both the Comprehension and Critic reports demanded that `void_payment_receipt` execute `UPDATE treasury_accounts SET current_balance = current_balance - ...`.
+  However, in the codebase (`js/api.js` Line 747), `getTreasuryBalances()` reads from `treasury_account_balances`—a **dynamic computed SQL view** derived from `treasury_transactions`. When `recordTreasuryTransaction` runs in `api.js`, it **only inserts rows into `treasury_transactions`**; it never mutates an account table!
+  The design document created confusion by loosely stating in the state machine: "Decrement treasury_accounts balance".
+* **Pragmatic Architectural Guidance:**
+  1. Explicitly clarify in the design that MRIA operates an **append-only ledger**. The compensating outflow inserted into `treasury_transactions` (`transaction_type = 'outflow'`, `amount = v_payment.amount`) mathematically adjusts running balances and statements.
+  2. For voided admission fees: `calculateMemberBalance()` in `js/api.js` (Line 41) filters by `status = 'verified'`. Setting `status = 'voided'` automatically reactivates the admission fee due without requiring custom database triggers.
+  3. Align the state diagram label (Line 207) to read: `Insert compensating outflow into treasury_transactions`.
 
 ---
 
-### Finding 7: Fragile Notification Architecture & Unverified Domain Vulnerability
-* **Severity:** **Major**
-* **Affected Scope:** Section 4 (Lines 305–313), CUJ 2 (Lines 71–80)
-* **Simplicity Rationale:**
-  1. Relying on client-side fire-and-forget `fetch()` to invoke Edge Functions after claim submission fails if a member locks their phone or loses tarmac signal before the HTTP handshake completes.
-  2. The Resend API strictly blocks sending emails to arbitrary recipient domains (`@airport.lk`, `@gmail.com`) unless a verified custom domain with SPF/DKIM DNS records is configured.
-  
-  **Architectural Prescription**:
-  1. Trigger notifications from PostgreSQL via Supabase Database Webhooks or an asynchronous database trigger, rather than relying on browser network lifecycles.
-  2. Leverage the existing `public.announcements` table to generate an urgent in-app banner for committee members, guaranteeing alerting even if external email delivery is throttled or unconfigured.
+### 🟡 Major 2: Dues Balance Logic: Reuse Existing Code & Fix Month-End Cutoff Bug
+* **Affected Scope:** Pillar 3, Item 11 (Lines 501–524), Comprehension Finding 1, Critic Blocker 4.
+* **The Complexity Trap:**
+  The design introduces an ad-hoc function `calculateNetDuesStanding(dues, payments)` inside `js/page-dashboard.js`.
+  1. **Premature Arrears Bug:** Line 504 tests `d.billing_month <= today`. For November 2026, `2026-11-01 <= 2026-11-09` evaluates to `true`, penalizing the active current month as overdue arrears midway through the month, violating the Month-End Cutoff rule.
+  2. **Phantom Future Dues:** Line 507 filters `billing_month > today && status === 'settled'`, expecting future monthly dues records to pre-exist in `member_dues`, which they do not.
+* **Pragmatic Architectural Guidance:**
+  Do not create a divergent calculation script in `page-dashboard.js`. Reuse and enhance `calculateMemberBalance(member)` in `js/api.js`:
+  1. Arrears = Pending dues where `billing_month < date_trunc('month', now())` (prior months only) + unpaid admission fee (if non-legacy).
+  2. Advance = Verified payments sum exceeding cumulative billed dues.
+  3. Keep all balance arithmetic inside `js/api.js` so `admin.html` and `dashboard.html` always report identical numbers.
 
 ---
 
-## 5. Architectural Verdict & Actionable Remediation Plan
+### 🟡 Major 3: Authenticated RLS Enforcement on `admin_inquiries`
+* **Affected Scope:** Pillar 4, Item 17 (Lines 642–644), Critic Blocker 3.
+* **Skeptical Architect Assessment:**
+  `CREATE POLICY "Users insert inquiries" ON public.admin_inquiries FOR INSERT WITH CHECK (true);` allows anonymous spam and spoofed identities via the public Supabase anon key.
+* **Pragmatic Architectural Guidance:**
+  Restrict insertion strictly to authenticated users:
+  ```sql
+  CREATE POLICY "Authenticated members insert inquiries" ON public.admin_inquiries
+      FOR INSERT TO authenticated
+      WITH CHECK (auth.uid() IS NOT NULL);
+  ```
 
-The overhaul document is conceptually ambitious and addresses real statutory pain points, but requires immediate de-escalation of accidental complexity before any code or migration is executed.
+---
 
-### Five Simplification Directives:
-1. **Drop the Custom CMS & Private R2**: Serve static Constitution PDFs from `/assets/docs/` or a public Supabase Storage bucket. Do not build `cms_documents` or a presigned URL Edge Function.
-2. **Automate Treasury via Database Triggers**: Bind `treasury_transactions` directly to `payments` status transitions (`verified`) and `benefit_claims` disbursements (`disbursed`) via PostgreSQL triggers. Eliminate manual dual-bookkeeping.
-3. **Preserve Existing Relational Patterns**: Keep `members.id` as an independent UUID; do not re-bind it to `auth.users(id)`. Split the enum migration into two files to avoid PostgreSQL transaction aborts.
-4. **Lock Down Member RLS & Profile Security**: Keep `members` table updates restricted to administrators/secretaries, and use a strict column-guard trigger for self-service contact edits.
-5. **Add Server-Side Fallback for Notifications**: Use in-app alerts on `announcements` as the authoritative notification mechanism, with Resend email as a best-effort secondary channel.
+### 🟡 Major 4: Society Notice Board Information Leak in Locked Preview
+* **Affected Scope:** Pillar 4, Item 16 (Lines 602–621), Critic Major 8.
+* **Skeptical Architect Assessment:**
+  When an unapproved external user signs in with Google, rendering `#announcementsList` exposes internal executive circulars and society discussions before their membership has been vetted.
+* **Pragmatic Architectural Guidance:**
+  Specify in Item 16 that when `member.is_approved === false`, `#dashboardNotificationCenter` is hidden and replaced with a static notice: *"Society announcements will appear once your account is approved."*
 
-With these five adjustments, the design will shed 40% of its accidental plumbing, resolve all 5 blockers identified across Stages 5–7, and achieve rock-solid statutory compliance.
+---
+
+### 🟡 Major 5: Currency Prefix Concatenation Duplication
+* **Affected Scope:** Pillar 1, Item 5 & Item 7; Pillar 3, Item 11; Critic Major 9.
+* **Skeptical Architect Assessment:**
+  `formatCurrency(amount)` in `js/ui.js` already prepends `Rs. `. Concatenating `-Rs. ${displayAmount}` results in `-Rs. Rs. 500.00` or drops thousands separators.
+* **Pragmatic Architectural Guidance:**
+  Update `formatCurrency(amount, { showSign = false } = {})` in `js/ui.js` to return `+Rs. 1,500.00` or `-Rs. 1,500.00`, and forbid manual `Rs. ` string concatenation across views.
+
+---
+
+### 🟢 Nits & Code Simplifications
+1. **Generalize Storage Helper (Pillar 4, Item 13):** Rename `uploadBankSlip(file, "claims")` in `js/storage.js` to `uploadStorageFile(file, folder = "slips")`.
+2. **Add Phone to Inquiries Schema (Pillar 4, Item 17):** Add `sender_phone VARCHAR(20)` to `admin_inquiries` so executive staff can respond via voice call or SMS.
+3. **Reset Pagination State on View Change (Pillar 5, Item 18):** In `js/page-dashboard.js`, reset `paymentsRenderLimit = 5` and `claimsRenderLimit = 5` whenever filters change or the modal reloads.
+4. **Trim Implementation Weeds (Section 3):** Remove 40-line concrete Tailwind HTML blocks from the architectural design document and replace them with interface contracts.
+
+---
+
+## 4. Final Verdict & Streamlining Directives
+
+### Verdict: **SOUND ARCHITECTURE — PROCEED WITH TARGETED STREAMLINING**
+
+The overall structure of the 18 enhancements is solid and directly addresses real operational needs. The design is ready to proceed to finalization once the following streamlining directives are incorporated:
+
+1. **Keep `app_role` Clean:** Use `is_archived BOOLEAN` on `members` instead of adding `'archived'` to `app_role`.
+2. **Keep Notifications 1-to-1:** Make `public.notifications.recipient_id` strictly `NOT NULL`. Let `announcements` handle public circulars.
+3. **Unify Print Isolation:** Use local cached `/assets/styles.css` with `iframe.onload`, serving both receipts and welfare grant vouchers.
+4. **Close Edge Function Security:** Update `upload-slip` to accept `folder: "claims"`, and restrict `get-slip-url` claim document downloads to claim owners and staff.
+5. **Centralize Financial Standing:** Keep balance math in `calculateMemberBalance` in `js/api.js` using month-end cutoff rules.
+
+*(Report delivered for persistence to `intermediate_zoom_out_report.md`)*

@@ -65,6 +65,14 @@ export const translations = {
     download_constitution: "Download Constitution (PDF)",
     view_policy: "Privacy Policy",
     view_terms: "Security Terms",
+    cumulative_contributions: "Contributions Paid to Date",
+    advance_balance: "Advance Prepaid Balance",
+    overdue_arrears: "Overdue Arrears",
+    status_voided: "Voided",
+    notifications_title: "Notifications",
+    install_app: "Install App",
+    inquiry_submitted: "Inquiry submitted successfully",
+    view_proof_document: "View Proof Document",
 
     // Bank Details & Transfer
     bank_details_title: "Official Bank of Ceylon Account",
@@ -266,6 +274,14 @@ export const translations = {
     download_constitution: "ව්‍යවස්ථාව භාගත කරන්න (PDF)",
     view_policy: "පෞද්ගලිකත්ව ප්‍රතිපත්තිය",
     view_terms: "ආරක්ෂක කොන්දේසි",
+    cumulative_contributions: "මෙතෙක් ගෙවා ඇති මුදල",
+    advance_balance: "අත්තිකාරම් ශේෂය",
+    overdue_arrears: "හිඟ මුදල්",
+    status_voided: "අවලංගු කරන ලදී",
+    notifications_title: "දැනුම්දීම් පුවරුව",
+    install_app: "යෙදුම ස්ථාපනය කරන්න",
+    inquiry_submitted: "ඔබගේ විමසීම සාර්ථකව යොමු කරන ලදී",
+    view_proof_document: "සාක්ෂි ලේඛනය බලන්න",
 
     // Bank Details & Transfer
     bank_details_title: "නිල ලංකා බැංකු ගිණුම් විස්තර",
