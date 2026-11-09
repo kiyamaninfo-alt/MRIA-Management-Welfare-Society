@@ -850,6 +850,50 @@ export async function getAuditLogs(limit = 25) {
 }
 
 /**
+ * Fetches verified payment receipts with pagination and joined member & staff details.
+ */
+export async function getPaymentReceipts({
+  limit = 25,
+  offset = 0,
+  status = "verified",
+  category = "all",
+  paymentMethod = "all",
+} = {}) {
+  let query = supabase
+    .from("payments")
+    .select(
+      "*, members:members!payments_member_id_fkey(id, full_name, email, phone, epf_number, designation), verified_by_staff:members!payments_verified_by_fkey(id, full_name, epf_number)",
+      { count: "exact" }
+    );
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  if (category && category !== "all") {
+    query = query.eq("payment_type", category);
+  }
+
+  if (paymentMethod && paymentMethod !== "all") {
+    query = query.eq("payment_method", paymentMethod);
+  }
+
+  query = query.order("created_at", { ascending: false });
+
+  if (limit) {
+    query = query.range(offset, offset + limit - 1);
+  }
+
+  const { data, count, error } = await query;
+  if (error) {
+    console.error("Error fetching payment receipts:", error);
+    throw error;
+  }
+
+  return { receipts: data || [], totalCount: count || 0 };
+}
+
+/**
  * Publishes a new announcement.
  */
 export async function publishAnnouncement({

@@ -25,6 +25,7 @@ import {
   deleteBenefitType,
   sendReceiptEmail,
   logUserActivity,
+  getPaymentReceipts,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml } from "./receipt.js";
@@ -147,6 +148,9 @@ export function switchAdminTab(targetTab) {
 
   // Lazy-load data for active tab
   if (targetTab === "treasury") loadTreasuryData();
+  if (targetTab === "receipts") {
+    if (receiptsLoaded) renderReceiptsTable();
+  }
   if (targetTab === "secretary") loadSecretaryData();
   if (targetTab === "claims") loadClaimsData();
   if (targetTab === "defaulters") loadDefaultersData();
@@ -774,6 +778,16 @@ function setupAdminForms() {
 
         const receiptNumber = payment?.id ? `MRIA-REC-${payment.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
 
+        if (receiptsLoaded && payment) {
+          const joinedReceipt = {
+            ...payment,
+            members: selectedMember,
+            verified_by_staff: currentStaff,
+          };
+          allLoadedReceipts.unshift(joinedReceipt);
+          receiptsTotalCount += 1;
+        }
+
         // Update live voucher preview to official issued state
         updateLiveReceiptPreview(true, payment);
 
@@ -1043,6 +1057,7 @@ function setupAdminForms() {
   setupDuesSettingsHandlers();
   setupAdmissionFeeModalsHandlers();
   setupBenefitModalsHandlers();
+  setupReceiptsSearchAndFilters();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -1347,6 +1362,438 @@ window.reloadCashBook = function () {
 window.filterCashBookAccount = function (accountId) {
   cashBookSelectedAccount = accountId;
   loadCashBookTransactions({ reset: true });
+};
+
+// ================= TAB: OFFICIAL RECEIPTS & VOUCHERS REGISTER =================
+
+let allLoadedReceipts = [];
+let receiptsTotalCount = 0;
+let receiptsLoaded = false;
+let receiptsSortField = "date"; // 'date' | 'name' | 'receipt_num' | 'amount' | 'category' | 'method'
+let receiptsSortAsc = false;
+let receiptsSearchQuery = "";
+let receiptsFilterCategory = "all";
+let receiptsFilterMethod = "all";
+let receiptsIsLoading = false;
+const RECEIPTS_PAGE_SIZE = 25;
+
+async function loadReceiptsData(force = false) {
+  const tbody = document.getElementById("receiptsTableBody");
+  const countBadge = document.getElementById("receiptsCountBadge");
+  const refreshBtn = document.getElementById("btnRefreshReceipts");
+  const tabBadge = document.getElementById("tabReceiptsCountBadge");
+
+  if (!tbody) return;
+  if (receiptsIsLoading) return;
+
+  try {
+    receiptsIsLoading = true;
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Loading Receipts...</span>';
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-12 text-center text-on-surface-variant font-medium">
+          <div class="inline-flex items-center gap-2">
+            <span class="material-symbols-outlined text-[20px] animate-spin text-primary">sync</span>
+            <span>Fetching official payment receipts from database...</span>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    const result = await getPaymentReceipts({
+      limit: RECEIPTS_PAGE_SIZE,
+      offset: 0,
+      category: receiptsFilterCategory,
+      paymentMethod: receiptsFilterMethod,
+    });
+
+    allLoadedReceipts = result.receipts || [];
+    receiptsTotalCount = Number(result.totalCount || allLoadedReceipts.length);
+    receiptsLoaded = true;
+
+    if (countBadge) {
+      countBadge.textContent = `Showing ${allLoadedReceipts.length} of ${receiptsTotalCount}`;
+    }
+    if (tabBadge) {
+      tabBadge.textContent = receiptsTotalCount;
+      tabBadge.classList.remove("hidden");
+    }
+
+    renderReceiptsTable();
+  } catch (err) {
+    console.error("Failed to load payment receipts:", err);
+    tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-rose-600 font-bold">Failed to load receipts: ${err.message || err}</td></tr>`;
+  } finally {
+    receiptsIsLoading = false;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">refresh</span><span>Load / Refresh Receipts</span>';
+    }
+  }
+}
+window.loadReceiptsData = loadReceiptsData;
+
+async function loadNextReceiptsPage() {
+  const nextBtn = document.getElementById("btnLoadMoreReceipts");
+  if (receiptsIsLoading || !receiptsLoaded) return;
+
+  const offset = allLoadedReceipts.length;
+  if (offset >= receiptsTotalCount) {
+    showToast("All receipts have already been loaded.", "info");
+    return;
+  }
+
+  try {
+    receiptsIsLoading = true;
+    if (nextBtn) {
+      nextBtn.disabled = true;
+      nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Loading next 25...</span>';
+    }
+
+    const result = await getPaymentReceipts({
+      limit: RECEIPTS_PAGE_SIZE,
+      offset,
+      category: receiptsFilterCategory,
+      paymentMethod: receiptsFilterMethod,
+    });
+
+    const newRows = result.receipts || [];
+    allLoadedReceipts = allLoadedReceipts.concat(newRows);
+    receiptsTotalCount = Number(result.totalCount || allLoadedReceipts.length);
+
+    renderReceiptsTable();
+    showToast(`Loaded ${newRows.length} more receipts (${allLoadedReceipts.length} of ${receiptsTotalCount})`, "info");
+  } catch (err) {
+    console.error("Failed to load next receipts page:", err);
+    showToast("Failed to load next receipts: " + (err.message || err), "error");
+  } finally {
+    receiptsIsLoading = false;
+    if (nextBtn) {
+      nextBtn.disabled = false;
+      nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">expand_more</span><span>Load Next 25 Receipts</span>';
+    }
+  }
+}
+window.loadNextReceiptsPage = loadNextReceiptsPage;
+
+function renderReceiptsTable() {
+  const tbody = document.getElementById("receiptsTableBody");
+  const countBadge = document.getElementById("receiptsCountBadge");
+  const paginationBar = document.getElementById("receiptsPaginationBar");
+  const paginationInfo = document.getElementById("receiptsPaginationInfo");
+  const nextBtn = document.getElementById("btnLoadMoreReceipts");
+  if (!tbody) return;
+
+  if (!receiptsLoaded) return;
+
+  const query = receiptsSearchQuery.trim().toLowerCase();
+  let list = allLoadedReceipts.slice();
+
+  // 1. Filter by Search Query
+  if (query) {
+    list = list.filter((r) => {
+      const member = r.members || {};
+      const fullName = (member.full_name || "").toLowerCase();
+      const epf = (member.epf_number || "").toLowerCase();
+      const desig = (member.designation || "").toLowerCase();
+      const rawId = (r.id || "").toLowerCase();
+      const recNumber = `mria-rec-${rawId.slice(0, 8)}`.toLowerCase();
+      const notes = (r.notes || "").toLowerCase();
+      const amount = String(r.amount || "");
+      const cat = (r.payment_type || "").toLowerCase();
+      const meth = (r.payment_method || "").toLowerCase();
+
+      return (
+        fullName.includes(query) ||
+        epf.includes(query) ||
+        desig.includes(query) ||
+        recNumber.includes(query) ||
+        rawId.includes(query) ||
+        notes.includes(query) ||
+        amount.includes(query) ||
+        cat.includes(query) ||
+        meth.includes(query)
+      );
+    });
+  }
+
+  // 2. Filter by Category
+  if (receiptsFilterCategory && receiptsFilterCategory !== "all") {
+    list = list.filter((r) => r.payment_type === receiptsFilterCategory);
+  }
+
+  // 3. Filter by Payment Method
+  if (receiptsFilterMethod && receiptsFilterMethod !== "all") {
+    list = list.filter((r) => r.payment_method === receiptsFilterMethod);
+  }
+
+  // 4. Sort
+  list.sort((a, b) => {
+    let comp = 0;
+    if (receiptsSortField === "date") {
+      const dateA = new Date(a.paid_at || a.verified_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.paid_at || b.verified_at || b.created_at || 0).getTime();
+      comp = dateA - dateB;
+    } else if (receiptsSortField === "name") {
+      const nameA = (a.members?.full_name || "").toLowerCase();
+      const nameB = (b.members?.full_name || "").toLowerCase();
+      comp = nameA.localeCompare(nameB);
+    } else if (receiptsSortField === "receipt_num") {
+      const recA = (a.id || "").toLowerCase();
+      const recB = (b.id || "").toLowerCase();
+      comp = recA.localeCompare(recB);
+    } else if (receiptsSortField === "amount") {
+      comp = Number(a.amount || 0) - Number(b.amount || 0);
+    } else if (receiptsSortField === "category") {
+      const catA = (a.payment_type || "").toLowerCase();
+      const catB = (b.payment_type || "").toLowerCase();
+      comp = catA.localeCompare(catB);
+    } else if (receiptsSortField === "method") {
+      const methA = (a.payment_method || "").toLowerCase();
+      const methB = (b.payment_method || "").toLowerCase();
+      comp = methA.localeCompare(methB);
+    }
+    return receiptsSortAsc ? comp : -comp;
+  });
+
+  // 5. Update Sort Column Header Icons
+  const sortFields = ["receipt_num", "name", "amount", "date", "category", "method"];
+  sortFields.forEach((field) => {
+    const iconEl = document.getElementById(`sortIcon_${field}`);
+    if (iconEl) {
+      if (receiptsSortField === field) {
+        iconEl.textContent = receiptsSortAsc ? "arrow_upward" : "arrow_downward";
+        iconEl.className = "material-symbols-outlined text-[14px] text-primary opacity-100 font-bold";
+      } else {
+        iconEl.textContent = "unfold_more";
+        iconEl.className = "material-symbols-outlined text-[14px] opacity-40 font-normal";
+      }
+    }
+  });
+
+  // Update Sort dropdown & direction button
+  const sortSelect = document.getElementById("receiptsSortSelect");
+  if (sortSelect) sortSelect.value = receiptsSortField;
+  const sortDirIcon = document.getElementById("receiptsSortDirIcon");
+  if (sortDirIcon) {
+    sortDirIcon.textContent = receiptsSortAsc ? "arrow_upward" : "arrow_downward";
+  }
+
+  // 6. Render Table Content
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-12 text-center text-on-surface-variant font-medium">
+          <div class="max-w-sm mx-auto space-y-2">
+            <span class="material-symbols-outlined text-3xl text-on-surface-variant/60">search_off</span>
+            <div class="font-bold text-sm text-on-surface">No Receipts Found</div>
+            <p class="text-xs text-on-surface-variant">
+              No payment receipts match your search and filter criteria.
+            </p>
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    const categoryInfo = {
+      monthly_due: { en: "Monthly Due", si: "මාසික දායක", color: "bg-sky-50 text-sky-800 border-sky-200" },
+      admission_fee: { en: "Admission Fee", si: "ඇතුල්වීමේ ගාස්තුව", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+      donation: { en: "Donation / Aid", si: "ආධාර මුදල්", color: "bg-purple-50 text-purple-800 border-purple-200" },
+    };
+
+    const methodInfo = {
+      cash: { name: "Direct Cash", icon: "payments", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+      bank_transfer: { name: "Bank Transfer", icon: "account_balance", color: "text-sky-700 bg-sky-50 border-sky-200" },
+      slip: { name: "Deposit Slip", icon: "receipt", color: "text-slate-700 bg-slate-100 border-slate-200" },
+    };
+
+    tbody.innerHTML = list.map((r) => {
+      const recNum = r.id ? `MRIA-REC-${r.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
+      const m = r.members || {};
+      const memberName = m.full_name || "Member";
+      const memberEpf = m.epf_number || "N/A";
+      const memberDesig = m.designation || "Staff";
+
+      const rawDate = r.paid_at || r.verified_at || r.created_at;
+      const formattedDate = rawDate
+        ? new Date(rawDate).toLocaleString("en-GB", {
+            timeZone: "Asia/Colombo",
+            dateStyle: "medium",
+            timeStyle: "short",
+          })
+        : "-";
+
+      const catMeta = categoryInfo[r.payment_type] || { en: r.payment_type, si: "", color: "bg-slate-100 text-slate-700 border-slate-200" };
+      const methMeta = methodInfo[r.payment_method] || { name: r.payment_method, icon: "payments", color: "text-slate-700 bg-slate-100 border-slate-200" };
+
+      const amountVal = Number(r.amount || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      return `
+        <tr class="hover:bg-surface/50 transition-colors" data-receipt-id="${r.id}">
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="font-mono font-bold text-primary text-xs px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200">
+              ${recNum}
+            </span>
+          </td>
+          <td class="py-3 px-3">
+            <div class="min-w-0">
+              <div class="font-bold text-on-surface text-xs truncate">${escapeHtml(memberName)}</div>
+              <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 flex-wrap mt-0.5">
+                <span class="font-mono text-[10px] text-primary font-bold bg-sky-50 px-1 rounded border border-sky-200">EPF: ${escapeHtml(memberEpf)}</span>
+                <span class="truncate">${escapeHtml(memberDesig)}</span>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <div class="font-extrabold text-xs sm:text-sm text-emerald-700">
+              Rs. ${amountVal}
+            </div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <div class="text-xs text-on-surface font-medium">${formattedDate}</div>
+            <div class="text-[10px] text-on-surface-variant">Sri Lanka Time</div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${catMeta.color}">
+              ${catMeta.en}
+            </span>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${methMeta.color}">
+              <span class="material-symbols-outlined text-[13px]">${methMeta.icon}</span>
+              <span>${methMeta.name}</span>
+            </span>
+          </td>
+          <td class="py-3 px-3 text-right whitespace-nowrap">
+            <button 
+              type="button" 
+              onclick="window.viewReceiptVoucher('${r.id}')" 
+              class="px-2.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+              title="View, Print, or Download Official Voucher"
+            >
+              <span class="material-symbols-outlined text-[15px]">visibility</span>
+              <span>View Voucher</span>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  // 7. Update Footer & Pagination Controls
+  if (countBadge) {
+    countBadge.textContent = `Showing ${list.length} of ${receiptsTotalCount}`;
+  }
+  if (paginationBar) {
+    paginationBar.classList.remove("hidden");
+  }
+  if (paginationInfo) {
+    paginationInfo.textContent = `Showing ${list.length} of ${receiptsTotalCount} receipts (${allLoadedReceipts.length} loaded from database).`;
+  }
+  if (nextBtn) {
+    if (allLoadedReceipts.length >= receiptsTotalCount || allLoadedReceipts.length === 0) {
+      nextBtn.disabled = true;
+      nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>All Receipts Loaded</span>';
+      nextBtn.classList.add("opacity-50", "cursor-not-allowed");
+    } else {
+      nextBtn.disabled = false;
+      nextBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">expand_more</span><span>Load Next 25 Receipts</span>';
+      nextBtn.classList.remove("opacity-50", "cursor-not-allowed");
+    }
+  }
+}
+window.renderReceiptsTable = renderReceiptsTable;
+
+window.changeReceiptsSort = function (field) {
+  if (receiptsSortField === field) {
+    receiptsSortAsc = !receiptsSortAsc;
+  } else {
+    receiptsSortField = field;
+    receiptsSortAsc = (field === "name" || field === "receipt_num");
+  }
+  renderReceiptsTable();
+};
+
+window.toggleReceiptsSortDirection = function () {
+  receiptsSortAsc = !receiptsSortAsc;
+  renderReceiptsTable();
+};
+
+window.filterReceiptsCategory = function (cat) {
+  receiptsFilterCategory = cat;
+  if (receiptsLoaded) {
+    renderReceiptsTable();
+  }
+};
+
+window.filterReceiptsMethod = function (method) {
+  receiptsFilterMethod = method;
+  if (receiptsLoaded) {
+    renderReceiptsTable();
+  }
+};
+
+window.clearReceiptsSearch = function () {
+  const input = document.getElementById("receiptsSearchInput");
+  const clearBtn = document.getElementById("receiptsClearSearchBtn");
+  if (input) input.value = "";
+  if (clearBtn) clearBtn.classList.add("hidden");
+  receiptsSearchQuery = "";
+  renderReceiptsTable();
+};
+
+function setupReceiptsSearchAndFilters() {
+  const input = document.getElementById("receiptsSearchInput");
+  const clearBtn = document.getElementById("receiptsClearSearchBtn");
+  if (!input) return;
+
+  let timer;
+  input.addEventListener("input", () => {
+    receiptsSearchQuery = input.value;
+    if (clearBtn) {
+      if (receiptsSearchQuery.trim()) {
+        clearBtn.classList.remove("hidden");
+      } else {
+        clearBtn.classList.add("hidden");
+      }
+    }
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      renderReceiptsTable();
+    }, 150);
+  });
+}
+
+window.viewReceiptVoucher = function (id) {
+  const r = allLoadedReceipts.find((item) => item.id === id);
+  if (!r) {
+    showToast("Receipt details not found.", "warning");
+    return;
+  }
+
+  const modal = document.getElementById("viewReceiptModal");
+  const modalContent = document.getElementById("viewReceiptModalContent");
+  const modalTitle = document.getElementById("viewReceiptModalTitle");
+  if (!modal || !modalContent) return;
+
+  const m = r.members || {};
+  const memberName = m.full_name ? `${m.full_name} (${m.epf_number ? `EPF: ${m.epf_number}` : "Staff"})` : "Member";
+  const verifierName = r.verified_by_staff?.full_name || currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer";
+  const recNum = r.id ? `MRIA-REC-${r.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
+
+  if (modalTitle) {
+    modalTitle.textContent = `Official Receipt Voucher: ${recNum}`;
+  }
+
+  modalContent.innerHTML = renderReceiptHtml(r, memberName, verifierName, false);
+  openModal("viewReceiptModal");
 };
 
 // ================= TAB 4: SECRETARY CONSOLE =================
