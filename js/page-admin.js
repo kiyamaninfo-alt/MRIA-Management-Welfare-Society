@@ -160,11 +160,13 @@ window.switchAdminTab = switchAdminTab;
 async function loadInitialData() {
   allMembers = await getAllMembers();
   window.allMembers = allMembers;
+  await loadDuesSettings();
   populateMemberDropdowns(allMembers);
   await loadSlipApprovalQueue();
   await loadTreasuryData();
 }
 
+let configuredMonthlyDueAmount = 300;
 let approvedMembersList = [];
 
 function populateMemberDropdowns(members) {
@@ -243,6 +245,9 @@ export function selectCashMember(member) {
     }
     card.classList.remove("hidden");
   }
+
+  // 5. Update live voucher preview
+  updateLiveReceiptPreview();
 }
 window.selectCashMember = selectCashMember;
 
@@ -260,9 +265,10 @@ window.clearCashMemberSearch = function () {
 
   renderCashMemberOptions(approvedMembersList);
   updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+  updateLiveReceiptPreview();
 };
 
-window.resetCashMemberSelection = function () {
+window.resetCashMemberSelection = function ({ preservePreview = false } = {}) {
   const cashSelect = document.getElementById("cashMemberSelect");
   const searchInput = document.getElementById("cashMemberSearchInput");
   const clearBtn = document.getElementById("cashMemberClearSearchBtn");
@@ -272,7 +278,6 @@ window.resetCashMemberSelection = function () {
   if (cashSelect) cashSelect.value = "";
   if (searchInput) {
     searchInput.value = "";
-    searchInput.focus();
   }
   if (clearBtn) clearBtn.classList.add("hidden");
   if (resultsList) resultsList.classList.add("hidden");
@@ -280,6 +285,10 @@ window.resetCashMemberSelection = function () {
 
   renderCashMemberOptions(approvedMembersList);
   updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+
+  if (!preservePreview) {
+    updateLiveReceiptPreview();
+  }
 };
 
 function setupCashMemberSearch() {
@@ -481,10 +490,117 @@ window.rejectSlipPrompt = async function (paymentId) {
 
 // ================= TAB 2: CASH DESK =================
 
+function setCashDateToToday() {
+  const dateInput = document.getElementById("cashDateInput");
+  if (dateInput) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    dateInput.value = `${year}-${month}-${day}`;
+  }
+}
+
+export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
+  const previewContainer = document.getElementById("cashReceiptPreview");
+  const statusBadge = document.getElementById("receiptPreviewStatusBadge");
+  if (!previewContainer) return;
+
+  if (isCommitted && payment) {
+    if (statusBadge) {
+      statusBadge.textContent = "Official Issued Receipt";
+      statusBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200";
+    }
+    const memberId = payment.member_id;
+    const selectedMember = allMembers.find((m) => m.id === memberId);
+    const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number || "EPF: N/A"})` : "Member";
+    previewContainer.innerHTML = renderReceiptHtml(payment, memberName, currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer", false);
+    return;
+  }
+
+  // Live draft preview
+  if (statusBadge) {
+    statusBadge.textContent = "Live Draft Preview";
+    statusBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200";
+  }
+
+  const memberId = document.getElementById("cashMemberSelect")?.value;
+  const selectedMember = allMembers.find((m) => m.id === memberId);
+  const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number || "EPF: N/A"})` : "";
+  const amount = Number(document.getElementById("cashAmountInput")?.value) || 0;
+  const category = document.getElementById("cashCategorySelect")?.value || "monthly_due";
+  const dateVal = document.getElementById("cashDateInput")?.value || new Date().toISOString().slice(0, 10);
+  const notes = document.getElementById("cashNotesInput")?.value || "";
+
+  const draftPayment = {
+    id: "DRAFT-PREVIEW",
+    member_id: memberId,
+    amount,
+    payment_type: category,
+    payment_method: "cash",
+    status: "draft",
+    paid_at: dateVal,
+    created_at: dateVal,
+    notes,
+  };
+
+  previewContainer.innerHTML = renderReceiptHtml(
+    draftPayment,
+    memberName,
+    currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer",
+    true
+  );
+}
+window.updateLiveReceiptPreview = updateLiveReceiptPreview;
+
 function setupAdminForms() {
   setupCashMemberSearch();
 
   const cashForm = document.getElementById("cashCollectionForm");
+  const categorySelect = document.getElementById("cashCategorySelect");
+  const amountInput = document.getElementById("cashAmountInput");
+  const dateInput = document.getElementById("cashDateInput");
+  const notesInput = document.getElementById("cashNotesInput");
+
+  // Automatically default collection date to today
+  setCashDateToToday();
+
+  // If default category is monthly_due, set default configured amount
+  if (categorySelect && amountInput && categorySelect.value === "monthly_due") {
+    amountInput.value = configuredMonthlyDueAmount;
+  }
+
+  // When payment category changes, if monthly_due, take configured amount
+  if (categorySelect) {
+    categorySelect.addEventListener("change", () => {
+      if (categorySelect.value === "monthly_due") {
+        amountInput.value = configuredMonthlyDueAmount;
+      }
+      updateLiveReceiptPreview();
+    });
+  }
+
+  if (amountInput) {
+    amountInput.addEventListener("input", () => {
+      updateLiveReceiptPreview();
+    });
+  }
+
+  if (dateInput) {
+    dateInput.addEventListener("change", () => {
+      updateLiveReceiptPreview();
+    });
+  }
+
+  if (notesInput) {
+    notesInput.addEventListener("input", () => {
+      updateLiveReceiptPreview();
+    });
+  }
+
+  // Render initial live preview
+  updateLiveReceiptPreview();
+
   if (cashForm) {
     cashForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -509,17 +625,16 @@ function setupAdminForms() {
           paidAt: dateVal || null,
         });
 
-        const selectedMember = allMembers.find((m) => m.id === memberId);
-        const memberName = selectedMember ? selectedMember.full_name : "Member";
-
-        const previewContainer = document.getElementById("cashReceiptPreview");
-        if (previewContainer) {
-          previewContainer.innerHTML = renderReceiptHtml(payment, memberName, currentStaff.full_name);
-        }
+        // Update live voucher preview to official issued state
+        updateLiveReceiptPreview(true, payment);
 
         showToast("Cash payment recorded! Official voucher generated.", "success");
         cashForm.reset();
-        window.resetCashMemberSelection();
+        setCashDateToToday();
+        if (amountInput) {
+          amountInput.value = configuredMonthlyDueAmount;
+        }
+        window.resetCashMemberSelection({ preservePreview: true });
         await loadTreasuryData();
       } catch (err) {
         showToast(err.message || "Failed to record cash payment.", "error");
@@ -1414,9 +1529,18 @@ function setupBankSettingsHandlers() {
 async function loadDuesSettings() {
   try {
     const dueSetting = await getSystemSetting("monthly_due_amount");
+    if (dueSetting?.amount != null) {
+      configuredMonthlyDueAmount = Number(dueSetting.amount);
+    }
     const input = document.getElementById("settingMonthlyDueAmount");
     if (input) {
-      input.value = dueSetting?.amount != null ? dueSetting.amount : 300;
+      input.value = configuredMonthlyDueAmount;
+    }
+    const categorySelect = document.getElementById("cashCategorySelect");
+    const amountInput = document.getElementById("cashAmountInput");
+    if (categorySelect && amountInput && categorySelect.value === "monthly_due") {
+      amountInput.value = configuredMonthlyDueAmount;
+      updateLiveReceiptPreview();
     }
   } catch (err) {
     console.error("Failed to load monthly dues setting:", err);
@@ -1452,6 +1576,14 @@ function setupDuesSettingsHandlers() {
         { amount, currency: "LKR" },
         currentStaff?.id || null
       );
+
+      configuredMonthlyDueAmount = amount;
+      const categorySelect = document.getElementById("cashCategorySelect");
+      const amountInput = document.getElementById("cashAmountInput");
+      if (categorySelect && amountInput && categorySelect.value === "monthly_due") {
+        amountInput.value = configuredMonthlyDueAmount;
+        updateLiveReceiptPreview();
+      }
 
       showToast(`Default monthly dues successfully updated to Rs. ${amount.toLocaleString()} /=`, "success");
       if (statusEl) {

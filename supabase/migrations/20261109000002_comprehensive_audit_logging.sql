@@ -98,17 +98,18 @@ BEGIN
         VALUES (
             timezone('utc', now()),
             v_actor_email,
-            COALESCE(v_actor_name, 'Member'),
+            COALESCE(v_actor_name, 'Staff Officer'),
             COALESCE(v_epf, 'N/A'),
             v_action,
             'payments',
             NEW.id::text,
             jsonb_build_object(
                 'amount', NEW.amount,
-                'billing_month', NEW.billing_month,
+                'payment_type', NEW.payment_type,
                 'method', NEW.payment_method,
                 'status', NEW.status,
-                'reference_number', NEW.reference_number
+                'member_id', NEW.member_id,
+                'notes', NEW.notes
             )
         );
     ELSIF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
@@ -415,9 +416,11 @@ BEGIN
             'treasury_transactions',
             NEW.id::text,
             jsonb_build_object(
-                'account_id', NEW.account_id,
-                'tx_type', NEW.tx_type,
+                'source_account_id', NEW.source_account_id,
+                'destination_account_id', NEW.destination_account_id,
+                'transaction_type', NEW.transaction_type,
                 'amount', NEW.amount,
+                'reference_no', NEW.reference_no,
                 'description', NEW.description
             )
         );
