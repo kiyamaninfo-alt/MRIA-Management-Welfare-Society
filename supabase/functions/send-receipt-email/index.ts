@@ -1,5 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -17,6 +15,7 @@ interface ReceiptEmailPayload {
   receiptNumber: string;
   amount: number;
   paymentType: string;
+  paymentMethod?: string;
   paidAt?: string;
   notes?: string;
   collectedByName?: string;
@@ -54,6 +53,7 @@ Deno.serve(async (req: Request) => {
       receiptNumber,
       amount,
       paymentType,
+      paymentMethod,
       paidAt,
       notes,
       collectedByName,
@@ -77,6 +77,14 @@ Deno.serve(async (req: Request) => {
 
     const catEn = categoryNamesEn[paymentType] || paymentType;
     const catSi = categoryNamesSi[paymentType] || "";
+
+    const methodNames: Record<string, string> = {
+      cash: "Direct Cash Float (අතින් දුන් මුදල් / භාණ්ඩාගාරය)",
+      bank_transfer: "Bank Transfer / Direct Deposit (බැංකු තැන්පතු)",
+      qr_payment: "LankaQR / QR Scan (QR ගෙවීම්)",
+      slip: "Bank Deposit Slip (බැංකු රිසිට්පත්)",
+    };
+    const methodDisplay = methodNames[paymentMethod || "cash"] || (paymentMethod || "Direct Cash Float");
 
     const isGrantVoucher = Boolean(body.isGrant || body.voucherType === "grant" || (receiptNumber && receiptNumber.includes("GRNT")));
 
@@ -204,7 +212,7 @@ Deno.serve(async (req: Request) => {
           </tr>
           <tr>
             <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Payment Method:</td>
-            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">Direct Cash Intake Desk (භාණ්ඩාගාරය)</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${methodDisplay}</td>
           </tr>
           <tr style="background-color: #f8fafc;">
             <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Issued & Authenticated By:</td>

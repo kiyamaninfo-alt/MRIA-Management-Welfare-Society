@@ -794,6 +794,7 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
   const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number || "EPF: N/A"})` : "";
   const amount = Number(document.getElementById("cashAmountInput")?.value) || 0;
   const category = document.getElementById("cashCategorySelect")?.value || "monthly_due";
+  const method = document.getElementById("cashMethodSelect")?.value || "cash";
   const dateVal = document.getElementById("cashDateInput")?.value || getSriLankaDateTimeLocal();
   const formattedDateVal = dateVal
     ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : (dateVal.includes("T") ? `${dateVal}:00+05:30` : `${dateVal}T00:00:00+05:30`))
@@ -805,7 +806,7 @@ export function updateLiveReceiptPreview(isCommitted = false, payment = null) {
     member_id: memberId,
     amount,
     payment_type: category,
-    payment_method: "cash",
+    payment_method: method,
     status: "draft",
     paid_at: formattedDateVal,
     created_at: formattedDateVal,
@@ -881,6 +882,7 @@ function setupAdminForms() {
   const amountInput = document.getElementById("cashAmountInput");
   const dateInput = document.getElementById("cashDateInput");
   const notesInput = document.getElementById("cashNotesInput");
+  const methodSelect = document.getElementById("cashMethodSelect");
   const admissionFeeSelect = document.getElementById("cashAdmissionFeeSelect");
 
   // Automatically default collection date to today in Sri Lanka time
@@ -952,6 +954,12 @@ function setupAdminForms() {
     });
   }
 
+  if (methodSelect) {
+    methodSelect.addEventListener("change", () => {
+      updateLiveReceiptPreview();
+    });
+  }
+
   // Render initial live preview
   updateLiveReceiptPreview();
 
@@ -961,6 +969,7 @@ function setupAdminForms() {
       const memberId = document.getElementById("cashMemberSelect").value;
       const amount = Number(document.getElementById("cashAmountInput").value);
       const category = document.getElementById("cashCategorySelect").value;
+      const method = document.getElementById("cashMethodSelect")?.value || "cash";
       const notes = document.getElementById("cashNotesInput").value;
       const dateVal = document.getElementById("cashDateInput").value;
       const issueBtn = document.getElementById("issueReceiptBtn");
@@ -991,6 +1000,7 @@ function setupAdminForms() {
           memberId,
           amount,
           paymentType: category,
+          paymentMethod: method,
           collectedByMemberId: currentStaff?.id || null,
           notes,
           paidAt: formattedPaidAt,
@@ -1022,6 +1032,7 @@ function setupAdminForms() {
               receiptNumber,
               amount,
               paymentType: category,
+              paymentMethod: method,
               paidAt: formattedPaidAt,
               notes,
               collectedByName: currentStaff?.full_name || "Treasurer",
@@ -1034,6 +1045,7 @@ function setupAdminForms() {
               details: {
                 receiptNumber,
                 amount,
+                paymentMethod: method,
                 recipientEmail: memberEmail,
                 memberId,
                 paymentType: category,
@@ -1089,6 +1101,7 @@ function setupAdminForms() {
             details: {
               receiptNumber,
               amount,
+              paymentMethod: method,
               memberId,
               memberName,
               paymentType: category,
@@ -1121,6 +1134,9 @@ function setupAdminForms() {
         }
 
         cashForm.reset();
+        if (methodSelect) {
+          methodSelect.value = "cash";
+        }
         setCashDateToToday();
         if (amountInput) {
           if (categorySelect?.value === "monthly_due") {
@@ -1829,6 +1845,7 @@ function renderReceiptsTable() {
     const methodInfo = {
       cash: { name: "Direct Cash", icon: "payments", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
       bank_transfer: { name: "Bank Transfer", icon: "account_balance", color: "text-sky-700 bg-sky-50 border-sky-200" },
+      qr_payment: { name: "LankaQR", icon: "qr_code_scanner", color: "text-amber-800 bg-amber-50 border-amber-200" },
       slip: { name: "Deposit Slip", icon: "receipt", color: "text-slate-700 bg-slate-100 border-slate-200" },
     };
 

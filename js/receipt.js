@@ -34,8 +34,24 @@ export async function shareReceipt(payment, memberName, verifierName) {
     donation: "ආධාර මුදල්",
   };
 
+  const methodNamesEn = {
+    bank_transfer: "Bank Transfer",
+    cash: "Direct Cash Float",
+    qr_payment: "LankaQR / QR Scan",
+    slip: "Bank Deposit Slip",
+  };
+
+  const methodNamesSi = {
+    bank_transfer: "බැංකු තැන්පතු",
+    cash: "අතින් දුන් මුදල්",
+    qr_payment: "LankaQR ගෙවීම්",
+    slip: "බැංකු රිසිට්පත් තැන්පතු",
+  };
+
   const paymentTypeKey = paymentObj.payment_type || "monthly_due";
+  const paymentMethodKey = paymentObj.payment_method || "cash";
   const categoryDisplay = isSi ? (categoryNamesSi[paymentTypeKey] || paymentTypeKey) : (categoryNamesEn[paymentTypeKey] || paymentTypeKey);
+  const methodDisplay = isSi ? (methodNamesSi[paymentMethodKey] || paymentMethodKey) : (methodNamesEn[paymentMethodKey] || paymentMethodKey);
   const payerName = memberName || (isSi ? "සංගමයේ සාමාජික" : "Association Member");
 
   const shareText = `*MRIA Management Welfare Association*\n` +
@@ -45,6 +61,7 @@ export async function shareReceipt(payment, memberName, verifierName) {
     `👤 Member: ${payerName}\n` +
     `📅 Date: ${dateStr}\n` +
     `🏷 Category: ${categoryDisplay}\n` +
+    `💳 Payment Method: ${methodDisplay}\n` +
     `💰 Amount: Rs. ${amountVal}\n` +
     `✅ Status: Verified & Settled in Ledger\n` +
     `✍️ Authenticated By: ${verifierName || "Treasurer"}\n` +
@@ -449,12 +466,16 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
 
   const methodNamesEn = {
     bank_transfer: "Bank Transfer",
-    cash: "Direct Cash",
+    cash: "Direct Cash Float",
+    qr_payment: "LankaQR / QR Scan",
+    slip: "Bank Deposit Slip",
   };
 
   const methodNamesSi = {
     bank_transfer: "බැංකු තැන්පතු",
     cash: "අතින් දුන් මුදල්",
+    qr_payment: "LankaQR ගෙවීම්",
+    slip: "බැංකු රිසිට්පත් තැන්පතු",
   };
 
   const paymentTypeKey = paymentObj.payment_type || "monthly_due";
