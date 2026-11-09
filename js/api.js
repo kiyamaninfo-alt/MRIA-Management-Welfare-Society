@@ -445,6 +445,8 @@ export async function recordCashPayment({
  */
 export async function sendReceiptEmail({
   paymentId,
+  claimId,
+  isGrant = false,
   recipientEmail,
   recipientName,
   recipientEpf,
@@ -469,6 +471,9 @@ export async function sendReceiptEmail({
       },
       body: JSON.stringify({
         paymentId,
+        claimId,
+        isGrant,
+        voucherType: isGrant ? "grant" : "receipt",
         recipientEmail,
         recipientName,
         recipientEpf,
@@ -643,6 +648,88 @@ export async function disburseBenefitClaim({ claimId, disbursedAmount, disbursed
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Records a direct welfare benefit grant disbursement.
+ * If claimId is provided, updates that existing claim to 'disbursed'.
+ * If claimId is not provided, inserts a new claim record with status = 'disbursed'.
+ * Also synchronizes the treasury transaction outflow to the specified source account.
+ */
+export async function recordDirectBenefitGrant({
+  claimId = null,
+  memberId,
+  benefitTypeId,
+  amount,
+  sourceAccountId = "boc_savings",
+  disbursedByMemberId,
+  disbursedAt = null,
+  notes = null,
+}) {
+  const formattedDisbursedAt = disbursedAt || new Date().toISOString();
+  let claim;
+
+  if (claimId) {
+    const { data, error } = await supabase
+      .from("benefit_claims")
+      .update({
+        status: "disbursed",
+        disbursed_amount: Number(amount),
+        disbursed_by: disbursedByMemberId,
+        disbursed_at: formattedDisbursedAt,
+        notes,
+      })
+      .eq("id", claimId)
+      .select("*, members(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
+      .single();
+
+    if (error) throw error;
+    claim = data;
+  } else {
+    const { data, error } = await supabase
+      .from("benefit_claims")
+      .insert([
+        {
+          member_id: memberId,
+          benefit_type_id: benefitTypeId,
+          claim_amount: Number(amount),
+          disbursed_amount: Number(amount),
+          status: "disbursed",
+          approved_by: disbursedByMemberId,
+          disbursed_by: disbursedByMemberId,
+          disbursed_at: formattedDisbursedAt,
+          notes,
+        },
+      ])
+      .select("*, members(id, full_name, epf_number, email, designation), benefit_types(id, code, title_en, title_si, max_amount)")
+      .single();
+
+    if (error) throw error;
+    claim = data;
+  }
+
+  // Ensure treasury transaction source account and transaction date match
+  if (claim?.id) {
+    try {
+      const txUpdates = {};
+      if (sourceAccountId && sourceAccountId !== "boc_savings") {
+        txUpdates.source_account_id = sourceAccountId;
+      }
+      if (formattedDisbursedAt) {
+        txUpdates.transaction_date = formattedDisbursedAt.split("T")[0];
+      }
+      if (Object.keys(txUpdates).length > 0) {
+        await supabase
+          .from("treasury_transactions")
+          .update(txUpdates)
+          .eq("claim_id", claim.id);
+      }
+    } catch (txErr) {
+      console.warn("Notice updating treasury transaction source account:", txErr);
+    }
+  }
+
+  return claim;
 }
 
 // ================= SOCIETY TREASURY APIS =================

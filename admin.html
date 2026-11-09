@@ -788,17 +788,246 @@
 
     </div>
 
-    <!-- ================= TAB 5: WELFARE BENEFIT CLAIMS ================= -->
-    <div id="tab-content-claims" class="tab-content hidden space-y-4">
+    <!-- ================= TAB 5: WELFARE BENEFIT CLAIMS & DISBURSEMENTS ================= -->
+    <div id="tab-content-claims" class="tab-content hidden space-y-5">
+      
+      <!-- Top Action Bar -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white border border-outline-variant rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-sky-100 text-primary flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-[24px]">volunteer_activism</span>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-on-surface">Welfare Benefit Grants &amp; Disbursements</h3>
+            <p class="text-xs text-on-surface-variant">Direct welfare grant payout desk, digital disbursement vouchers, and committee evaluations.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <button type="button" id="toggleGrantDeskBtn" onclick="window.toggleGrantDesk()" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+            <span class="material-symbols-outlined text-[18px]">payments</span>
+            <span id="toggleGrantDeskBtnText">Direct Benefit Payout Desk</span>
+          </button>
+          <button type="button" onclick="switchAdminTab('cms'); document.getElementById('benefitsManagementCard')?.scrollIntoView({ behavior: 'smooth' });" class="px-3.5 py-2 rounded-xl border border-outline-variant bg-surface hover:bg-white text-xs font-bold text-on-surface-variant hover:text-primary flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">tune</span>
+            <span class="hidden md:inline">Configure Facilities</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Direct Benefit Payout Desk (Grid with Form + Live Voucher Preview) -->
+      <div id="grantPayoutDeskSection" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Column: Benefit Disbursement Form -->
+        <div class="lg:col-span-6 bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[22px]">payments</span>
+              <div>
+                <h3 class="font-bold text-base text-on-surface">Direct Benefit Payout Desk</h3>
+                <p class="text-[11px] text-on-surface-variant">සුබසාධන ප්‍රතිලාභ ගෙවීම් පීඨිකාව</p>
+              </div>
+            </div>
+            <button type="button" onclick="window.resetGrantDisbursementForm()" class="text-[11px] text-on-surface-variant hover:text-rose-600 font-semibold flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px]">restart_alt</span>
+              <span>Reset Form</span>
+            </button>
+          </div>
+
+          <!-- Linked Welfare Claim Alert (Appears when disbursing an existing claim from table) -->
+          <div id="grantLinkedClaimAlert" class="hidden p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-2 shadow-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="material-symbols-outlined text-amber-700 text-[18px] shrink-0">link</span>
+              <div class="truncate">
+                <span class="font-bold">Linked to Claim:</span> <span id="grantLinkedClaimRef" class="font-mono font-bold text-amber-800">CLM-XXXX</span>
+                <span class="text-[11px] text-amber-700 block truncate" id="grantLinkedClaimDetails">Disbursing approved committee claim</span>
+              </div>
+            </div>
+            <button type="button" onclick="window.unlinkClaimFromGrantDesk()" class="text-[11px] font-bold text-rose-600 hover:text-rose-800 shrink-0 px-2 py-0.5 rounded border border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer">
+              Unlink
+            </button>
+          </div>
+
+          <form id="grantDisbursementForm" class="space-y-4">
+            <input type="hidden" id="grantClaimIdInput" value="" />
+
+            <!-- Member Search & Selection Component -->
+            <div class="space-y-2 relative" id="grantMemberSelectGroup">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-on-surface" for="grantMemberSearchInput">
+                  Select Beneficiary Member (ප්‍රතිලාභී සාමාජිකයා)
+                  <span class="text-rose-500">*</span>
+                </label>
+                <span id="grantMemberMatchCount" class="text-[11px] font-mono text-on-surface-variant font-medium"></span>
+              </div>
+
+              <!-- Dedicated Member Search Bar with Instant Autocomplete Results -->
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px] pointer-events-none">person_search</span>
+                <input 
+                  type="text" 
+                  id="grantMemberSearchInput" 
+                  placeholder="Type name, EPF (e.g. 0001), designation, or email to search..." 
+                  autocomplete="off"
+                  class="w-full pl-9 pr-8 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs font-medium text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
+                />
+                <button 
+                  type="button" 
+                  id="grantMemberClearSearchBtn" 
+                  onclick="window.clearGrantMemberSearch()"
+                  class="hidden absolute right-2.5 top-2.5 text-on-surface-variant hover:text-rose-600 transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <span class="material-symbols-outlined text-[18px]">cancel</span>
+                </button>
+
+                <!-- Search Results Dropdown Popover -->
+                <div id="grantMemberResultsList" class="hidden absolute z-30 left-0 right-0 top-full mt-1.5 bg-white border border-outline-variant rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-outline-variant/60">
+                </div>
+              </div>
+
+              <!-- Standard Dropdown Select (In sync with search bar & form validation) -->
+              <div>
+                <select id="grantMemberSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer" required>
+                  <option value="" disabled selected>-- Select Member from list or search above --</option>
+                </select>
+              </div>
+
+              <!-- Selected Member Highlight Card -->
+              <div id="grantSelectedMemberCard" class="hidden p-3 rounded-xl bg-sky-50 border border-sky-200/80 flex items-center justify-between gap-3 text-xs shadow-xs">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shrink-0" id="grantSelectedMemberInitials">
+                    M
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-on-surface text-xs truncate flex items-center gap-1.5">
+                      <span id="grantSelectedMemberName">-</span>
+                      <span class="px-1.5 py-0.2 rounded font-mono text-[10px] bg-white font-bold border border-sky-300 text-primary" id="grantSelectedMemberEpf">-</span>
+                    </div>
+                    <div class="text-[11px] text-on-surface-variant truncate" id="grantSelectedMemberDesignation">-</div>
+                    <div class="text-[11px] font-semibold truncate flex items-center gap-1 mt-0.5" id="grantSelectedMemberEmail"></div>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onclick="window.resetGrantMemberSelection()" 
+                  class="text-[11px] font-bold text-rose-600 hover:text-rose-800 shrink-0 px-2.5 py-1 rounded-lg hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+
+            <!-- Benefit Program & Amount in LKR -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">
+                  Benefit Program (ප්‍රතිලාභ වැඩසටහන)
+                  <span class="text-rose-500">*</span>
+                </label>
+                <select id="grantBenefitTypeSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" required>
+                  <option value="" disabled selected>-- Select Benefit Facility --</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-bold text-on-surface">Amount (LKR)</label>
+                  <span class="text-[10px] text-primary font-semibold" id="grantConfiguredLimitTag">Limit: Rs. 20,000/=</span>
+                </div>
+                <input type="number" id="grantAmountInput" value="20000" min="100" step="100" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" required />
+              </div>
+            </div>
+
+            <!-- Benefit Program Limit & Info Helper Card -->
+            <div id="grantBenefitInfoCard" class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[15px] text-sky-700">info</span>
+                  <span id="grantInfoTitle">Death Donation (Bereavement Aid)</span>
+                </span>
+                <span class="font-mono font-bold text-primary text-[11px]" id="grantInfoMaxAmount">Max: Rs. 20,000/=</span>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-relaxed" id="grantInfoDescription">
+                Statutory death bereavement welfare donation to deceased member family or member.
+              </p>
+            </div>
+
+            <!-- Source Account & Disbursement Date / Time -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-on-surface mb-1">
+                  Source Treasury Account (ගෙවන ගිණුම)
+                </label>
+                <select id="grantSourceAccountSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors">
+                  <option value="boc_savings" selected>Bank of Ceylon Operating Savings (BOC Account)</option>
+                  <option value="cash_in_hand">Treasurer Physical Cash Float (Desk Cash)</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-bold text-on-surface">
+                    Disbursement Date &amp; Time
+                  </label>
+                  <span class="text-[10px] font-bold text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">schedule</span>
+                    <span>SL Time (Asia/Colombo)</span>
+                  </span>
+                </div>
+                <input type="datetime-local" id="grantDateInput" step="60" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+                <span class="text-[10px] text-on-surface-variant mt-1 block">
+                  Format: <strong>YYYY-MM-DD HH:mm</strong> (Sri Lanka Standard Time)
+                </span>
+              </div>
+            </div>
+
+            <!-- Notes / Remarks -->
+            <div>
+              <label class="block text-xs font-bold text-on-surface mb-1">Notes / Remarks (සටහන්)</label>
+              <input type="text" id="grantNotesInput" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" placeholder="e.g. Approved bereavement aid grant disbursed to member" />
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="issueGrantDisbursementBtn" class="mutation-btn w-full py-2.5 px-4 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all">
+              <span class="material-symbols-outlined text-[18px]">verified</span>
+              <span>Disburse Benefit Grant &amp; Issue Official Voucher</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Column: Live Digital Grant Voucher Preview Container -->
+        <div class="lg:col-span-6 bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">receipt_long</span>
+              <h4 class="font-bold text-sm text-on-surface">
+                Digital Grant Voucher Preview
+              </h4>
+            </div>
+            <span id="grantVoucherStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              Live Draft Preview
+            </span>
+          </div>
+
+          <div id="grantVoucherPreview" class="min-h-[300px]">
+          </div>
+
+          <!-- HTML Status Message Container (Automated email notification or No registered email message) -->
+          <div id="grantEmailNotificationBanner" class="hidden"></div>
+        </div>
+
+      </div>
+
+      <!-- Welfare Benefit Grants Review Queue Table -->
       <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant mb-4">
           <div>
-            <h3 class="font-bold text-base text-on-surface">Welfare Benefit Grants Review</h3>
-            <p class="text-xs text-on-surface-variant">Committee application evaluations and treasury disbursements.</p>
+            <h3 class="font-bold text-base text-on-surface">Welfare Benefit Grants Review Queue</h3>
+            <p class="text-xs text-on-surface-variant">Committee application evaluations, approval workflows, and quick disbursement shortcuts.</p>
           </div>
-          <button type="button" onclick="switchAdminTab('cms'); document.getElementById('benefitsManagementCard')?.scrollIntoView({ behavior: 'smooth' });" class="px-3.5 py-2 rounded-xl border border-outline-variant bg-surface hover:bg-white text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm">
-            <span class="material-symbols-outlined text-[16px]">tune</span>
-            <span>Configure Benefit Limits &amp; Facilities</span>
+          <button type="button" onclick="loadClaimsData()" class="px-3 py-1.5 rounded-xl border border-outline-variant bg-surface hover:bg-white text-xs font-bold text-on-surface flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+            <span class="material-symbols-outlined text-[15px]">refresh</span>
+            <span>Refresh Queue</span>
           </button>
         </div>
 
@@ -820,6 +1049,7 @@
           </table>
         </div>
       </div>
+
     </div>
 
     <!-- ================= TAB 6: DEFAULTERS ROSTER ================= -->

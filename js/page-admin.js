@@ -12,6 +12,7 @@ import {
   getAllBenefitClaims,
   reviewBenefitClaim,
   disburseBenefitClaim,
+  recordDirectBenefitGrant,
   getTreasuryBalances,
   recordTreasuryTransaction,
   getTreasuryStatement,
@@ -28,7 +29,7 @@ import {
   getPaymentReceipts,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
-import { renderReceiptHtml } from "./receipt.js";
+import { renderReceiptHtml, renderGrantVoucherHtml, shareGrantVoucher, downloadGrantVoucherFile } from "./receipt.js";
 import { exportTreasuryStatementToCsv, printTreasuryStatementPdf, getAccountSummariesFromStatement } from "./treasury-export.js";
 import { initLanguage, t, getLanguage } from "./i18n.js";
 import {
@@ -43,6 +44,8 @@ import {
 
 let currentStaff = null;
 let allMembers = [];
+let allBenefitTypes = [];
+let allClaimsList = [];
 let pendingPayments = [];
 let currentStatementData = null;
 let currentQrDataUrl = "/assets/default-bank-qr.svg";
@@ -51,7 +54,7 @@ let currentQrDataUrl = "/assets/default-bank-qr.svg";
 const ROLE_TABS = {
   admin: ["slips", "cash", "treasury", "receipts", "secretary", "claims", "defaulters", "cms", "audit"],
   manager: ["slips", "cash", "treasury", "receipts", "secretary", "claims", "defaulters", "cms", "audit"],
-  treasurer: ["treasury", "receipts", "slips", "cash", "defaulters", "cms", "audit"],
+  treasurer: ["treasury", "receipts", "slips", "cash", "claims", "defaulters", "cms", "audit"],
   secretary: ["secretary", "receipts", "claims", "defaulters", "cms"],
   committee_member: ["claims", "defaulters", "receipts"],
 };
@@ -167,8 +170,9 @@ window.switchAdminTab = switchAdminTab;
 async function loadInitialData() {
   allMembers = await getAllMembers();
   window.allMembers = allMembers;
-  await Promise.all([loadDuesSettings(), loadAdmissionFeesSettings()]);
+  await Promise.all([loadDuesSettings(), loadAdmissionFeesSettings(), loadBenefitTypesSettings()]);
   populateMemberDropdowns(allMembers);
+  populateGrantBenefitTypes();
   await loadSlipApprovalQueue();
   await loadTreasuryData();
 }
@@ -182,6 +186,8 @@ function populateMemberDropdowns(members) {
   approvedMembersList = (members || []).filter((m) => m.is_approved);
   renderCashMemberOptions(approvedMembersList);
   updateCashMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+  renderGrantMemberOptions(approvedMembersList);
+  updateGrantMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
 }
 
 function renderCashMemberOptions(members) {
@@ -402,6 +408,220 @@ function setupCashMemberSearch() {
       const member = approvedMembersList.find((m) => m.id === memberId);
       if (member) {
         selectCashMember(member);
+      }
+    });
+  }
+}
+
+// ================= BENEFIT GRANTS MEMBER SEARCH & SELECTION =================
+
+export function renderGrantMemberOptions(members) {
+  const grantSelect = document.getElementById("grantMemberSelect");
+  if (!grantSelect) return;
+
+  const currentVal = grantSelect.value;
+  grantSelect.innerHTML = '<option value="" disabled selected>-- Select Member from list or search above --</option>';
+
+  members.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = `${m.full_name} (EPF: ${m.epf_number || "N/A"}) - ${m.designation || "Staff"}`;
+    grantSelect.appendChild(opt);
+  });
+
+  if (currentVal && [...grantSelect.options].some((opt) => opt.value === currentVal)) {
+    grantSelect.value = currentVal;
+  }
+}
+
+export function updateGrantMemberMatchCount(matches, total) {
+  const badge = document.getElementById("grantMemberMatchCount");
+  if (!badge) return;
+  if (matches === total) {
+    badge.textContent = `${total} Members Available`;
+  } else {
+    badge.textContent = `${matches} of ${total} Matches`;
+  }
+}
+
+export function selectGrantMember(member) {
+  const grantSelect = document.getElementById("grantMemberSelect");
+  const searchInput = document.getElementById("grantMemberSearchInput");
+  const resultsList = document.getElementById("grantMemberResultsList");
+  const clearBtn = document.getElementById("grantMemberClearSearchBtn");
+  const card = document.getElementById("grantSelectedMemberCard");
+
+  if (!member) return;
+
+  if (grantSelect) {
+    if (![...grantSelect.options].some((opt) => opt.value === member.id)) {
+      renderGrantMemberOptions(approvedMembersList);
+    }
+    grantSelect.value = member.id;
+  }
+
+  if (searchInput) {
+    searchInput.value = `${member.full_name} (EPF: ${member.epf_number || "N/A"})`;
+  }
+  if (clearBtn) clearBtn.classList.remove("hidden");
+  if (resultsList) resultsList.classList.add("hidden");
+
+  if (card) {
+    const nameEl = document.getElementById("grantSelectedMemberName");
+    const epfEl = document.getElementById("grantSelectedMemberEpf");
+    const desigEl = document.getElementById("grantSelectedMemberDesignation");
+    const emailEl = document.getElementById("grantSelectedMemberEmail");
+    const initialsEl = document.getElementById("grantSelectedMemberInitials");
+
+    if (nameEl) nameEl.textContent = member.full_name || "-";
+    if (epfEl) epfEl.textContent = `EPF: ${member.epf_number || "N/A"}`;
+    if (desigEl) desigEl.textContent = member.designation || "Staff";
+    if (emailEl) {
+      if (member.email) {
+        emailEl.innerHTML = `<span class="material-symbols-outlined text-[13px] text-emerald-600">mail</span><span class="text-slate-700">${escapeHtml(member.email)}</span>`;
+      } else {
+        emailEl.innerHTML = `<span class="material-symbols-outlined text-[13px] text-amber-600">mail_off</span><span class="text-amber-700 font-bold">No registered email on profile</span>`;
+      }
+    }
+    if (initialsEl) {
+      initialsEl.textContent = (member.full_name || "M").charAt(0).toUpperCase();
+    }
+    card.classList.remove("hidden");
+  }
+
+  updateLiveGrantVoucherPreview();
+}
+window.selectGrantMember = selectGrantMember;
+
+window.clearGrantMemberSearch = function () {
+  const searchInput = document.getElementById("grantMemberSearchInput");
+  const clearBtn = document.getElementById("grantMemberClearSearchBtn");
+  const resultsList = document.getElementById("grantMemberResultsList");
+
+  if (searchInput) {
+    searchInput.value = "";
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add("hidden");
+  if (resultsList) resultsList.classList.add("hidden");
+
+  renderGrantMemberOptions(approvedMembersList);
+  updateGrantMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+  updateLiveGrantVoucherPreview();
+};
+
+window.resetGrantMemberSelection = function ({ preservePreview = false } = {}) {
+  const grantSelect = document.getElementById("grantMemberSelect");
+  const searchInput = document.getElementById("grantMemberSearchInput");
+  const clearBtn = document.getElementById("grantMemberClearSearchBtn");
+  const resultsList = document.getElementById("grantMemberResultsList");
+  const card = document.getElementById("grantSelectedMemberCard");
+
+  if (grantSelect) grantSelect.value = "";
+  if (searchInput) searchInput.value = "";
+  if (clearBtn) clearBtn.classList.add("hidden");
+  if (resultsList) resultsList.classList.add("hidden");
+  if (card) card.classList.add("hidden");
+
+  renderGrantMemberOptions(approvedMembersList);
+  updateGrantMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+
+  const emailBanner = document.getElementById("grantEmailNotificationBanner");
+  if (emailBanner && !preservePreview) {
+    emailBanner.innerHTML = "";
+    emailBanner.className = "hidden";
+  }
+
+  if (!preservePreview) {
+    updateLiveGrantVoucherPreview();
+  }
+};
+
+function setupGrantMemberSearch() {
+  const searchInput = document.getElementById("grantMemberSearchInput");
+  const resultsList = document.getElementById("grantMemberResultsList");
+  const clearBtn = document.getElementById("grantMemberClearSearchBtn");
+  const grantSelect = document.getElementById("grantMemberSelect");
+
+  if (!searchInput || !resultsList) return;
+
+  function filterMembers(q) {
+    const query = q.trim().toLowerCase();
+    if (!query) {
+      if (clearBtn) clearBtn.classList.add("hidden");
+      renderGrantMemberOptions(approvedMembersList);
+      updateGrantMemberMatchCount(approvedMembersList.length, approvedMembersList.length);
+      resultsList.classList.add("hidden");
+      return;
+    }
+
+    if (clearBtn) clearBtn.classList.remove("hidden");
+
+    const matches = approvedMembersList.filter((m) => {
+      const name = (m.full_name || "").toLowerCase();
+      const epf = (m.epf_number || "").toLowerCase();
+      const desig = (m.designation || "").toLowerCase();
+      const email = (m.email || "").toLowerCase();
+      return name.includes(query) || epf.includes(query) || desig.includes(query) || email.includes(query);
+    });
+
+    renderGrantMemberOptions(matches.length > 0 ? matches : approvedMembersList);
+    updateGrantMemberMatchCount(matches.length, approvedMembersList.length);
+
+    if (matches.length === 0) {
+      resultsList.innerHTML = `
+        <div class="p-3 text-center text-xs text-on-surface-variant font-medium">
+          No members found matching "<span class="font-bold text-on-surface">${q}</span>"
+        </div>
+      `;
+    } else {
+      resultsList.innerHTML = matches.map((m) => {
+        const initials = (m.full_name || "M").charAt(0).toUpperCase();
+        return `
+          <div class="p-2.5 hover:bg-sky-50 transition-colors cursor-pointer flex items-center justify-between gap-2" onclick="window.selectGrantMember(window.allMembers.find(item => item.id === '${m.id}'))">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded-full bg-sky-100 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                ${initials}
+              </div>
+              <div class="min-w-0">
+                <div class="font-bold text-xs text-on-surface truncate">${m.full_name}</div>
+                <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+                  <span class="font-mono text-[10px] text-primary font-bold bg-sky-50 px-1 rounded border border-sky-200">EPF: ${m.epf_number || "N/A"}</span>
+                  <span class="truncate">${m.designation || "Staff"}</span>
+                </div>
+              </div>
+            </div>
+            <span class="material-symbols-outlined text-[16px] text-primary/70 shrink-0">check</span>
+          </div>
+        `;
+      }).join("");
+    }
+    resultsList.classList.remove("hidden");
+  }
+
+  searchInput.addEventListener("input", (e) => {
+    filterMembers(e.target.value);
+  });
+
+  searchInput.addEventListener("focus", () => {
+    if (searchInput.value.trim().length > 0) {
+      filterMembers(searchInput.value);
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const group = document.getElementById("grantMemberSelectGroup");
+    if (group && !group.contains(e.target)) {
+      resultsList.classList.add("hidden");
+    }
+  });
+
+  if (grantSelect) {
+    grantSelect.addEventListener("change", () => {
+      const memberId = grantSelect.value;
+      const member = approvedMembersList.find((m) => m.id === memberId);
+      if (member) {
+        selectGrantMember(member);
       }
     });
   }
@@ -1058,6 +1278,7 @@ function setupAdminForms() {
   setupAdmissionFeeModalsHandlers();
   setupBenefitModalsHandlers();
   setupReceiptsSearchAndFilters();
+  setupGrantDeskForm();
 }
 
 // ================= TAB 3: SOCIETY TREASURY =================
@@ -1874,7 +2095,500 @@ window.openEditMemberModal = function (memberId) {
   openModal("editMemberModal");
 };
 
-// ================= TAB 5: WELFARE CLAIMS =================
+// ================= TAB 5: WELFARE CLAIMS & BENEFIT GRANTS =================
+
+export function populateGrantBenefitTypes() {
+  const select = document.getElementById("grantBenefitTypeSelect");
+  if (!select) return;
+
+  const currentVal = select.value;
+  select.innerHTML = '<option value="" disabled selected>-- Select Benefit Facility --</option>';
+
+  const list = (allBenefitTypes && allBenefitTypes.length > 0)
+    ? allBenefitTypes
+    : [
+        {
+          id: "benefit-death",
+          code: "DEATH_AID",
+          title_en: "Death Donation (Bereavement Aid)",
+          title_si: "මරණාධාර සුබසාධන ප්‍රතිලාභය",
+          description_en: "Statutory bereavement welfare donation to deceased member family or member.",
+          max_amount: 20000,
+          is_active: true,
+        },
+      ];
+
+  list.forEach((b) => {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.dataset.amount = b.max_amount;
+    opt.dataset.titleEn = b.title_en;
+    opt.dataset.titleSi = b.title_si || "";
+    opt.dataset.descEn = b.description_en || "";
+    opt.dataset.isActive = b.is_active ? "1" : "0";
+    const statusTag = b.is_active ? "" : " (Inactive)";
+    opt.textContent = `${b.title_en} ${b.title_si ? `(${b.title_si})` : ""} — Max Rs. ${Number(b.max_amount).toLocaleString()}/=${statusTag}`;
+    select.appendChild(opt);
+  });
+
+  // Select first active or match previous
+  if (currentVal && [...select.options].some((opt) => opt.value === currentVal)) {
+    select.value = currentVal;
+  } else {
+    const firstActive = list.find((b) => b.is_active) || list[0];
+    if (firstActive) {
+      select.value = firstActive.id;
+    }
+  }
+
+  updateGrantBenefitInfoCard();
+  updateLiveGrantVoucherPreview();
+}
+window.populateGrantBenefitTypes = populateGrantBenefitTypes;
+
+export function updateGrantBenefitInfoCard() {
+  const select = document.getElementById("grantBenefitTypeSelect");
+  const amountInput = document.getElementById("grantAmountInput");
+  const limitTag = document.getElementById("grantConfiguredLimitTag");
+  const infoTitle = document.getElementById("grantInfoTitle");
+  const infoMax = document.getElementById("grantInfoMaxAmount");
+  const infoDesc = document.getElementById("grantInfoDescription");
+  const notesInput = document.getElementById("grantNotesInput");
+
+  if (!select) return;
+  const opt = select.options[select.selectedIndex];
+  if (!opt || !opt.dataset.amount) return;
+
+  const maxAmount = Number(opt.dataset.amount) || 0;
+  const titleEn = opt.dataset.titleEn || "Benefit Program";
+  const descEn = opt.dataset.descEn || "Configured welfare assistance grant facility.";
+
+  if (limitTag) limitTag.textContent = `Limit: Rs. ${maxAmount.toLocaleString()}/=`;
+  if (infoTitle) infoTitle.textContent = titleEn;
+  if (infoMax) infoMax.textContent = `Max: Rs. ${maxAmount.toLocaleString()}/=`;
+  if (infoDesc) infoDesc.textContent = descEn;
+
+  if (amountInput && (!amountInput.value || amountInput.value === "20000" || amountInput.dataset.autoFilled === "true")) {
+    amountInput.value = maxAmount;
+    amountInput.dataset.autoFilled = "true";
+  }
+
+  if (notesInput && (!notesInput.value || notesInput.value.includes("grant") || notesInput.value.includes("ආධාර"))) {
+    notesInput.value = `${titleEn} grant disbursement to member`;
+  }
+}
+
+function setGrantDateToToday() {
+  const dateInput = document.getElementById("grantDateInput");
+  if (dateInput) {
+    dateInput.value = getSriLankaDateTimeLocal();
+  }
+}
+
+export function updateLiveGrantVoucherPreview(isCommitted = false, claimData = null) {
+  const previewContainer = document.getElementById("grantVoucherPreview");
+  const statusBadge = document.getElementById("grantVoucherStatusBadge");
+  if (!previewContainer) return;
+
+  if (isCommitted && claimData) {
+    if (statusBadge) {
+      statusBadge.textContent = "Official Issued Grant Voucher";
+      statusBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200";
+    }
+    const memberId = claimData.member_id;
+    const selectedMember = allMembers.find((m) => m.id === memberId) || claimData.members;
+    const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number ? `EPF: ${selectedMember.epf_number}` : "Staff"})` : "Beneficiary Member";
+    
+    const bt = claimData.benefit_types || (allBenefitTypes || []).find((b) => b.id === claimData.benefit_type_id) || {};
+
+    const grantObj = {
+      id: claimData.id,
+      amount: claimData.disbursed_amount || claimData.claim_amount,
+      benefit_title_en: bt.title_en || "Welfare Benefit Grant",
+      benefit_title_si: bt.title_si || "",
+      source_account_id: document.getElementById("grantSourceAccountSelect")?.value || "boc_savings",
+      disbursed_at: claimData.disbursed_at || claimData.created_at,
+      notes: claimData.notes,
+      status: "disbursed",
+    };
+
+    previewContainer.innerHTML = renderGrantVoucherHtml(grantObj, memberName, currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer", false);
+    return;
+  }
+
+  // Live draft preview
+  if (statusBadge) {
+    statusBadge.textContent = "Live Draft Preview";
+    statusBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200";
+  }
+
+  const memberId = document.getElementById("grantMemberSelect")?.value;
+  const selectedMember = allMembers.find((m) => m.id === memberId);
+  const memberName = selectedMember ? `${selectedMember.full_name} (${selectedMember.epf_number ? `EPF: ${selectedMember.epf_number}` : "Staff"})` : "";
+  const benefitTypeId = document.getElementById("grantBenefitTypeSelect")?.value;
+  const selectedBenefit = (allBenefitTypes || []).find((b) => b.id === benefitTypeId);
+  const amount = Number(document.getElementById("grantAmountInput")?.value) || 0;
+  const sourceAccountId = document.getElementById("grantSourceAccountSelect")?.value || "boc_savings";
+  const dateVal = document.getElementById("grantDateInput")?.value || getSriLankaDateTimeLocal();
+  const formattedDateVal = dateVal
+    ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : (dateVal.includes("T") ? `${dateVal}:00+05:30` : `${dateVal}T00:00:00+05:30`))
+    : new Date().toISOString();
+  const notes = document.getElementById("grantNotesInput")?.value || "";
+
+  const draftGrant = {
+    id: "DRAFT-PREVIEW",
+    amount,
+    benefit_title_en: selectedBenefit?.title_en || "Welfare Aid Grant",
+    benefit_title_si: selectedBenefit?.title_si || "",
+    source_account_id: sourceAccountId,
+    disbursed_at: formattedDateVal,
+    notes,
+    status: "draft",
+  };
+
+  previewContainer.innerHTML = renderGrantVoucherHtml(
+    draftGrant,
+    memberName,
+    currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer",
+    true
+  );
+}
+window.updateLiveGrantVoucherPreview = updateLiveGrantVoucherPreview;
+
+window.toggleGrantDesk = function () {
+  const section = document.getElementById("grantPayoutDeskSection");
+  if (!section) return;
+
+  if (section.classList.contains("hidden")) {
+    section.classList.remove("hidden");
+    section.scrollIntoView({ behavior: "smooth" });
+  } else {
+    section.scrollIntoView({ behavior: "smooth" });
+  }
+};
+
+window.loadClaimIntoPayoutDesk = function (claimId) {
+  const claim = (allClaimsList || []).find((c) => c.id === claimId);
+  if (!claim) {
+    showToast("Claim details not found.", "warning");
+    return;
+  }
+
+  const section = document.getElementById("grantPayoutDeskSection");
+  if (section && section.classList.contains("hidden")) {
+    section.classList.remove("hidden");
+  }
+
+  const claimIdInput = document.getElementById("grantClaimIdInput");
+  const linkedAlert = document.getElementById("grantLinkedClaimAlert");
+  const linkedRef = document.getElementById("grantLinkedClaimRef");
+  const linkedDetails = document.getElementById("grantLinkedClaimDetails");
+  const benefitSelect = document.getElementById("grantBenefitTypeSelect");
+  const amountInput = document.getElementById("grantAmountInput");
+  const notesInput = document.getElementById("grantNotesInput");
+
+  if (claimIdInput) claimIdInput.value = claim.id;
+
+  if (linkedAlert) {
+    linkedAlert.classList.remove("hidden");
+    if (linkedRef) linkedRef.textContent = `CLM-${claim.id.slice(0, 8).toUpperCase()}`;
+    const m = claim.members || {};
+    const bt = claim.benefit_types || {};
+    if (linkedDetails) {
+      linkedDetails.textContent = `Disbursing ${bt.title_en || "welfare grant"} for ${m.full_name || "Member"} (EPF: ${m.epf_number || "N/A"})`;
+    }
+  }
+
+  // Select member
+  const member = allMembers.find((m) => m.id === claim.member_id) || claim.members;
+  if (member) {
+    selectGrantMember(member);
+  }
+
+  // Select benefit type
+  if (benefitSelect && claim.benefit_type_id) {
+    benefitSelect.value = claim.benefit_type_id;
+    updateGrantBenefitInfoCard();
+  }
+
+  // Set amount
+  if (amountInput) {
+    amountInput.value = claim.claim_amount;
+    delete amountInput.dataset.autoFilled;
+  }
+
+  // Set notes
+  if (notesInput) {
+    const btTitle = claim.benefit_types?.title_en || "Welfare grant";
+    notesInput.value = claim.notes || `Disbursement for ${btTitle} (CLM-${claim.id.slice(0, 8).toUpperCase()})`;
+  }
+
+  if (section) {
+    section.scrollIntoView({ behavior: "smooth" });
+  }
+
+  updateLiveGrantVoucherPreview();
+  showToast(`Loaded Claim CLM-${claim.id.slice(0, 8).toUpperCase()} into Payout Desk. Review and confirm below.`, "info");
+};
+
+window.unlinkClaimFromGrantDesk = function () {
+  const claimIdInput = document.getElementById("grantClaimIdInput");
+  const linkedAlert = document.getElementById("grantLinkedClaimAlert");
+  if (claimIdInput) claimIdInput.value = "";
+  if (linkedAlert) linkedAlert.classList.add("hidden");
+  updateLiveGrantVoucherPreview();
+};
+
+window.resetGrantDisbursementForm = function () {
+  const form = document.getElementById("grantDisbursementForm");
+  if (form) form.reset();
+  window.unlinkClaimFromGrantDesk();
+  window.resetGrantMemberSelection({ preservePreview: true });
+  setGrantDateToToday();
+  populateGrantBenefitTypes();
+  const banner = document.getElementById("grantEmailNotificationBanner");
+  if (banner) {
+    banner.className = "hidden";
+    banner.innerHTML = "";
+  }
+};
+
+function setupGrantDeskForm() {
+  setupGrantMemberSearch();
+  setGrantDateToToday();
+  populateGrantBenefitTypes();
+
+  const form = document.getElementById("grantDisbursementForm");
+  const benefitSelect = document.getElementById("grantBenefitTypeSelect");
+  const amountInput = document.getElementById("grantAmountInput");
+  const sourceSelect = document.getElementById("grantSourceAccountSelect");
+  const dateInput = document.getElementById("grantDateInput");
+  const notesInput = document.getElementById("grantNotesInput");
+
+  if (benefitSelect) {
+    benefitSelect.addEventListener("change", () => {
+      updateGrantBenefitInfoCard();
+      updateLiveGrantVoucherPreview();
+    });
+  }
+
+  if (amountInput) {
+    amountInput.addEventListener("input", () => {
+      delete amountInput.dataset.autoFilled;
+      updateLiveGrantVoucherPreview();
+    });
+  }
+
+  if (sourceSelect) {
+    sourceSelect.addEventListener("change", () => {
+      updateLiveGrantVoucherPreview();
+    });
+  }
+
+  if (dateInput) {
+    dateInput.addEventListener("change", () => {
+      updateLiveGrantVoucherPreview();
+    });
+  }
+
+  if (notesInput) {
+    notesInput.addEventListener("input", () => {
+      updateLiveGrantVoucherPreview();
+    });
+  }
+
+  // Initial preview render
+  updateLiveGrantVoucherPreview();
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const memberId = document.getElementById("grantMemberSelect")?.value;
+      const benefitTypeId = document.getElementById("grantBenefitTypeSelect")?.value;
+      const amount = Number(document.getElementById("grantAmountInput")?.value);
+      const sourceAccountId = document.getElementById("grantSourceAccountSelect")?.value || "boc_savings";
+      const dateVal = document.getElementById("grantDateInput")?.value;
+      const notes = document.getElementById("grantNotesInput")?.value || "";
+      const claimId = document.getElementById("grantClaimIdInput")?.value || null;
+      const issueBtn = document.getElementById("issueGrantDisbursementBtn");
+      const banner = document.getElementById("grantEmailNotificationBanner");
+
+      if (!memberId) {
+        showToast("Please select a beneficiary member.", "warning");
+        return;
+      }
+      if (!benefitTypeId) {
+        showToast("Please select a benefit facility.", "warning");
+        return;
+      }
+      if (!amount || amount <= 0) {
+        showToast("Please specify a valid grant amount.", "warning");
+        return;
+      }
+
+      const selectedMember = allMembers.find((m) => m.id === memberId);
+      const memberEmail = (selectedMember?.email || "").trim();
+      const memberName = selectedMember ? selectedMember.full_name : "Beneficiary";
+      const memberEpf = selectedMember?.epf_number || "";
+      const selectedBenefit = (allBenefitTypes || []).find((b) => b.id === benefitTypeId);
+      const benefitTitle = selectedBenefit?.title_en || "Welfare Grant";
+
+      const formattedDisbursedAt = dateVal
+        ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : `${dateVal}:00+05:30`)
+        : new Date().toISOString();
+
+      try {
+        if (issueBtn) {
+          issueBtn.disabled = true;
+          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Disbursing Benefit Grant &amp; Issuing Voucher...</span>';
+        }
+
+        const disbursedClaim = await recordDirectBenefitGrant({
+          claimId,
+          memberId,
+          benefitTypeId,
+          amount,
+          sourceAccountId,
+          disbursedByMemberId: currentStaff?.id || null,
+          disbursedAt: formattedDisbursedAt,
+          notes,
+        });
+
+        const voucherNumber = disbursedClaim?.id ? `MRIA-GRNT-${disbursedClaim.id.slice(0, 8).toUpperCase()}` : "MRIA-GRNT";
+
+        // Update live voucher preview to official issued state
+        updateLiveGrantVoucherPreview(true, disbursedClaim);
+
+        // Handle Automated Email Dispatch
+        if (memberEmail) {
+          try {
+            await sendReceiptEmail({
+              claimId: disbursedClaim.id,
+              isGrant: true,
+              recipientEmail: memberEmail,
+              recipientName: memberName,
+              recipientEpf: memberEpf,
+              receiptNumber: voucherNumber,
+              amount,
+              paymentType: `Welfare Grant: ${benefitTitle}`,
+              paidAt: formattedDisbursedAt,
+              notes,
+              collectedByName: currentStaff?.full_name || "Treasurer",
+            });
+
+            logUserActivity({
+              action: "BENEFIT_GRANT_EMAILED",
+              entityType: "BENEFIT_CLAIM",
+              entityId: disbursedClaim.id,
+              details: {
+                voucherNumber,
+                amount,
+                recipientEmail: memberEmail,
+                memberId,
+                benefitTypeId,
+                benefitTitle,
+              },
+              actorEmail: currentStaff?.email || null,
+              actorName: currentStaff?.full_name || null,
+              epfNumber: currentStaff?.epf_number || null,
+            }).catch(() => {});
+
+            if (banner) {
+              banner.className = "mt-4 block";
+              banner.innerHTML = `
+                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+                  <div class="space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-emerald-900">
+                      <span>Official Grant Voucher Emailed Automatically</span>
+                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">වවුචරය සාර්ථකව ඊමේල් කරන ලදී</span>
+                    </div>
+                    <p class="text-[11px] text-emerald-800 leading-relaxed">
+                      An official digital voucher copy for <strong>${voucherNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+                    </p>
+                  </div>
+                </div>
+              `;
+            }
+
+            showToast(`Benefit grant disbursed! Official voucher emailed to ${memberEmail}`, "success");
+          } catch (emailErr) {
+            console.error("Grant email dispatch error:", emailErr);
+            if (banner) {
+              banner.className = "mt-4 block";
+              banner.innerHTML = `
+                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
+                  <div class="space-y-1">
+                    <div class="font-bold text-emerald-900">Official Grant Voucher Issued</div>
+                    <p class="text-[11px] text-emerald-800 leading-relaxed">
+                      Grant voucher <strong>${voucherNumber}</strong> recorded in treasury ledger. Email dispatch triggered. Digital voucher is ready below.
+                    </p>
+                  </div>
+                </div>
+              `;
+            }
+            showToast("Benefit grant disbursed! Digital voucher ready below.", "success");
+          }
+        } else {
+          // NO email registered on member profile -> display clear amber HTML message
+          logUserActivity({
+            action: "BENEFIT_GRANT_ISSUED_NO_EMAIL",
+            entityType: "BENEFIT_CLAIM",
+            entityId: disbursedClaim.id,
+            details: {
+              voucherNumber,
+              amount,
+              memberId,
+              memberName,
+              benefitTitle,
+              notice: "No registered email on member profile",
+            },
+            actorEmail: currentStaff?.email || null,
+            actorName: currentStaff?.full_name || null,
+            epfNumber: currentStaff?.epf_number || null,
+          }).catch(() => {});
+
+          if (banner) {
+            banner.className = "mt-4 block";
+            banner.innerHTML = `
+              <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
+                <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">mail_off</span>
+                <div class="space-y-1">
+                  <div class="font-bold flex items-center gap-1.5 text-amber-900">
+                    <span>No Registered Email Address</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">ලියාපදිංචි විද්‍යුත් තැපෑලක් නොමැත</span>
+                  </div>
+                  <p class="text-[11px] text-amber-800 leading-relaxed">
+                    Member <strong>${escapeHtml(memberName)}</strong>${memberEpf ? ` (EPF: ${escapeHtml(memberEpf)})` : ""} does not have an email address registered in the system. The official grant voucher <strong>${voucherNumber}</strong> was recorded in the database and treasury outflow, but could not be sent by email. You can download or print the official voucher below, or share it via WhatsApp.
+                  </p>
+                </div>
+              </div>
+            `;
+          }
+
+          showToast(`Grant disbursed! (Note: No registered email address on file for ${memberName})`, "warning");
+        }
+
+        form.reset();
+        window.unlinkClaimFromGrantDesk();
+        window.resetGrantMemberSelection({ preservePreview: true });
+        setGrantDateToToday();
+        populateGrantBenefitTypes();
+
+        await Promise.all([loadClaimsData(), loadTreasuryData()]);
+      } catch (err) {
+        showToast(err.message || "Failed to disburse benefit grant.", "error");
+      } finally {
+        if (issueBtn) {
+          issueBtn.disabled = false;
+          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">verified</span><span>Disburse Benefit Grant &amp; Issue Official Voucher</span>';
+        }
+      }
+    });
+  }
+}
 
 async function loadClaimsData() {
   const tbody = document.getElementById("benefitClaimsQueueBody");
@@ -1882,12 +2596,15 @@ async function loadClaimsData() {
 
   try {
     const claims = await getAllBenefitClaims();
-    if (claims.length === 0) {
+    allClaimsList = claims || [];
+    window.allClaimsList = allClaimsList;
+
+    if (allClaimsList.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-on-surface-variant">No welfare claims submitted yet.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = claims.map((c) => {
+    tbody.innerHTML = allClaimsList.map((c) => {
       const m = c.members || {};
       const bt = c.benefit_types || {};
       const applicantName = m.full_name || m.email || "Member";
@@ -1899,11 +2616,23 @@ async function loadClaimsData() {
         actions = `
           <button onclick="window.reviewClaim('${c.id}', 'approved')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>
           <button onclick="window.reviewClaim('${c.id}', 'rejected')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-50">Reject</button>
+          <button onclick="window.loadClaimIntoPayoutDesk('${c.id}')" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900 flex items-center gap-1 shadow-sm" title="Load into Direct Benefit Payout Desk">
+            <span class="material-symbols-outlined text-[13px]">payments</span>
+            <span>Disburse</span>
+          </button>
         `;
       } else if (c.status === "approved") {
         actions = `
-          <button onclick="window.disburseClaim('${c.id}', ${c.claim_amount})" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900">
-            Disburse Grant
+          <button onclick="window.loadClaimIntoPayoutDesk('${c.id}')" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900 flex items-center gap-1 shadow-sm" title="Load into Direct Benefit Payout Desk">
+            <span class="material-symbols-outlined text-[13px]">payments</span>
+            <span>Disburse Grant</span>
+          </button>
+        `;
+      } else if (c.status === "disbursed") {
+        actions = `
+          <button onclick="window.viewGrantVoucher('${c.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer" title="View official disbursement voucher">
+            <span class="material-symbols-outlined text-[14px]">receipt_long</span>
+            <span>View Voucher</span>
           </button>
         `;
       } else {
@@ -1920,12 +2649,12 @@ async function loadClaimsData() {
           <td class="py-2.5 px-3 font-medium">${benefitTitle}</td>
           <td class="py-2.5 px-3 font-mono font-bold text-primary">${formatCurrency(c.claim_amount)}</td>
           <td class="py-2.5 px-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${c.status === "disbursed" ? "bg-emerald-50 text-emerald-800" : "bg-sky-50 text-sky-800"}">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${c.status === "disbursed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : (c.status === "approved" ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-sky-50 text-sky-800 border border-sky-200")}">
               ${c.status.toUpperCase()}
             </span>
           </td>
           <td class="py-2.5 px-3 text-right">
-            <div class="inline-flex items-center gap-2">${actions}</div>
+            <div class="inline-flex items-center gap-1.5">${actions}</div>
           </td>
         </tr>
       `;
@@ -1934,6 +2663,45 @@ async function loadClaimsData() {
     console.error("Claims data error:", err);
   }
 }
+
+window.viewGrantVoucher = function (claimId) {
+  const claim = (allClaimsList || []).find((c) => c.id === claimId);
+  if (!claim) {
+    showToast("Claim record not found.", "warning");
+    return;
+  }
+
+  const modal = document.getElementById("viewReceiptModal");
+  const modalContent = document.getElementById("viewReceiptModalContent");
+  const modalTitle = document.getElementById("viewReceiptModalTitle");
+  if (!modal || !modalContent) return;
+
+  const m = claim.members || {};
+  const bt = claim.benefit_types || {};
+  const memberName = m.full_name ? `${m.full_name} (${m.epf_number ? `EPF: ${m.epf_number}` : "Staff"})` : "Member";
+  const verifierName = currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer";
+  const voucherNum = `MRIA-GRNT-${claim.id.slice(0, 8).toUpperCase()}`;
+
+  if (modalTitle) {
+    modalTitle.textContent = `Official Grant Voucher: ${voucherNum}`;
+  }
+
+  const grantData = {
+    id: claim.id,
+    amount: claim.disbursed_amount || claim.claim_amount,
+    benefit_title_en: bt.title_en || "Welfare Grant",
+    benefit_title_si: bt.title_si || "",
+    source_account_id: "boc_savings",
+    disbursed_at: claim.disbursed_at || claim.created_at,
+    notes: claim.notes || "Welfare benefit payout",
+    status: "disbursed",
+    voucher_type: "benefit_grant",
+    is_grant: true,
+  };
+
+  modalContent.innerHTML = renderGrantVoucherHtml(grantData, memberName, verifierName, false);
+  openModal("viewReceiptModal");
+};
 
 window.reviewClaim = async function (claimId, status) {
   const notes = prompt(`Enter review notes for ${status}:`);
@@ -1947,21 +2715,8 @@ window.reviewClaim = async function (claimId, status) {
   }
 };
 
-window.disburseClaim = async function (claimId, amount) {
-  if (!confirm(`Are you sure you want to disburse LKR ${amount}? This will automatically record an outflow in the Society Treasury.`)) return;
-  try {
-    await disburseBenefitClaim({
-      claimId,
-      disbursedAmount: amount,
-      disbursedByMemberId: currentStaff.id,
-      notes: "Disbursed via Treasury Management Console",
-    });
-    showToast("Grant disbursed and logged to Treasury successfully!", "success");
-    await loadClaimsData();
-    await loadTreasuryData();
-  } catch (err) {
-    showToast(err.message || "Disbursement failed.", "error");
-  }
+window.disburseClaim = function (claimId, amount) {
+  window.loadClaimIntoPayoutDesk(claimId);
 };
 
 // ================= TAB 6: DEFAULTERS ROSTER =================
@@ -2681,14 +3436,14 @@ function setupAdmissionFeeModalsHandlers() {
 
 // ================= WELFARE BENEFITS & FACILITIES SETTINGS =================
 
-let allBenefitTypes = [];
-
 async function loadBenefitTypesSettings() {
   const tbody = document.getElementById("benefitTypesTableBody");
-  if (!tbody) return;
 
   try {
     allBenefitTypes = await getAllBenefitTypes();
+    populateGrantBenefitTypes();
+
+    if (!tbody) return;
     if (!allBenefitTypes || allBenefitTypes.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-on-surface-variant">No welfare benefit programs configured. Click "Add Benefit Program" above to create one.</td></tr>';
       return;

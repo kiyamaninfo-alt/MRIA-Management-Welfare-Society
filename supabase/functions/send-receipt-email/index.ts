@@ -8,6 +8,9 @@ const corsHeaders = {
 
 interface ReceiptEmailPayload {
   paymentId?: string;
+  claimId?: string;
+  isGrant?: boolean;
+  voucherType?: string;
   recipientEmail: string;
   recipientName: string;
   recipientEpf?: string;
@@ -75,6 +78,8 @@ Deno.serve(async (req: Request) => {
     const catEn = categoryNamesEn[paymentType] || paymentType;
     const catSi = categoryNamesSi[paymentType] || "";
 
+    const isGrantVoucher = Boolean(body.isGrant || body.voucherType === "grant" || (receiptNumber && receiptNumber.includes("GRNT")));
+
     // Format date in Sri Lanka Time
     const dateObj = paidAt ? new Date(paidAt) : new Date();
     const formattedDate = dateObj.toLocaleString("en-GB", {
@@ -83,8 +88,82 @@ Deno.serve(async (req: Request) => {
       timeStyle: "short",
     });
 
-    const emailSubject = `[MRIA Welfare Receipt] Payment Confirmation: ${receiptNumber} (Rs. ${formattedAmount})`;
-    const emailHtml = `
+    const emailSubject = isGrantVoucher
+      ? `[MRIA Welfare Grant] Benefit Disbursement Voucher: ${receiptNumber} (Rs. ${formattedAmount})`
+      : `[MRIA Welfare Receipt] Payment Confirmation: ${receiptNumber} (Rs. ${formattedAmount})`;
+
+    const emailHtml = isGrantVoucher
+      ? `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <!-- Header -->
+        <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 16px; margin-bottom: 20px;">
+          <h2 style="color: #0c4a6e; margin: 0 0 6px 0; font-size: 20px; font-weight: 800;">
+            MRIA කළමනාකාර සුබසාධක සංගමය
+          </h2>
+          <div style="font-size: 13px; color: #0284c7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+            Mattala Rajapaksa International Airport • Management Welfare Association
+          </div>
+          <div style="margin-top: 10px; display: inline-block; padding: 4px 12px; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 9999px; color: #065f46; font-size: 12px; font-weight: 700;">
+            ✓ Official Benefit Grant Voucher / නිල සුබසාධන ප්‍රදාන වවුචරය
+          </div>
+        </div>
+
+        <!-- Salutation -->
+        <p style="font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+          Dear <strong>${recipientName}</strong>${recipientEpf ? ` (EPF: ${recipientEpf})` : ""},
+        </p>
+        <p style="font-size: 13px; line-height: 1.6; color: #475569; margin-bottom: 20px;">
+          This is your official digital welfare grant disbursement voucher confirming that your welfare benefit payout has been authorized and disbursed from the Society Treasury.
+        </p>
+
+        <!-- Voucher Table -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; width: 40%;">Voucher Number:</td>
+            <td style="padding: 10px 14px; font-weight: 700; font-family: monospace; color: #0369a1; border-bottom: 1px solid #e2e8f0;">${receiptNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Disbursement Date & Time:</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${formattedDate} (Sri Lanka Time)</td>
+          </tr>
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Benefit Program / Facility:</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">
+              ${catEn} ${catSi ? `<span style="color: #0284c7; font-size: 11px;">(${catSi})</span>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Beneficiary Member:</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${recipientName} ${recipientEpf ? `(EPF: ${recipientEpf})` : ""}</td>
+          </tr>
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Authorized & Disbursed By:</td>
+            <td style="padding: 10px 14px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0;">${collectedByName || "Welfare Association Treasurer"}</td>
+          </tr>
+          ${notes ? `
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Notes / Remarks:</td>
+            <td style="padding: 10px 14px; color: #475569; border-bottom: 1px solid #e2e8f0;">${notes}</td>
+          </tr>` : ""}
+          <tr style="background-color: #f0fdf4;">
+            <td style="padding: 14px; font-weight: 800; color: #166534; font-size: 14px;">Total Amount Disbursed:</td>
+            <td style="padding: 14px; font-weight: 800; color: #166534; font-size: 18px;">LKR ${formattedAmount} /=</td>
+          </tr>
+        </table>
+
+        <!-- Status & Portal link -->
+        <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-bottom: 24px;">
+          This disbursement has been recorded in the Society Treasury Ledger. You can log into your member portal at any time to review your benefit applications and history.
+        </p>
+
+        <!-- Footer -->
+        <footer style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.4;">
+          © MRIA කළමනාකාර සුබසාධක සංගමය — Mattala Rajapaksa International Airport<br/>
+          Automated Statutory Financial Notification
+        </footer>
+      </div>
+      `
+      : `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
         <!-- Header -->
         <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 16px; margin-bottom: 20px;">
@@ -153,7 +232,7 @@ Deno.serve(async (req: Request) => {
           Automated Statutory Financial Notification
         </footer>
       </div>
-    `;
+      `;
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
