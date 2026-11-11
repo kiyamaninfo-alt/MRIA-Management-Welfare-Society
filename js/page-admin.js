@@ -1,5 +1,7 @@
 import { requireAuth, signOut } from "./auth.js";
 import {
+  getMemberDues,
+  calculateMemberBalance,
   getPendingPayments,
   verifyPayment,
   rejectPayment,
@@ -13,6 +15,7 @@ import {
   reviewBenefitClaim,
   disburseBenefitClaim,
   recordDirectBenefitGrant,
+  undoClaimDisbursement,
   getTreasuryBalances,
   recordTreasuryTransaction,
   getTreasuryStatement,
@@ -30,6 +33,7 @@ import {
   voidPaymentReceipt,
   deleteOrArchiveMember,
   sendNotification,
+  sendBatchNotifications,
   getAdminInquiries,
   resolveAdminInquiry,
 } from "./api.js";
@@ -41,6 +45,7 @@ import {
   showToast,
   openModal,
   closeModal,
+  openDuesBreakdownModal,
   setupModalDismissers,
   initOfflineDetection,
   formatCurrency,
@@ -159,6 +164,7 @@ export function switchAdminTab(targetTab) {
   if (targetTab === "treasury") loadTreasuryData();
   if (targetTab === "receipts") {
     if (receiptsLoaded) renderReceiptsTable();
+    else loadReceiptsData();
   }
   if (targetTab === "secretary") loadSecretaryData();
   if (targetTab === "claims") loadClaimsData();
@@ -886,21 +892,21 @@ window.executeApproveSlip = async function () {
           banner.className = "block";
           banner.innerHTML = `
             <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
-              <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+              <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
               <div class="space-y-1">
                 <div class="font-bold flex items-center gap-1.5 text-emerald-900">
-                  <span>Official Receipt Emailed Automatically</span>
-                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">රිසිට්පත සාර්ථකව ඊමේල් කරන ලදී</span>
+                  <span>Official Receipt Issued</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">ඩිජිටල් රිසිට්පත නිකුත් කරන ලදී</span>
                 </div>
                 <p class="text-[11px] text-emerald-800 leading-relaxed">
-                  A digital copy of receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+                  Receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) recorded in official ledger. Digital voucher is ready below for download or print.
                 </p>
               </div>
             </div>
           `;
         }
 
-        showToast(`Bank slip approved! Official receipt emailed to ${memberEmail}`, "success");
+        showToast("Bank slip approved! Digital voucher ready below.", "success");
       } catch (emailErr) {
         console.error("Receipt email error:", emailErr);
         if (banner) {
@@ -1160,6 +1166,31 @@ window.renderCashAdmissionFeeOptions = renderCashAdmissionFeeOptions;
 function setupAdminForms() {
   setupCashMemberSearch();
 
+  let currentCashIdempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : null;
+  const refreshCashIdempotencyKey = () => {
+    currentCashIdempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : null;
+    return currentCashIdempotencyKey;
+  };
+  window.resetCashCollectionForm = function () {
+    const cashForm = document.getElementById("cashCollectionForm");
+    if (cashForm) cashForm.reset();
+    const methodSelect = document.getElementById("cashMethodSelect");
+    if (methodSelect) methodSelect.value = "cash";
+    setCashDateToToday();
+    const amountInput = document.getElementById("cashAmountInput");
+    const categorySelect = document.getElementById("cashCategorySelect");
+    if (amountInput) {
+      if (categorySelect?.value === "monthly_due") {
+        amountInput.value = configuredMonthlyDueAmount;
+      } else if (categorySelect?.value === "admission_fee") {
+        amountInput.value = configuredAdmissionFeeAmount;
+      }
+    }
+    window.resetCashMemberSelection({ preservePreview: false });
+    refreshCashIdempotencyKey();
+    showToast("Cash desk reset. New transaction token generated.", "info");
+  };
+
   const cashForm = document.getElementById("cashCollectionForm");
   const categorySelect = document.getElementById("cashCategorySelect");
   const amountInput = document.getElementById("cashAmountInput");
@@ -1287,11 +1318,15 @@ function setupAdminForms() {
           collectedByMemberId: currentStaff?.id || null,
           notes,
           paidAt: formattedPaidAt,
+          idempotencyKey: currentCashIdempotencyKey,
         });
+
+        // Unconditionally refresh form token after settled transaction so subsequent payments get fresh token
+        refreshCashIdempotencyKey();
 
         const receiptNumber = payment?.id ? `MRIA-REC-${payment.id.slice(0, 8).toUpperCase()}` : "MRIA-REC";
 
-        if (receiptsLoaded && payment) {
+        if (receiptsLoaded && payment && !payment.is_replayed) {
           const joinedReceipt = {
             ...payment,
             members: selectedMember,
@@ -1304,8 +1339,28 @@ function setupAdminForms() {
         // Update live voucher preview to official issued state
         updateLiveReceiptPreview(true, payment);
 
-        // Handle Automated Email Dispatch & HTML Message
-        if (memberEmail) {
+        if (payment.is_replayed) {
+          // INTERCEPTED DUPLICATE: Replay official voucher without duplicate email or activity logs
+          if (banner) {
+            banner.className = "mt-4 block";
+            banner.innerHTML = `
+              <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
+                <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">verified</span>
+                <div class="space-y-1">
+                  <div class="font-bold flex items-center gap-1.5 text-amber-900">
+                    <span>Payment Already Recorded (Duplicate Intercepted)</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">දැනටමත් සටහන් කර ඇත</span>
+                  </div>
+                  <p class="text-[11px] text-amber-800 leading-relaxed">
+                    This cash payment was already recorded under Receipt <strong>${receiptNumber}</strong> (Rs. ${Number(amount).toLocaleString()} /=). Official digital voucher reloaded below without creating a duplicate entry or sending a duplicate email.
+                  </p>
+                </div>
+              </div>
+            `;
+          }
+          showToast("Payment already recorded! Official voucher reloaded.", "info");
+        } else if (memberEmail) {
+          // Handle Automated Email Dispatch & HTML Message for fresh payments
           try {
             await sendReceiptEmail({
               paymentId: payment.id,
@@ -1342,21 +1397,21 @@ function setupAdminForms() {
               banner.className = "mt-4 block";
               banner.innerHTML = `
                 <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
-                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
                   <div class="space-y-1">
                     <div class="font-bold flex items-center gap-1.5 text-emerald-900">
-                      <span>Official Receipt Emailed Automatically</span>
-                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">රිසිට්පත සාර්ථකව ඊමේල් කරන ලදී</span>
+                      <span>Official Receipt Issued</span>
+                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">ඩිජිටල් රිසිට්පත නිකුත් කරන ලදී</span>
                     </div>
                     <p class="text-[11px] text-emerald-800 leading-relaxed">
-                      A digital copy of receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+                      Receipt <strong>${receiptNumber}</strong> (Rs. ${amount.toLocaleString()} /=) recorded in official ledger. Digital voucher is ready below for download or print.
                     </p>
                   </div>
                 </div>
               `;
             }
 
-            showToast(`Payment recorded! Official receipt automatically emailed to ${memberEmail}`, "success");
+            showToast("Cash payment recorded! Digital voucher ready below.", "success");
           } catch (emailErr) {
             console.error("Receipt email error:", emailErr);
             if (banner) {
@@ -1431,7 +1486,12 @@ function setupAdminForms() {
         window.resetCashMemberSelection({ preservePreview: true });
         await loadTreasuryData();
       } catch (err) {
-        showToast(err.message || "Failed to record cash payment.", "error");
+        if (err.message && err.message.includes("IDEMPOTENCY_PAYLOAD_MISMATCH")) {
+          showToast("Transaction Conflict: Form token was already used with conflicting payment data. Resetting form token.", "error");
+          refreshCashIdempotencyKey();
+        } else {
+          showToast(err.message || "Failed to record cash payment.", "error");
+        }
       } finally {
         if (issueBtn) {
           issueBtn.disabled = false;
@@ -1579,6 +1639,7 @@ function setupAdminForms() {
   setupReceiptsSearchAndFilters();
   setupGrantDeskForm();
   setupVoidReceiptHandler();
+  setupUndoClaimHandler();
   setupInquiriesHandlers();
   setupNotificationHandlers();
 }
@@ -1804,7 +1865,7 @@ function renderCashBookRows() {
 
     const formatAccountPill = (accId) => {
       if (accId === "boc_savings") {
-        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200"><span class="material-symbols-outlined text-[13px]">account_balance</span>BOC Savings</span>`;
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200"><span class="material-symbols-outlined text-[13px]">account_balance</span>Bank Savings</span>`;
       } else if (accId === "cash_in_hand") {
         return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><span class="material-symbols-outlined text-[13px]">payments</span>Cash in Hand</span>`;
       } else if (accId === "fixed_deposits") {
@@ -1897,6 +1958,7 @@ let receiptsSortAsc = false;
 let receiptsSearchQuery = "";
 let receiptsFilterCategory = "all";
 let receiptsFilterMethod = "all";
+let receiptsFilterStatus = "verified";
 let receiptsIsLoading = false;
 const RECEIPTS_PAGE_SIZE = 25;
 
@@ -1930,6 +1992,7 @@ async function loadReceiptsData(force = false) {
     const result = await getPaymentReceipts({
       limit: RECEIPTS_PAGE_SIZE,
       offset: 0,
+      status: "all",
       category: receiptsFilterCategory,
       paymentMethod: receiptsFilterMethod,
     });
@@ -1980,6 +2043,7 @@ async function loadNextReceiptsPage() {
     const result = await getPaymentReceipts({
       limit: RECEIPTS_PAGE_SIZE,
       offset,
+      status: "all",
       category: receiptsFilterCategory,
       paymentMethod: receiptsFilterMethod,
     });
@@ -2055,7 +2119,7 @@ function renderReceiptsTable() {
   }
 
   // 3b. Filter by Status (Verified vs Voided)
-  const statusFilter = document.getElementById("receiptsFilterStatus")?.value || "all";
+  const statusFilter = document.getElementById("receiptsStatusFilter")?.value || document.getElementById("receiptsFilterStatus")?.value || receiptsFilterStatus || "all";
   if (statusFilter && statusFilter !== "all") {
     list = list.filter((r) => r.status === statusFilter);
   }
@@ -2283,6 +2347,13 @@ window.filterReceiptsMethod = function (method) {
   }
 };
 
+window.filterReceiptsStatus = function (status) {
+  receiptsFilterStatus = status;
+  if (receiptsLoaded) {
+    renderReceiptsTable();
+  }
+};
+
 window.clearReceiptsSearch = function () {
   const input = document.getElementById("receiptsSearchInput");
   const clearBtn = document.getElementById("receiptsClearSearchBtn");
@@ -2386,6 +2457,10 @@ async function loadSecretaryData() {
           <td class="py-2.5 px-3 text-right">
             <div class="inline-flex items-center gap-1.5 justify-end">
               ${approveAction}
+              <button type="button" onclick="window.viewMemberDuesLedger('${m.id}', '${(m.full_name || '').replace(/'/g, "\\'")}')" class="px-2.5 py-1 border border-teal-300 text-teal-800 bg-teal-50/50 rounded-lg text-xs font-semibold hover:bg-teal-100 flex items-center gap-1 cursor-pointer" title="Inspect Monthly Dues Ledger">
+                <span class="material-symbols-outlined text-[13px]">receipt_long</span>
+                <span>Dues</span>
+              </button>
               <button onclick="window.openEditMemberModal('${m.id}')" class="px-2.5 py-1 border border-outline-variant rounded-lg text-xs font-semibold hover:border-primary">
                 Edit
               </button>
@@ -2410,6 +2485,18 @@ window.approveMember = async function (memberId) {
     await loadSecretaryData();
   } catch (err) {
     showToast(err.message || "Approval failed.", "error");
+  }
+};
+
+window.viewMemberDuesLedger = async function (memberId, memberName) {
+  try {
+    const dues = await getMemberDues(memberId);
+    const member = (allMembers || []).find((m) => m.id === memberId);
+    const balance = await calculateMemberBalance(member);
+    openDuesBreakdownModal(dues, balance, memberName || member?.full_name);
+  } catch (err) {
+    console.error("Failed to load member dues:", err);
+    showToast("Failed to load dues ledger.", "error");
   }
 };
 
@@ -2714,6 +2801,228 @@ window.resetGrantDisbursementForm = function () {
   }
 };
 
+let pendingGrantPayout = null;
+
+window.executeConfirmGrantDisbursement = async function () {
+  if (!pendingGrantPayout) return;
+  const {
+    claimId,
+    memberId,
+    benefitTypeId,
+    amount,
+    method,
+    formattedDisbursedAt,
+    notes,
+    memberName,
+    memberEpf,
+    memberEmail,
+    benefitTitle,
+    selectedBenefit,
+  } = pendingGrantPayout;
+
+  const btn = document.getElementById("btnExecuteConfirmGrant");
+  const modalContainer = document.getElementById("confirmGrantVoucherContainer");
+  const modalBanner = document.getElementById("confirmGrantBanner");
+  const actionBox = document.getElementById("confirmGrantActionBox");
+  const doneBox = document.getElementById("confirmGrantDoneBox");
+  const deskBanner = document.getElementById("grantEmailNotificationBanner");
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Disbursing &amp; Generating Voucher...</span>';
+    }
+
+    const disbursedClaim = await recordDirectBenefitGrant({
+      claimId,
+      memberId,
+      benefitTypeId,
+      amount,
+      paymentMethod: method,
+      disbursedByMemberId: currentStaff?.id || null,
+      disbursedAt: formattedDisbursedAt,
+      notes,
+    });
+
+    const voucherNumber = disbursedClaim?.id ? `MRIA-GRNT-${disbursedClaim.id.slice(0, 8).toUpperCase()}` : "MRIA-GRNT";
+
+    // Format grant object for rendered voucher
+    const grantObj = {
+      id: disbursedClaim?.id || "ISSUED",
+      amount: disbursedClaim?.disbursed_amount || amount,
+      benefit_title_en: benefitTitle,
+      benefit_title_si: selectedBenefit?.title_si || "",
+      payment_method: method,
+      source_account_id: method === "cash" ? "cash_in_hand" : "boc_savings",
+      disbursed_at: formattedDisbursedAt,
+      notes,
+      status: "disbursed",
+      voucher_type: "benefit_grant",
+      is_grant: true,
+    };
+
+    // Render official issued voucher in confirmation modal
+    if (modalContainer) {
+      modalContainer.innerHTML = renderGrantVoucherHtml(
+        grantObj,
+        `${memberName}${memberEpf ? ` (EPF: ${memberEpf})` : ""}`,
+        currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer",
+        false
+      );
+    }
+
+    // Also update live voucher preview on desk
+    updateLiveGrantVoucherPreview(true, disbursedClaim);
+
+    // Handle email dispatch & banners
+    if (memberEmail) {
+      try {
+        await sendReceiptEmail({
+          claimId: disbursedClaim.id,
+          isGrant: true,
+          recipientEmail: memberEmail,
+          recipientName: memberName,
+          recipientEpf: memberEpf,
+          receiptNumber: voucherNumber,
+          amount,
+          paymentType: `Welfare Grant: ${benefitTitle}`,
+          paymentMethod: method,
+          paidAt: formattedDisbursedAt,
+          notes,
+          collectedByName: currentStaff?.full_name || "Treasurer",
+        });
+
+        logUserActivity({
+          action: "BENEFIT_GRANT_EMAILED",
+          entityType: "BENEFIT_CLAIM",
+          entityId: disbursedClaim.id,
+          details: {
+            voucherNumber,
+            amount,
+            paymentMethod: method,
+            recipientEmail: memberEmail,
+            memberId,
+            benefitTypeId,
+            benefitTitle,
+          },
+          actorEmail: currentStaff?.email || null,
+          actorName: currentStaff?.full_name || null,
+          epfNumber: currentStaff?.epf_number || null,
+        }).catch(() => {});
+
+        const emailSuccessHtml = `
+          <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+            <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
+            <div class="space-y-1">
+              <div class="font-bold flex items-center gap-1.5 text-emerald-900">
+                <span>Official Grant Voucher Emailed Automatically</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">වවුචරය සාර්ථකව ඊමේල් කරන ලදී</span>
+              </div>
+              <p class="text-[11px] text-emerald-800 leading-relaxed">
+                An official digital voucher copy for <strong>${voucherNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
+              </p>
+            </div>
+          </div>
+        `;
+        if (modalBanner) {
+          modalBanner.className = "block";
+          modalBanner.innerHTML = emailSuccessHtml;
+        }
+        if (deskBanner) {
+          deskBanner.className = "mt-4 block";
+          deskBanner.innerHTML = emailSuccessHtml;
+        }
+
+        showToast(`Benefit grant disbursed! Official voucher emailed to ${memberEmail}`, "success");
+      } catch (emailErr) {
+        console.error("Grant email dispatch error:", emailErr);
+        const emailFallbackHtml = `
+          <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
+            <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
+            <div class="space-y-1">
+              <div class="font-bold text-emerald-900">Official Grant Voucher Issued</div>
+              <p class="text-[11px] text-emerald-800 leading-relaxed">
+                Grant voucher <strong>${voucherNumber}</strong> recorded in treasury ledger. Digital voucher is ready for download or printing below.
+              </p>
+            </div>
+          </div>
+        `;
+        if (modalBanner) {
+          modalBanner.className = "block";
+          modalBanner.innerHTML = emailFallbackHtml;
+        }
+        if (deskBanner) {
+          deskBanner.className = "mt-4 block";
+          deskBanner.innerHTML = emailFallbackHtml;
+        }
+        showToast("Benefit grant disbursed! Digital voucher ready.", "success");
+      }
+    } else {
+      // No registered email
+      logUserActivity({
+        action: "BENEFIT_GRANT_ISSUED_NO_EMAIL",
+        entityType: "BENEFIT_CLAIM",
+        entityId: disbursedClaim.id,
+        details: {
+          voucherNumber,
+          amount,
+          paymentMethod: method,
+          memberId,
+          memberName,
+          benefitTitle,
+          notice: "No registered email on member profile",
+        },
+        actorEmail: currentStaff?.email || null,
+        actorName: currentStaff?.full_name || null,
+        epfNumber: currentStaff?.epf_number || null,
+      }).catch(() => {});
+
+      const noEmailHtml = `
+        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
+          <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">mail_off</span>
+          <div class="space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-amber-900">
+              <span>No Registered Email Address</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">ලියාපදිංචි විද්‍යුත් තැපෑලක් නොමැත</span>
+            </div>
+            <p class="text-[11px] text-amber-800 leading-relaxed">
+              Member <strong>${escapeHtml(memberName)}</strong>${memberEpf ? ` (EPF: ${escapeHtml(memberEpf)})` : ""} does not have an email address registered in the system. The official grant voucher <strong>${voucherNumber}</strong> was recorded in the database and treasury outflow. You can download or print the official voucher below, or share it via WhatsApp.
+            </p>
+          </div>
+        </div>
+      `;
+      if (modalBanner) {
+        modalBanner.className = "block";
+        modalBanner.innerHTML = noEmailHtml;
+      }
+      if (deskBanner) {
+        deskBanner.className = "mt-4 block";
+        deskBanner.innerHTML = noEmailHtml;
+      }
+      showToast(`Grant disbursed! (No email registered on file for ${memberName})`, "warning");
+    }
+
+    // Switch action boxes
+    if (actionBox) actionBox.classList.add("hidden");
+    if (doneBox) doneBox.classList.remove("hidden");
+
+    // Refresh background data
+    await Promise.all([loadClaimsData(), loadTreasuryData()]);
+  } catch (err) {
+    showToast(err.message || "Failed to disburse benefit grant.", "error");
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">verified</span><span>Confirm &amp; Disburse Grant</span>';
+    }
+  }
+};
+
+window.finishGrantDisbursementModal = function () {
+  closeModal("confirmGrantModal");
+  window.resetGrantDisbursementForm();
+  pendingGrantPayout = null;
+};
+
 function setupGrantDeskForm() {
   setupGrantMemberSearch();
   setGrantDateToToday();
@@ -2762,7 +3071,7 @@ function setupGrantDeskForm() {
   updateLiveGrantVoucherPreview();
 
   if (form) {
-    form.addEventListener("submit", async (e) => {
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const memberId = document.getElementById("grantMemberSelect")?.value;
@@ -2772,8 +3081,6 @@ function setupGrantDeskForm() {
       const dateVal = document.getElementById("grantDateInput")?.value;
       const notes = document.getElementById("grantNotesInput")?.value || "";
       const claimId = document.getElementById("grantClaimIdInput")?.value || null;
-      const issueBtn = document.getElementById("issueGrantDisbursementBtn");
-      const banner = document.getElementById("grantEmailNotificationBanner");
 
       if (!memberId) {
         showToast("Please select a beneficiary member.", "warning");
@@ -2799,160 +3106,74 @@ function setupGrantDeskForm() {
         ? (dateVal.includes("+") || dateVal.includes("Z") ? dateVal : `${dateVal}:00+05:30`)
         : new Date().toISOString();
 
-      try {
-        if (issueBtn) {
-          issueBtn.disabled = true;
-          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Disbursing Benefit Grant &amp; Issuing Voucher...</span>';
-        }
+      // Store pending grant payload
+      pendingGrantPayout = {
+        claimId,
+        memberId,
+        benefitTypeId,
+        amount,
+        method,
+        dateVal,
+        formattedDisbursedAt,
+        notes,
+        selectedMember,
+        selectedBenefit,
+        memberName,
+        memberEpf,
+        memberEmail,
+        benefitTitle,
+      };
 
-        const disbursedClaim = await recordDirectBenefitGrant({
-          claimId,
-          memberId,
-          benefitTypeId,
+      // Populate confirmation modal fields
+      const nameEl = document.getElementById("confirmGrantMemberName");
+      const epfEl = document.getElementById("confirmGrantMemberEpf");
+      const progEl = document.getElementById("confirmGrantProgram");
+      const amtEl = document.getElementById("confirmGrantAmount");
+      const modalContainer = document.getElementById("confirmGrantVoucherContainer");
+      const modalBanner = document.getElementById("confirmGrantBanner");
+      const actionBox = document.getElementById("confirmGrantActionBox");
+      const doneBox = document.getElementById("confirmGrantDoneBox");
+      const btn = document.getElementById("btnExecuteConfirmGrant");
+
+      if (nameEl) nameEl.textContent = memberName;
+      if (epfEl) epfEl.textContent = memberEpf ? `EPF: ${memberEpf}` : "Staff";
+      if (progEl) progEl.textContent = benefitTitle;
+      if (amtEl) amtEl.textContent = formatCurrency(amount);
+
+      // Render Draft Voucher Preview in Confirmation Modal
+      if (modalContainer) {
+        const draftGrant = {
+          id: "DRAFT-PREVIEW",
           amount,
-          paymentMethod: method,
-          disbursedByMemberId: currentStaff?.id || null,
-          disbursedAt: formattedDisbursedAt,
+          benefit_title_en: benefitTitle,
+          benefit_title_si: selectedBenefit?.title_si || "",
+          payment_method: method,
+          source_account_id: method === "cash" ? "cash_in_hand" : "boc_savings",
+          disbursed_at: formattedDisbursedAt,
           notes,
-        });
-
-        const voucherNumber = disbursedClaim?.id ? `MRIA-GRNT-${disbursedClaim.id.slice(0, 8).toUpperCase()}` : "MRIA-GRNT";
-
-        // Update live voucher preview to official issued state
-        updateLiveGrantVoucherPreview(true, disbursedClaim);
-
-        // Handle Automated Email Dispatch
-        if (memberEmail) {
-          try {
-            await sendReceiptEmail({
-              claimId: disbursedClaim.id,
-              isGrant: true,
-              recipientEmail: memberEmail,
-              recipientName: memberName,
-              recipientEpf: memberEpf,
-              receiptNumber: voucherNumber,
-              amount,
-              paymentType: `Welfare Grant: ${benefitTitle}`,
-              paymentMethod: method,
-              paidAt: formattedDisbursedAt,
-              notes,
-              collectedByName: currentStaff?.full_name || "Treasurer",
-            });
-
-            logUserActivity({
-              action: "BENEFIT_GRANT_EMAILED",
-              entityType: "BENEFIT_CLAIM",
-              entityId: disbursedClaim.id,
-              details: {
-                voucherNumber,
-                amount,
-                paymentMethod: method,
-                recipientEmail: memberEmail,
-                memberId,
-                benefitTypeId,
-                benefitTitle,
-              },
-              actorEmail: currentStaff?.email || null,
-              actorName: currentStaff?.full_name || null,
-              epfNumber: currentStaff?.epf_number || null,
-            }).catch(() => {});
-
-            if (banner) {
-              banner.className = "mt-4 block";
-              banner.innerHTML = `
-                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
-                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">mark_email_read</span>
-                  <div class="space-y-1">
-                    <div class="font-bold flex items-center gap-1.5 text-emerald-900">
-                      <span>Official Grant Voucher Emailed Automatically</span>
-                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200/60 font-semibold text-emerald-800">වවුචරය සාර්ථකව ඊමේල් කරන ලදී</span>
-                    </div>
-                    <p class="text-[11px] text-emerald-800 leading-relaxed">
-                      An official digital voucher copy for <strong>${voucherNumber}</strong> (Rs. ${amount.toLocaleString()} /=) has been automatically dispatched to member's registered email: <strong>${escapeHtml(memberEmail)}</strong>.
-                    </p>
-                  </div>
-                </div>
-              `;
-            }
-
-            showToast(`Benefit grant disbursed! Official voucher emailed to ${memberEmail}`, "success");
-          } catch (emailErr) {
-            console.error("Grant email dispatch error:", emailErr);
-            if (banner) {
-              banner.className = "mt-4 block";
-              banner.innerHTML = `
-                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 shadow-xs">
-                  <span class="material-symbols-outlined text-emerald-600 text-[20px] shrink-0 mt-0.5">check_circle</span>
-                  <div class="space-y-1">
-                    <div class="font-bold text-emerald-900">Official Grant Voucher Issued</div>
-                    <p class="text-[11px] text-emerald-800 leading-relaxed">
-                      Grant voucher <strong>${voucherNumber}</strong> recorded in treasury ledger. Email dispatch triggered. Digital voucher is ready below.
-                    </p>
-                  </div>
-                </div>
-              `;
-            }
-            showToast("Benefit grant disbursed! Digital voucher ready below.", "success");
-          }
-        } else {
-          // NO email registered on member profile -> display clear amber HTML message
-          logUserActivity({
-            action: "BENEFIT_GRANT_ISSUED_NO_EMAIL",
-            entityType: "BENEFIT_CLAIM",
-            entityId: disbursedClaim.id,
-            details: {
-              voucherNumber,
-              amount,
-              paymentMethod: method,
-              memberId,
-              memberName,
-              benefitTitle,
-              notice: "No registered email on member profile",
-            },
-            actorEmail: currentStaff?.email || null,
-            actorName: currentStaff?.full_name || null,
-            epfNumber: currentStaff?.epf_number || null,
-          }).catch(() => {});
-
-          if (banner) {
-            banner.className = "mt-4 block";
-            banner.innerHTML = `
-              <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-xs">
-                <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">mail_off</span>
-                <div class="space-y-1">
-                  <div class="font-bold flex items-center gap-1.5 text-amber-900">
-                    <span>No Registered Email Address</span>
-                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-200/60 font-semibold text-amber-800">ලියාපදිංචි විද්‍යුත් තැපෑලක් නොමැත</span>
-                  </div>
-                  <p class="text-[11px] text-amber-800 leading-relaxed">
-                    Member <strong>${escapeHtml(memberName)}</strong>${memberEpf ? ` (EPF: ${escapeHtml(memberEpf)})` : ""} does not have an email address registered in the system. The official grant voucher <strong>${voucherNumber}</strong> was recorded in the database and treasury outflow, but could not be sent by email. You can download or print the official voucher below, or share it via WhatsApp.
-                  </p>
-                </div>
-              </div>
-            `;
-          }
-
-          showToast(`Grant disbursed! (Note: No registered email address on file for ${memberName})`, "warning");
-        }
-
-        form.reset();
-        if (methodSelect) {
-          methodSelect.value = "cash";
-        }
-        window.unlinkClaimFromGrantDesk();
-        window.resetGrantMemberSelection({ preservePreview: true });
-        setGrantDateToToday();
-        populateGrantBenefitTypes();
-
-        await Promise.all([loadClaimsData(), loadTreasuryData()]);
-      } catch (err) {
-        showToast(err.message || "Failed to disburse benefit grant.", "error");
-      } finally {
-        if (issueBtn) {
-          issueBtn.disabled = false;
-          issueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">verified</span><span>Disburse Benefit Grant &amp; Issue Official Voucher</span>';
-        }
+          status: "draft",
+        };
+        modalContainer.innerHTML = renderGrantVoucherHtml(
+          draftGrant,
+          `${memberName}${memberEpf ? ` (EPF: ${memberEpf})` : ""}`,
+          currentStaff?.full_name || "භාණ්ඩාගාරික / Treasurer",
+          true
+        );
       }
+
+      // Reset modal UI state
+      if (modalBanner) {
+        modalBanner.className = "hidden";
+        modalBanner.innerHTML = "";
+      }
+      if (actionBox) actionBox.classList.remove("hidden");
+      if (doneBox) doneBox.classList.add("hidden");
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">verified</span><span>Confirm &amp; Disburse Grant</span>';
+      }
+
+      openModal("confirmGrantModal");
     });
   }
 }
@@ -3002,11 +3223,23 @@ async function loadClaimsData() {
           </button>
         `;
       } else if (c.status === "disbursed") {
+        const disbursedTime = new Date(c.disbursed_at || c.created_at).getTime();
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const isWithin30Days = !isNaN(disbursedTime) && (Date.now() - disbursedTime <= thirtyDaysMs);
+
+        const undoBtn = isWithin30Days ? `
+          <button type="button" onclick="window.openUndoClaimModal('${c.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer" title="Undo benefit payout within 30 days">
+            <span class="material-symbols-outlined text-[13px]">undo</span>
+            <span>Undo</span>
+          </button>
+        ` : "";
+
         actions = `
           <button onclick="window.viewGrantVoucher('${c.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer" title="View official disbursement voucher">
             <span class="material-symbols-outlined text-[14px]">receipt_long</span>
             <span>View Voucher</span>
           </button>
+          ${undoBtn}
         `;
       } else {
         actions = `<span class="text-on-surface-variant text-xs capitalize">${c.status}</span>`;
@@ -3092,6 +3325,85 @@ window.reviewClaim = async function (claimId, status) {
 window.disburseClaim = function (claimId, amount) {
   window.loadClaimIntoPayoutDesk(claimId);
 };
+
+window.openUndoClaimModal = function (claimId) {
+  const claim = (allClaimsList || []).find((c) => c.id === claimId);
+  if (!claim) {
+    showToast("Claim record not found.", "warning");
+    return;
+  }
+
+  const m = claim.members || {};
+  const bt = claim.benefit_types || {};
+  const voucherNum = `MRIA-GRNT-${claim.id.slice(0, 8).toUpperCase()}`;
+  const memberName = m.full_name ? `${m.full_name} (${m.epf_number ? `EPF: ${m.epf_number}` : "Staff"})` : "Member";
+  const amountVal = formatCurrency(claim.disbursed_amount || claim.claim_amount);
+  const benefitTitle = bt.title_en || "Welfare Grant";
+  const dateVal = formatDate(claim.disbursed_at || claim.created_at);
+
+  const idInput = document.getElementById("undoClaimId");
+  const numSpan = document.getElementById("undoClaimVoucherNumber");
+  const memSpan = document.getElementById("undoClaimMemberName");
+  const progSpan = document.getElementById("undoClaimBenefitTitle");
+  const amtSpan = document.getElementById("undoClaimAmount");
+  const dateSpan = document.getElementById("undoClaimDate");
+  const reasonInput = document.getElementById("undoClaimReason");
+
+  if (idInput) idInput.value = claim.id;
+  if (numSpan) numSpan.textContent = voucherNum;
+  if (memSpan) memSpan.textContent = memberName;
+  if (progSpan) progSpan.textContent = benefitTitle;
+  if (amtSpan) amtSpan.textContent = amountVal;
+  if (dateSpan) dateSpan.textContent = dateVal;
+  if (reasonInput) reasonInput.value = "";
+
+  openModal("undoClaimModal");
+};
+
+function setupUndoClaimHandler() {
+  const form = document.getElementById("undoClaimForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const claimId = document.getElementById("undoClaimId")?.value;
+    const reason = document.getElementById("undoClaimReason")?.value?.trim();
+    const submitBtn = document.getElementById("btnExecuteUndoClaim");
+
+    if (!claimId) {
+      showToast("Invalid claim selected.", "warning");
+      return;
+    }
+
+    if (!reason || reason.length < 5) {
+      showToast("Please provide an official justification of at least 5 characters.", "warning");
+      return;
+    }
+
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Reversing Disbursement...</span>';
+      }
+
+      await undoClaimDisbursement(claimId, reason, currentStaff?.id || null);
+      showToast("Benefit grant disbursement undone. Claim reverted to approved and funds credited back to Treasury.", "success");
+      closeModal("undoClaimModal");
+
+      await Promise.all([loadClaimsData(), loadTreasuryData()]);
+    } catch (err) {
+      console.error("Undo disbursement error:", err);
+      showToast(err.message || "Failed to undo benefit grant disbursement.", "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">undo</span><span>Confirm &amp; Reverse Disbursement</span>';
+      }
+    }
+  });
+}
+
+window.loadClaimsData = loadClaimsData;
 
 // ================= TAB 6: DEFAULTERS ROSTER =================
 
@@ -3239,8 +3551,8 @@ export async function loadBankSettings() {
   try {
     const bankSetting = await getSystemSetting("bank_qr");
     const data = bankSetting || {
-      bank_name: "Bank of Ceylon (BOC)",
-      branch: "Mattala Airport Branch (742)",
+      bank_name: "Association Bank Account",
+      branch: "Mattala Branch",
       account_name: "MRIA Management Welfare Association",
       account_number: "8201948201",
       url: "/assets/default-bank-qr.svg",
@@ -3316,7 +3628,7 @@ function setupBankSettingsHandlers() {
       if (statusEl) {
         statusEl.textContent = "Default QR code restored - click Save to apply.";
       }
-      showToast("Reset to default BOC QR image. Click Save to apply.", "info");
+      showToast("Reset to default LankaQR image. Click Save to apply.", "info");
     });
   }
 
@@ -4349,17 +4661,55 @@ function setupNotificationHandlers() {
   const form = document.getElementById("dispatchNotificationForm");
   if (!form) return;
 
+  const targetRadios = form.querySelectorAll('input[name="notifTargetMode"]');
+  const recipientContainer = document.getElementById("notifRecipientContainer");
+  const recipientSelect = document.getElementById("notifRecipientSelect");
+
+  const syncTargetVisibility = () => {
+    const selectedMode = form.querySelector('input[name="notifTargetMode"]:checked')?.value || "single";
+    if (selectedMode === "single") {
+      if (recipientContainer) recipientContainer.classList.remove("hidden");
+      if (recipientSelect) {
+        recipientSelect.disabled = false;
+        recipientSelect.required = true;
+      }
+    } else {
+      if (recipientContainer) recipientContainer.classList.add("hidden");
+      if (recipientSelect) {
+        recipientSelect.disabled = true;
+        recipientSelect.required = false;
+        recipientSelect.value = "";
+      }
+    }
+  };
+
+  targetRadios.forEach((radio) => {
+    radio.addEventListener("change", syncTargetVisibility);
+  });
+  syncTargetVisibility();
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const recipientId = document.getElementById("notifRecipientSelect")?.value;
-    const titleEn = document.getElementById("notifTitleEn")?.value?.trim();
-    const titleSi = document.getElementById("notifTitleSi")?.value?.trim();
-    const messageEn = document.getElementById("notifMessageEn")?.value?.trim();
-    const messageSi = document.getElementById("notifMessageSi")?.value?.trim();
-    const priority = document.querySelector('input[name="notifPriority"]:checked')?.value || "normal";
+    const targetMode = form.querySelector('input[name="notifTargetMode"]:checked')?.value || "single";
+    const recipientId = recipientSelect?.value;
+    const titleEn = document.getElementById("notifTitleEn")?.value?.trim() || "";
+    const titleSi = document.getElementById("notifTitleSi")?.value?.trim() || "";
+    const messageEn = document.getElementById("notifMessageEn")?.value?.trim() || "";
+    const messageSi = document.getElementById("notifMessageSi")?.value?.trim() || "";
+    const priority = form.querySelector('input[name="notifPriority"]:checked')?.value || "normal";
 
-    if (!recipientId || !titleEn || !messageEn) {
-      showToast("Please fill all required notification fields.", "warning");
+    const finalTitleEn = titleEn || titleSi;
+    const finalTitleSi = titleSi || titleEn;
+    const finalMsgEn = messageEn || messageSi;
+    const finalMsgSi = messageSi || messageEn;
+
+    if (!finalTitleEn || !finalMsgEn) {
+      showToast("Please provide a notification title and message.", "warning");
+      return;
+    }
+
+    if (targetMode === "single" && !recipientId) {
+      showToast("Please select a recipient member.", "warning");
       return;
     }
 
@@ -4370,17 +4720,53 @@ function setupNotificationHandlers() {
         btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Dispatching...</span>';
       }
 
-      await sendNotification({
-        recipientId,
-        titleEn,
-        titleSi: titleSi || titleEn,
-        messageEn,
-        messageSi: messageSi || messageEn,
-        priority,
-      });
+      if (targetMode === "single") {
+        await sendNotification({
+          recipientId,
+          titleEn: finalTitleEn,
+          titleSi: finalTitleSi,
+          messageEn: finalMsgEn,
+          messageSi: finalMsgSi,
+          priority,
+        });
+        showToast("Notification successfully dispatched to member.", "success");
+      } else if (targetMode === "all") {
+        const approvedMembers = (allMembers || []).filter((m) => m.is_approved && !m.is_archived);
+        if (approvedMembers.length === 0) {
+          showToast("No active members found to notify.", "warning");
+          return;
+        }
+        const batch = approvedMembers.map((m) => ({
+          recipient_id: m.id,
+          title_en: finalTitleEn,
+          title_si: finalTitleSi,
+          message_en: finalMsgEn,
+          message_si: finalMsgSi,
+          priority,
+        }));
+        await sendBatchNotifications(batch);
+        showToast(`Notification broadcasted to all ${batch.length} active members.`, "success");
+      } else if (targetMode === "arrears") {
+        const defaulters = await getDefaultersRoster();
+        const uniqueMemberIds = [...new Set((defaulters || []).map((d) => d.member_id).filter(Boolean))];
+        if (uniqueMemberIds.length === 0) {
+          showToast("No members with pending arrears found.", "info");
+          return;
+        }
+        const batch = uniqueMemberIds.map((mId) => ({
+          recipient_id: mId,
+          title_en: finalTitleEn,
+          title_si: finalTitleSi,
+          message_en: finalMsgEn,
+          message_si: finalMsgSi,
+          priority,
+        }));
+        await sendBatchNotifications(batch);
+        showToast(`Notification sent to ${batch.length} members with arrears.`, "success");
+      }
 
-      showToast("Notification successfully dispatched to member.", "success");
       form.reset();
+      syncTargetVisibility();
     } catch (err) {
       console.error("Notification dispatch error:", err);
       showToast(err.message || "Failed to dispatch notification.", "error");

@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
         <!-- Header -->
         <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 16px; margin-bottom: 20px;">
           <h2 style="color: #0c4a6e; margin: 0 0 6px 0; font-size: 20px; font-weight: 800;">
-            MRIA කළමනාකාර සුබසාධක සංගමය
+            MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
           </h2>
           <div style="font-size: 13px; color: #0284c7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
             Mattala Rajapaksa International Airport • Management Welfare Association
@@ -170,7 +170,7 @@ Deno.serve(async (req: Request) => {
 
         <!-- Footer -->
         <footer style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.4;">
-          © MRIA කළමනාකාර සුබසාධක සංගමය — Mattala Rajapaksa International Airport<br/>
+          © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය — Mattala Rajapaksa International Airport<br/>
           Automated Statutory Financial Notification
         </footer>
       </div>
@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
         <!-- Header -->
         <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 16px; margin-bottom: 20px;">
           <h2 style="color: #0c4a6e; margin: 0 0 6px 0; font-size: 20px; font-weight: 800;">
-            MRIA කළමනාකාර සුබසාධක සංගමය
+            MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
           </h2>
           <div style="font-size: 13px; color: #0284c7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
             Mattala Rajapaksa International Airport • Management Welfare Association
@@ -240,7 +240,7 @@ Deno.serve(async (req: Request) => {
 
         <!-- Footer -->
         <footer style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.4;">
-          © MRIA කළමනාකාර සුබසාධක සංගමය — Mattala Rajapaksa International Airport<br/>
+          © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය — Mattala Rajapaksa International Airport<br/>
           Automated Statutory Financial Notification
         </footer>
       </div>

@@ -133,9 +133,8 @@ async function refreshDashboardData() {
   if (!currentMember) return;
 
   try {
-    // A. Announcements & Notification Center
-    const announcements = await getAnnouncements();
-    renderNotificationsCenter(announcements);
+    // A. Announcements / Notifications Loaded into Notification Modal
+    // (Banners removed from main view to prevent recurring popups)
 
     // B. Bank Coordinates & QR Code
     const bankQrSetting = await getSystemSetting("bank_qr");
@@ -160,12 +159,10 @@ async function refreshDashboardData() {
         const accNumEl = document.getElementById("displayAccountNumber");
         if (accNumEl) accNumEl.textContent = bankQrSetting.account_number;
       }
-      if (bankQrSetting.bank_name) {
+      if (bankQrSetting.bank_name || bankQrSetting.branch) {
         const badgeEl = document.getElementById("displayBankBadge");
         if (badgeEl) {
-          const bankPrefix = bankQrSetting.bank_name.includes("Ceylon") ? "BOC" : bankQrSetting.bank_name.split(" ")[0];
-          const branchPrefix = bankQrSetting.branch ? bankQrSetting.branch.split(" ")[0] : "";
-          badgeEl.textContent = branchPrefix ? `${bankPrefix} ${branchPrefix}` : bankPrefix;
+          badgeEl.textContent = bankQrSetting.branch || bankQrSetting.bank_name || "Official Account";
         }
       }
     }
@@ -313,19 +310,21 @@ window.openNotificationsModal = function () {
       const title = isSi ? (n.title_si || n.title_en) : (n.title_en || n.title_si);
       const msg = isSi ? (n.message_si || n.message_en) : (n.message_en || n.message_si);
       const isUrgent = n.priority === "urgent";
+      const isUnread = !n.is_read;
 
       return `
-        <div class="py-3 px-2 flex items-start justify-between gap-3 ${n.is_read ? "opacity-75" : "bg-sky-50/40 rounded-xl p-2.5"}">
+        <div class="py-3 px-3.5 my-1.5 flex items-start justify-between gap-3 ${isUnread ? "border-l-4 border-rose-600 bg-rose-50/70 rounded-r-xl shadow-xs" : "opacity-75 p-3 rounded-xl bg-slate-50 border border-slate-200/60"}">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center gap-2">
               ${isUrgent ? '<span class="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">URGENT</span>' : ''}
-              <h5 class="font-bold text-xs text-on-surface truncate">${escapeHtml(title)}</h5>
+              ${isUnread ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-rose-600 text-white tracking-wider">${t("unread_badge") || "UNREAD"}</span>` : `<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-200 text-slate-700 tracking-wider">${t("read_badge") || "READ"}</span>`}
+              <h5 class="font-bold text-xs ${isUnread ? "text-rose-950 font-extrabold" : "text-on-surface"} truncate">${escapeHtml(title)}</h5>
               <span class="text-[10px] text-on-surface-variant font-mono">• ${formatDate(n.created_at)}</span>
             </div>
-            <p class="text-xs text-on-surface-variant whitespace-pre-wrap leading-relaxed">${escapeHtml(msg)}</p>
+            <p class="text-xs ${isUnread ? "text-rose-900/90 font-medium" : "text-on-surface-variant"} whitespace-pre-wrap leading-relaxed">${escapeHtml(msg)}</p>
           </div>
-          ${!n.is_read ? `
-            <button type="button" onclick="window.markNotifRead('${n.id}')" class="shrink-0 px-2.5 py-1 bg-white hover:bg-slate-100 border border-outline-variant rounded-lg text-[11px] font-bold text-primary shadow-xs cursor-pointer">
+          ${isUnread ? `
+            <button type="button" onclick="window.markNotifRead('${n.id}')" class="shrink-0 px-2.5 py-1 bg-white hover:bg-rose-100 border border-rose-300 rounded-lg text-[11px] font-bold text-rose-700 shadow-xs cursor-pointer">
               Mark Read
             </button>
           ` : ''}
@@ -491,15 +490,21 @@ function renderMetrics(balanceInfo, dues) {
     monthDueLabel.textContent = t("cumulative_contributions") || "Contributions Paid to Date";
   }
 
-  const ytdPaid = Number(
-    balanceInfo.totalDuesPaid ??
+  let lifetimePaid = Number(
     balanceInfo.totalPaid ??
-    balanceInfo.ytdContributions ??
-    balanceInfo.ytdPaid ??
+    balanceInfo.totalDuesPaid ??
     0
   );
+
+  // Fallback to verified payments in currentPayments if balanceInfo was 0
+  if (lifetimePaid === 0 && Array.isArray(currentPayments) && currentPayments.length > 0) {
+    lifetimePaid = currentPayments
+      .filter((p) => p.status === "verified")
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }
+
   if (monthAmountEl) {
-    monthAmountEl.textContent = formatCurrency(ytdPaid);
+    monthAmountEl.textContent = formatCurrency(lifetimePaid);
   }
 
   const latestPayment = (currentPayments && currentPayments.length > 0) ? currentPayments[0] : null;
@@ -520,18 +525,21 @@ function renderMetrics(balanceInfo, dues) {
 }
 
 function renderClaimsSummary(claims) {
-  const totalClaimed = claims
-    .filter((c) => c.status === "disbursed" || c.status === "approved")
+  const totalDisbursed = claims
+    .filter((c) => c.status === "disbursed")
     .reduce((sum, c) => sum + Number(c.disbursed_amount || c.claim_amount || 0), 0);
 
   const display = document.getElementById("benefitsClaimedDisplay");
   if (display) {
-    display.textContent = formatCurrency(totalClaimed);
+    display.textContent = formatCurrency(totalDisbursed);
   }
 
+  const lastDisbursedClaim = claims.find((c) => c.status === "disbursed") || claims[0];
   const lastClaimDateDisplay = document.getElementById("lastClaimDateDisplay");
-  if (lastClaimDateDisplay && claims.length > 0) {
-    lastClaimDateDisplay.textContent = `Last: ${formatDate(claims[0].created_at)}`;
+  if (lastClaimDateDisplay && lastDisbursedClaim) {
+    lastClaimDateDisplay.textContent = `Last: ${formatDate(lastDisbursedClaim.disbursed_at || lastDisbursedClaim.created_at)}`;
+  } else if (lastClaimDateDisplay) {
+    lastClaimDateDisplay.textContent = "Last: None";
   }
 }
 
@@ -546,14 +554,21 @@ function renderDuesLedger(dues) {
 
   tbody.innerHTML = dues.map((due) => {
     const isPaid = due.status === "paid";
+    const isPrepaid = isPaid && Boolean(due.is_advance_settled);
     return `
       <tr class="hover:bg-sky-50/30 transition-colors">
         <td class="py-2.5 px-3 font-semibold text-on-surface">${due.billing_month}</td>
         <td class="py-2.5 px-3 font-mono font-bold text-right tabular-nums">${formatCurrency(due.amount)}</td>
         <td class="py-2.5 px-3">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isPaid ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}">
-            <span class="material-symbols-outlined text-[13px]">${isPaid ? "check_circle" : "schedule"}</span>
-            ${isPaid ? t("paid") : t("pending")}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+            isPrepaid
+              ? "bg-teal-50 text-teal-800 border border-teal-200"
+              : isPaid
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-rose-50 text-rose-700"
+          }">
+            <span class="material-symbols-outlined text-[13px]">${isPrepaid ? "task_alt" : isPaid ? "check_circle" : "schedule"}</span>
+            ${isPrepaid ? t("prepaid") : isPaid ? t("paid") : t("pending")}
           </span>
         </td>
         <td class="py-2.5 px-3 text-right text-on-surface-variant font-mono">${formatDate(due.updated_at || due.created_at)}</td>
@@ -755,42 +770,63 @@ function populateBenefitTypesDropdown(types) {
 
 function populatePaymentMonths() {
   const select = document.getElementById("paymentMonthSelect");
-  if (!select) return;
-  select.innerHTML = "";
+  const hiddenInput = document.getElementById("paymentMonthHiddenInput");
+  const displayText = document.getElementById("displayPaymentMonthText");
 
   const pendingMonths = (currentDues || []).filter((d) => d.status === "pending");
-  // Sort ascending so earliest unpaid month is first (FIFO, Item 12)
+  // Sort ascending so earliest unpaid month is first (FIFO, Item 11/12)
   pendingMonths.sort((a, b) => a.billing_month.localeCompare(b.billing_month));
-
-  if (pendingMonths.length > 0) {
-    pendingMonths.forEach((d) => {
-      const opt = document.createElement("option");
-      opt.value = d.billing_month;
-      opt.textContent = `${d.billing_month.slice(0, 7)} (Unpaid Dues: ${formatCurrency(d.amount)})`;
-      select.appendChild(opt);
-    });
-    // Auto-select earliest unpaid month
-    select.value = pendingMonths[0].billing_month;
-  }
 
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  if (!pendingMonths.some((d) => d.billing_month === currentMonthStr)) {
-    const opt = document.createElement("option");
-    opt.value = currentMonthStr;
-    opt.textContent = `${currentMonthStr.slice(0, 7)} (Current Month)`;
-    select.appendChild(opt);
-    if (pendingMonths.length === 0) {
-      select.value = currentMonthStr;
-    }
+
+  let earliestMonth = "";
+  let earliestLabel = "";
+
+  if (pendingMonths.length > 0) {
+    earliestMonth = pendingMonths[0].billing_month;
+    earliestLabel = `${earliestMonth.slice(0, 7)} (Outstanding: ${formatCurrency(pendingMonths[0].amount)})`;
+  } else {
+    earliestMonth = currentMonthStr;
+    earliestLabel = `${currentMonthStr.slice(0, 7)} (Current Month)`;
   }
 
-  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
-  const nextOpt = document.createElement("option");
-  nextOpt.value = nextMonthStr;
-  nextOpt.textContent = `${nextMonthStr.slice(0, 7)} (Advance Contribution)`;
-  select.appendChild(nextOpt);
+  if (displayText) {
+    displayText.textContent = earliestLabel;
+  }
+  if (hiddenInput) {
+    hiddenInput.value = earliestMonth;
+  }
+
+  if (select) {
+    select.innerHTML = "";
+    if (pendingMonths.length > 0) {
+      pendingMonths.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.billing_month;
+        opt.textContent = `${d.billing_month.slice(0, 7)} (Unpaid Dues: ${formatCurrency(d.amount)})`;
+        select.appendChild(opt);
+      });
+      select.value = pendingMonths[0].billing_month;
+    }
+
+    if (!pendingMonths.some((d) => d.billing_month === currentMonthStr)) {
+      const opt = document.createElement("option");
+      opt.value = currentMonthStr;
+      opt.textContent = `${currentMonthStr.slice(0, 7)} (Current Month)`;
+      select.appendChild(opt);
+      if (pendingMonths.length === 0) {
+        select.value = currentMonthStr;
+      }
+    }
+
+    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
+    const nextOpt = document.createElement("option");
+    nextOpt.value = nextMonthStr;
+    nextOpt.textContent = `${nextMonthStr.slice(0, 7)} (Advance Contribution)`;
+    select.appendChild(nextOpt);
+  }
 }
 
 function openPaymentModal() {
@@ -833,6 +869,9 @@ function openPaymentModal() {
 
 window.openPaymentModal = openPaymentModal;
 window.openUploadSlipModal = openPaymentModal;
+window.openCurrentDuesBreakdown = function () {
+  openDuesBreakdownModal(currentDues, currentBalanceInfo);
+};
 
 function setupActionListeners() {
   // Outstanding dues card click opens breakdown popup
@@ -994,7 +1033,7 @@ function setupActionListeners() {
       const category = document.getElementById("paymentCategorySelect")?.value || "monthly_due";
       const method = document.getElementById("paymentMethodSelect")?.value || "bank_transfer";
       const amount = Number(document.getElementById("paymentAmountInput")?.value);
-      const selectedMonth = document.getElementById("paymentMonthSelect")?.value;
+      const selectedMonth = document.getElementById("paymentMonthHiddenInput")?.value || document.getElementById("paymentMonthSelect")?.value;
       const remarks = (document.getElementById("paymentRemarksInput")?.value || "").trim();
 
       if (!amount || amount <= 0) {
@@ -1023,7 +1062,7 @@ function setupActionListeners() {
 
         let formattedNotes = "";
         if (category === "monthly_due" && selectedMonth) {
-          formattedNotes = `[Billing Month: ${selectedMonth.slice(0, 7)}]`;
+          formattedNotes = `[Settling Dues via FIFO starting from: ${selectedMonth.slice(0, 7)}]`;
         }
         if (remarks) {
           formattedNotes = formattedNotes ? `${formattedNotes} ${remarks}` : remarks;

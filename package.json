@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "MRIA Management Welfare Association PWA",
   "main": "sw.js",
+  "type": "module",
   "scripts": {
-    "start": "serve -l 3000",
+    "start": "npx serve -l 3000",
     "build:css": "tailwindcss -i ./src/input.css -o ./assets/styles.css --minify",
     "dev:css": "tailwindcss -i ./src/input.css -o ./assets/styles.css --watch"
   },

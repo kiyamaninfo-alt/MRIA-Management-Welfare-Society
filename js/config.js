@@ -5,10 +5,10 @@ export const CONFIG = {
   FUNCTIONS_URL: "https://aqbpanrsotkpnqxhlces.supabase.co/functions/v1",
   ADMIN_EMAIL: "krishaja@gmail.com",
   APP_NAME: "MRIA Management Welfare Association",
-  APP_NAME_SI: "MRIA කළමනාකාර සුබසාධක සංගමය",
+  APP_NAME_SI: "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
   HERO_TAGLINE: "Digital Platform - MRIA Management Welfare Association",
   SUB_HEADLINE: "100% DEDICATED STAFF WELFARE",
-  FOOTER_TEXT: "© MRIA කළමනාකාර සුබසාධක සංගමය",
+  FOOTER_TEXT: "© MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
   auth: {
     persistSession: true,
     autoRefreshToken: true,

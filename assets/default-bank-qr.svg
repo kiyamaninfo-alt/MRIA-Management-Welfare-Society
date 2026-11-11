@@ -23,9 +23,9 @@
   <rect x="36" y="96" width="12" height="24" fill="#0F172A"/>
   <rect x="56" y="108" width="28" height="12" fill="#0F172A"/>
   <rect x="96" y="96" width="48" height="48" rx="6" fill="#0284C7"/>
-  <!-- BOC Center Emblem inside QR -->
+  <!-- Center Emblem inside QR -->
   <circle cx="120" cy="120" r="16" fill="#FFFFFF"/>
-  <text x="120" y="125" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="12" fill="#0284C7">BOC</text>
+  <text x="120" y="125" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="12" fill="#0284C7">QR</text>
   <rect x="156" y="96" width="24" height="12" fill="#0F172A"/>
   <rect x="192" y="108" width="12" height="24" fill="#0F172A"/>
   <rect x="168" y="120" width="12" height="24" fill="#0F172A"/>

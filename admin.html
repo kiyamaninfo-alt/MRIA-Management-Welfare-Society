@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>MRIA කළමනාකාර සුබසාධක සංගමය | Management &amp; Treasury Console</title>
+  <title>MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය | Management &amp; Treasury Console</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
   <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png"/>
   <link rel="apple-touch-icon" href="/assets/icon-192.png"/>
@@ -37,8 +37,8 @@
           <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
         </div>
         <div class="flex flex-col">
-          <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight">
-            MRIA කළමනාකාර සුබසාධක සංගමය
+          <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight truncate max-w-[160px] sm:max-w-none">
+            MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
           </span>
           <span class="text-[11px] text-on-surface-variant font-medium">
             Administrative &amp; Treasury Management Console
@@ -197,9 +197,15 @@
         
         <!-- Cash Intake Form -->
         <div class="lg:col-span-6 bg-white border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
-          <div class="flex items-center gap-2 pb-3 border-b border-outline-variant">
-            <span class="material-symbols-outlined text-primary text-[22px]">payments</span>
-            <h3 class="font-bold text-base text-on-surface">Direct Cash Intake Desk</h3>
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[22px]">payments</span>
+              <h3 class="font-bold text-base text-on-surface">Direct Cash Intake Desk</h3>
+            </div>
+            <button type="button" onclick="window.resetCashCollectionForm()" class="text-[11px] text-on-surface-variant hover:text-rose-600 font-semibold flex items-center gap-1 cursor-pointer transition-colors" title="Reset form and generate fresh transaction token">
+              <span class="material-symbols-outlined text-[14px]">restart_alt</span>
+              <span>Reset Form</span>
+            </button>
           </div>
 
           <form id="cashCollectionForm" class="space-y-4">
@@ -387,10 +393,10 @@
           <span class="text-[11px] text-sky-200">Across 3 Accounts</span>
         </div>
 
-        <!-- BOC Savings -->
+        <!-- Association Bank Savings -->
         <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">BOC Savings</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_savings">Bank Savings Account</span>
             <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
           </div>
           <div id="balBocSavings" class="text-xl font-extrabold text-on-surface my-2">LKR 0.00</div>
@@ -492,7 +498,7 @@
           <div>
             <label class="block font-bold text-on-surface mb-1">Target Account</label>
             <select id="txAccountSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium">
-              <option value="boc_savings">BOC Savings Account</option>
+              <option value="boc_savings">Bank Savings Account</option>
               <option value="cash_in_hand">Cash in Hand</option>
               <option value="fixed_deposits">Fixed Deposits</option>
             </select>
@@ -545,7 +551,7 @@
             <!-- Account Filter Dropdown -->
             <select id="cashBookAccountFilter" onchange="window.filterCashBookAccount(this.value)" class="px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface outline-none cursor-pointer">
               <option value="">All Accounts (සියලු ගිණුම්)</option>
-              <option value="boc_savings">BOC Savings (8201948201)</option>
+              <option value="boc_savings">Bank Savings Account (8201948201)</option>
               <option value="cash_in_hand">Cash in Hand (Desk Cash)</option>
               <option value="fixed_deposits">Fixed Deposits</option>
             </select>
@@ -1177,7 +1183,7 @@
               <label class="block text-xs font-bold text-on-surface mb-1">
                 Bank Name
               </label>
-              <input type="text" id="settingBankName" required placeholder="e.g., Bank of Ceylon (BOC)" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+              <input type="text" id="settingBankName" required placeholder="e.g., Association Bank Account" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-on-surface text-xs sm:text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1435,14 +1441,33 @@
           <span class="material-symbols-outlined text-primary text-[24px]">notification_add</span>
           <div>
             <h4 class="font-bold text-sm sm:text-base text-on-surface">Dispatch Member Notification</h4>
-            <p class="text-xs text-on-surface-variant">Send a targeted in-app notification to an active member.</p>
+            <p class="text-xs text-on-surface-variant">Send a targeted in-app notification to members (All, Arrears, or Individual).</p>
           </div>
         </div>
 
         <form id="dispatchNotificationForm" class="space-y-3.5 max-w-2xl text-xs">
+          <!-- Target Cohort Selector -->
           <div>
+            <label class="block font-bold text-on-surface mb-1.5">Notification Audience / Target</label>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label class="flex items-center gap-2 p-2.5 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+                <input type="radio" name="notifTargetMode" value="single" checked class="text-primary focus:ring-primary" />
+                <span class="font-semibold text-on-surface" data-i18n="target_single_member">Individual Member</span>
+              </label>
+              <label class="flex items-center gap-2 p-2.5 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+                <input type="radio" name="notifTargetMode" value="arrears" class="text-primary focus:ring-primary" />
+                <span class="font-semibold text-rose-700" data-i18n="target_arrears_members">Members with Pending Arrears</span>
+              </label>
+              <label class="flex items-center gap-2 p-2.5 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+                <input type="radio" name="notifTargetMode" value="all" class="text-primary focus:ring-primary" />
+                <span class="font-semibold text-primary" data-i18n="target_all_members">All Active Members</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="notifRecipientContainer">
             <label class="block font-bold text-on-surface mb-1">Recipient Member <span class="text-rose-500">*</span></label>
-            <select id="notifRecipientSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none cursor-pointer" required>
+            <select id="notifRecipientSelect" class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary outline-none cursor-pointer">
               <option value="" disabled selected>-- Select Member --</option>
             </select>
           </div>
@@ -1742,6 +1767,85 @@
         </span>
         <button type="button" onclick="closeModal('approveSlipModal')" class="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold text-xs shadow-sm transition-colors cursor-pointer">
           Done &amp; Return to Queue
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CONFIRM BENEFIT GRANT DISBURSEMENT MODAL -->
+  <div id="confirmGrantModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto space-y-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-3 border-b border-outline-variant">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[24px]">verified</span>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface" id="confirmGrantModalTitle">Confirm Benefit Grant Disbursement</h4>
+          </div>
+          <p class="text-[11px] text-on-surface-variant mt-0.5" id="confirmGrantModalSubtitle">
+            සුබසාධන ප්‍රතිලාභ ප්‍රදානය තහවුරු කර නිල වවුචරය නිකුත් කිරීම
+          </p>
+        </div>
+        <button type="button" onclick="closeModal('confirmGrantModal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-variant transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Quick Inspection Bar -->
+      <div id="confirmGrantInspectionBar" class="p-3 bg-surface-variant/40 border border-outline-variant rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="min-w-0">
+          <div class="font-bold text-on-surface truncate" id="confirmGrantMemberName">-</div>
+          <div class="text-[11px] text-on-surface-variant flex items-center gap-2">
+            <span id="confirmGrantMemberEpf">EPF: -</span>
+            <span>•</span>
+            <span id="confirmGrantProgram" class="font-medium text-primary">-</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-mono font-extrabold text-sm text-primary bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20" id="confirmGrantAmount">Rs. 0.00</span>
+        </div>
+      </div>
+
+      <!-- Live Grant Voucher Container (Draft Preview or Issued Voucher) -->
+      <div id="confirmGrantVoucherContainer" class="min-h-[260px]">
+        <!-- Rendered voucher html -->
+      </div>
+
+      <!-- Post-issue Email Banner (shown after confirmation) -->
+      <div id="confirmGrantBanner" class="hidden"></div>
+
+      <!-- Pre-confirmation Actions Box -->
+      <div id="confirmGrantActionBox" class="space-y-3 pt-2 border-t border-outline-variant">
+        <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+          <span class="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">help</span>
+          <div>
+            <p class="font-bold">Are you sure you want to disburse this welfare benefit grant?</p>
+            <p class="text-amber-800 text-[10.5px] mt-0.5">
+              This will record the disbursement outflow in the Society Treasury, generate an immutable official digital grant voucher, and dispatch the notification to the beneficiary.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('confirmGrantModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-bold text-xs text-on-surface hover:bg-surface-variant transition-colors cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" id="btnExecuteConfirmGrant" onclick="window.executeConfirmGrantDisbursement()" class="mutation-btn px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">verified</span>
+            <span>Confirm &amp; Disburse Grant</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Post-confirmation Close Button Box (shown after grant is disbursed) -->
+      <div id="confirmGrantDoneBox" class="hidden pt-2 border-t border-outline-variant flex items-center justify-between">
+        <span class="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">task_alt</span>
+          <span>Grant disbursed &amp; voucher issued</span>
+        </span>
+        <button type="button" onclick="window.finishGrantDisbursementModal()" class="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold text-xs shadow-sm transition-colors cursor-pointer">
+          Done &amp; Return to Desk
         </button>
       </div>
 
@@ -2106,6 +2210,85 @@
     </div>
   </div>
 
+  <!-- UNDO BENEFIT GRANT DISBURSEMENT MODAL -->
+  <div id="undoClaimModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-rose-600 text-[24px]">undo</span>
+          <div>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface">Undo Benefit Grant Disbursement</h4>
+            <p class="text-[11px] text-on-surface-variant">ප්‍රතිලාභ ගෙවීම අවලංගු කර භාණ්ඩාගාරයට බැර කිරීම (දින 30ක් ඇතුළත)</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('undoClaimModal')" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="undoClaimForm" class="space-y-4 text-xs">
+        <input type="hidden" id="undoClaimId" />
+
+        <div class="p-3 bg-surface-variant/40 border border-outline-variant rounded-xl space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-on-surface-variant font-medium">Voucher Number:</span>
+            <span id="undoClaimVoucherNumber" class="font-mono font-bold text-on-surface">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-on-surface-variant font-medium">Beneficiary Member:</span>
+            <span id="undoClaimMemberName" class="font-semibold text-on-surface">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-on-surface-variant font-medium">Benefit Facility:</span>
+            <span id="undoClaimBenefitTitle" class="font-medium text-on-surface">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-on-surface-variant font-medium">Disbursed Amount:</span>
+            <span id="undoClaimAmount" class="font-mono font-bold text-rose-600 text-sm">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-on-surface-variant font-medium">Disbursement Date:</span>
+            <span id="undoClaimDate" class="font-mono text-on-surface-variant">-</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 shadow-xs">
+          <span class="material-symbols-outlined text-rose-600 text-[20px] shrink-0 mt-0.5">warning</span>
+          <div class="space-y-1">
+            <p class="font-bold">Important Treasury &amp; Accounting Impact</p>
+            <p class="text-rose-800 text-[11px] leading-relaxed">
+              Undoing this disbursement will reverse the outflow from the Society Treasury (crediting the disbursed amount back to the receiving account), update the Treasury statement, and revert the claim status back to <strong>APPROVED</strong> so it can be re-evaluated or re-disbursed.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-on-surface mb-1" for="undoClaimReason">
+            Reason for Undoing Disbursement (අවලංගු කිරීමට හේතුව) <span class="text-rose-500">*</span>
+          </label>
+          <textarea 
+            id="undoClaimReason" 
+            required 
+            minlength="5" 
+            rows="3" 
+            placeholder="Please provide an official justification (e.g. incorrect amount disbursed, wrong beneficiary member selected, duplicate disbursement, test record)..." 
+            class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface font-medium focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-colors"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('undoClaimModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" id="btnExecuteUndoClaim" class="mutation-btn px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">undo</span>
+            <span>Confirm &amp; Reverse Disbursement</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- RESOLVE INQUIRY MODAL (ADMIN) -->
   <div id="inquiryResolveModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto">
@@ -2167,7 +2350,7 @@
   <footer class="bg-white border-t border-outline-variant w-full py-6 mt-12">
     <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-on-surface-variant">
       <div class="font-semibold text-on-surface" data-i18n="footer_text">
-        © MRIA කළමනාකාර සුබසාධක සංගමය
+        © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
       </div>
       <div>
         <span>Mattala Rajapaksa International Airport</span>

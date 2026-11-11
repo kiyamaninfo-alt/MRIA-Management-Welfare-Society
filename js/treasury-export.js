@@ -4,9 +4,9 @@
  */
 
 export const ACCOUNT_NAMES = {
-  boc_savings: "Bank of Ceylon Operating Savings",
+  boc_savings: "Association Bank Operating Account",
   cash_in_hand: "Treasurer Physical Cash Float",
-  fixed_deposits: "BOC Fixed Deposit Capital Reserve",
+  fixed_deposits: "Fixed Deposit Capital Reserve",
 };
 
 /**
@@ -77,7 +77,7 @@ export function exportTreasuryStatementToCsv(statementData, startDate, endDate) 
   const lines = [];
 
   // Header information
-  lines.push(["MRIA කළමනාකාර සුබසාධක සංගමය - Treasury Ledger Statement"].map(escapeCsvCell).join(","));
+  lines.push(["MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය - Treasury Ledger Statement"].map(escapeCsvCell).join(","));
   lines.push([`Statement Period: ${startDate} to ${endDate}`].map(escapeCsvCell).join(","));
   lines.push([`Generated At: ${new Date().toLocaleString()}`].map(escapeCsvCell).join(","));
   lines.push([]);
@@ -305,7 +305,7 @@ export function printTreasuryStatementPdf(statementData, startDate, endDate) {
 
       <div class="header">
         <div>
-          <div class="title">MRIA කළමනාකාර සුබසාධක සංගමය</div>
+          <div class="title">MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය</div>
           <div class="subtitle">MRIA Management Welfare Association — Treasury Ledger Statement</div>
           <div class="meta">Mattala Rajapaksa International Airport, Sri Lanka</div>
         </div>
@@ -371,7 +371,7 @@ export function printTreasuryStatementPdf(statementData, startDate, endDate) {
       </div>
 
       <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-        © MRIA කළමනාකාර සුබසාධක සංගමය — Official Financial Record System Generated
+        © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය — Official Financial Record System Generated
       </div>
     </body>
     </html>

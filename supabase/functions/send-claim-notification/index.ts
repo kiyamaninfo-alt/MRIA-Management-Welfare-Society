@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
     const emailSubject = `[MRIA Welfare] New Benefit Claim: ${benefitTitle} - ${memberName} (EPF: ${memberEpf})`;
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        <h2 style="color: #1e3a8a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">MRIA කළමනාකාර සුබසාධක සංගමය</h2>
+        <h2 style="color: #1e3a8a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය</h2>
         <h3 style="color: #334155;">New Welfare Benefit Claim Submitted</h3>
         <p>A new welfare grant application has been submitted and is pending committee review:</p>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -159,7 +159,7 @@ Deno.serve(async (req: Request) => {
         </table>
         <p>Please log in to the Administrative Management Console to inspect the attached supporting documents and process this request.</p>
         <footer style="margin-top: 30px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 10px;">
-          © MRIA කළමනාකාර සුබසාධක සංගමය — Automated System Notification
+          © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය — Automated System Notification
         </footer>
       </div>
     `;

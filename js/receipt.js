@@ -171,12 +171,12 @@ export async function shareGrantVoucher(grant, memberName, verifierName) {
 
   const methodNamesEn = {
     cash: "Direct Cash Float (Desk Cash)",
-    bank_transfer: "Bank Transfer / Deposit (BOC Account)",
+    bank_transfer: "Bank Transfer / Deposit (Bank Account)",
     qr_payment: "LankaQR / QR Scan",
   };
   const methodNamesSi = {
     cash: "භාණ්ඩාගාර අත්පිට මුදල් (Desk Cash Float)",
-    bank_transfer: "ලංකා බැංකු තැන්පතු (BOC Account)",
+    bank_transfer: "බැංකු තැන්පතු / පැවරුම්",
     qr_payment: "LankaQR ගෙවීම්",
   };
   const methodKey = grantObj.payment_method || (grantObj.source_account_id === "cash_in_hand" ? "cash" : "bank_transfer");
@@ -380,18 +380,18 @@ export function renderGrantVoucherHtml(grant, memberName, verifierName = "භා
 
   const methodNamesEn = {
     cash: "Direct Cash Float (Physical Desk Float)",
-    bank_transfer: "Bank Transfer / Deposit (BOC Account)",
+    bank_transfer: "Bank Transfer / Deposit (Bank Account)",
     qr_payment: "LankaQR / QR Scan",
   };
   const methodNamesSi = {
     cash: "භාණ්ඩාගාර අත්පිට මුදල් (අතින් දුන් මුදල්)",
-    bank_transfer: "ලංකා බැංකු තැන්පතු (BOC ගිණුම)",
+    bank_transfer: "බැංකු තැන්පතු / පැවරුම්",
     qr_payment: "LankaQR ගෙවීම් (QR ස්කෑන්)",
   };
   const methodKey = grantObj.payment_method || (grantObj.source_account_id === "cash_in_hand" ? "cash" : "bank_transfer");
   const methodDisplay = isSi ? (methodNamesSi[methodKey] || methodKey) : (methodNamesEn[methodKey] || methodKey);
 
-  const title = isSi ? "MRIA කළමනාකාර සුබසාධක සංගමය" : "MRIA Management Welfare Association";
+  const title = isSi ? "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය" : "MRIA Management Welfare Association";
   const subtitle = isActuallyDraft
     ? (isSi ? "සජීවී පෙරදසුන (තවම ගෙවා නැත)" : "Live Draft Preview (Not yet disbursed)")
     : (isSi ? "නිල සුබසාධන ප්‍රතිලාභ ප්‍රදාන වවුචරය" : "Official Welfare Benefit Grant Voucher");
@@ -470,16 +470,16 @@ export function renderGrantVoucherHtml(grant, memberName, verifierName = "භා
       </div>
 
       <!-- Print, Download, and Share Buttons (Hidden during print) -->
-      <div class="mt-5 grid grid-cols-3 gap-2 print:hidden">
-        <button type="button" onclick="window.printGrantVoucher()" class="py-2.5 px-2 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Print or save as PDF">
+      <div class="mt-5 flex flex-col sm:flex-row gap-2 print:hidden">
+        <button type="button" onclick="window.printGrantVoucher()" class="flex-1 py-2.5 px-3 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Print or save as PDF">
           <span class="material-symbols-outlined text-[16px]">print</span>
           <span>${printBtnText}</span>
         </button>
-        <button type="button" onclick="window.downloadGrantVoucherFile()" class="py-2.5 px-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Download standalone HTML voucher">
+        <button type="button" onclick="window.downloadGrantVoucherFile()" class="flex-1 py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Download standalone HTML voucher">
           <span class="material-symbols-outlined text-[16px]">download</span>
           <span>${downloadBtnText}</span>
         </button>
-        <button type="button" onclick="window.shareCurrentGrantVoucher()" class="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Share via WhatsApp or Web Share">
+        <button type="button" onclick="window.shareCurrentGrantVoucher()" class="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Share via WhatsApp or Web Share">
           <span class="material-symbols-outlined text-[16px]">share</span>
           <span>${shareBtnText}</span>
         </button>
@@ -555,7 +555,7 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
   const payerName = memberName || (isSi ? "සාමාජිකයා තෝරන්න" : "Select a Member");
 
   const isVoided = paymentObj.status === "voided";
-  const title = isSi ? "MRIA කළමනාකාර සුබසාධක සංගමය" : "MRIA Management Welfare Association";
+  const title = isSi ? "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය" : "MRIA Management Welfare Association";
   const subtitle = isVoided
     ? (isSi ? "අවලංගු කළ රිසිට්පත (VOIDED)" : "Official Voucher - VOIDED")
     : (isActuallyDraft
@@ -643,16 +643,16 @@ export function renderReceiptHtml(payment, memberName, verifierName = "භාණ
       </div>
 
       <!-- Print, Download, and Share Buttons (Hidden during print) -->
-      <div class="mt-5 grid grid-cols-3 gap-2 print:hidden">
-        <button type="button" onclick="window.printReceipt()" class="py-2.5 px-2 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Print or save as PDF">
+      <div class="mt-5 flex flex-col sm:flex-row gap-2 print:hidden">
+        <button type="button" onclick="window.printReceipt()" class="flex-1 py-2.5 px-3 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Print or save as PDF">
           <span class="material-symbols-outlined text-[16px]">print</span>
           <span>${printBtnText}</span>
         </button>
-        <button type="button" onclick="window.downloadReceiptFile()" class="py-2.5 px-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Download standalone HTML receipt">
+        <button type="button" onclick="window.downloadReceiptFile()" class="flex-1 py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Download standalone HTML receipt">
           <span class="material-symbols-outlined text-[16px]">download</span>
           <span>${downloadBtnText}</span>
         </button>
-        <button type="button" onclick="window.shareCurrentReceipt()" class="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer" title="Share via WhatsApp or Web Share">
+        <button type="button" onclick="window.shareCurrentReceipt()" class="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer" title="Share via WhatsApp or Web Share">
           <span class="material-symbols-outlined text-[16px]">share</span>
           <span>${shareBtnText}</span>
         </button>

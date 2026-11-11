@@ -75,12 +75,16 @@ export async function calculateMemberBalance(member) {
   }
 
   // 2. Fetch all verified payments for this member
-  const { data: verifiedPayments } = await supabase
+  const { data: verifiedPayments, error: paymentsErr } = await supabase
     .from("payments")
-    .select("amount, payment_type, created_at, verified_at, paid_at")
+    .select("amount, payment_type, created_at, verified_at")
     .eq("member_id", member.id)
     .eq("status", "verified")
     .order("created_at", { ascending: false });
+
+  if (paymentsErr) {
+    console.error("Error fetching verified payments in calculateMemberBalance:", paymentsErr);
+  }
 
   const paymentsList = verifiedPayments || [];
 
@@ -88,7 +92,7 @@ export async function calculateMemberBalance(member) {
   const currentYear = now.getFullYear();
   const ytdContributions = paymentsList
     .filter((p) => {
-      const d = new Date(p.verified_at || p.created_at || p.paid_at);
+      const d = new Date(p.verified_at || p.created_at);
       return d.getFullYear() === currentYear;
     })
     .reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -119,7 +123,7 @@ export async function calculateMemberBalance(member) {
     totalPaid: totalVerifiedPaid,
     totalDuesPaid,
     cumulativePaid: totalDuesPaid,
-    lastPaymentDate: paymentsList.length > 0 ? (paymentsList[0].paid_at || paymentsList[0].verified_at || paymentsList[0].created_at) : null,
+    lastPaymentDate: paymentsList.length > 0 ? (paymentsList[0].verified_at || paymentsList[0].created_at) : null,
     pendingDues: dues.filter((d) => d.status === "pending"),
     netStanding,
     isArrears: netStanding < 0,
@@ -482,7 +486,8 @@ export async function rejectPayment(paymentId, verifierMemberId, reason) {
 }
 
 /**
- * Logs a direct cash payment by Treasurer or Admin (immediately verified).
+ * Logs a direct cash payment by Treasurer or Admin (immediately verified) with token idempotency.
+ * Atomic RPC guarantees duplicate submission prevention, safe voucher replay, and email protection.
  */
 export async function recordCashPayment({
   memberId,
@@ -492,28 +497,29 @@ export async function recordCashPayment({
   collectedByMemberId,
   notes = null,
   paidAt = null,
+  idempotencyKey = null,
 }) {
   const transactionDate = paidAt ? new Date(paidAt).toISOString() : new Date().toISOString();
-  const { data, error } = await supabase
-    .from("payments")
-    .insert([
-      {
-        member_id: memberId,
-        amount: Number(amount),
-        payment_type: paymentType,
-        payment_method: paymentMethod || "cash",
-        status: "verified",
-        verified_by: collectedByMemberId,
-        verified_at: transactionDate,
-        created_at: transactionDate,
-        notes,
-      },
-    ])
-    .select()
-    .single();
+  const token = idempotencyKey || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : null);
+
+  const { data, error } = await supabase.rpc("record_cash_payment_idempotent", {
+    p_member_id: memberId,
+    p_amount: Number(amount),
+    p_payment_type: paymentType,
+    p_payment_method: paymentMethod || "cash",
+    p_collected_by: collectedByMemberId,
+    p_notes: notes,
+    p_paid_at: transactionDate,
+    p_idempotency_key: token,
+  });
 
   if (error) throw error;
-  return data;
+  
+  // RPC returns { payment: {...}, is_replayed: boolean }
+  return {
+    ...data.payment,
+    is_replayed: Boolean(data.is_replayed),
+  };
 }
 
 /**
@@ -725,6 +731,25 @@ export async function disburseBenefitClaim({ claimId, disbursedAmount, disbursed
     .single();
 
   if (error) throw error;
+  return data;
+}
+
+/**
+ * Safely undoes a welfare benefit claim disbursement within the 30-day window.
+ * Reverts the claim status to 'approved', clears disbursement fields, records
+ * a compensating Treasury inflow reversal, and logs an immutable audit entry.
+ */
+export async function undoClaimDisbursement(claimId, reason, undoneByMemberId) {
+  const { data, error } = await supabase.rpc("undo_claim_disbursement", {
+    p_claim_id: claimId,
+    p_reason: reason,
+    p_undone_by: undoneByMemberId,
+  });
+
+  if (error) {
+    console.error("Error undoing claim disbursement:", error);
+    throw error;
+  }
   return data;
 }
 
@@ -1180,6 +1205,20 @@ export async function sendNotification({ recipientId, titleEn, titleSi, messageE
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Sends notifications to multiple members in a single batch insert.
+ */
+export async function sendBatchNotifications(notificationsArray) {
+  if (!notificationsArray || notificationsArray.length === 0) return [];
+  const { data, error } = await supabase
+    .from("notifications")
+    .insert(notificationsArray)
+    .select();
+
+  if (error) throw error;
+  return data || [];
 }
 
 /**

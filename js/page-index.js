@@ -1,9 +1,11 @@
 import { signInWithGoogle, getCurrentSession, getMemberProfile } from "./auth.js";
 import { initLanguage } from "./i18n.js";
+import { initOfflineDetection, openContactModal, downloadConstitutionPdf } from "./ui.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // 1. Initialize bilingual translations
+  // 1. Initialize bilingual translations & offline detection
   initLanguage();
+  initOfflineDetection();
 
   // 2. Register Service Worker for PWA capabilities
   if ("serviceWorker" in navigator) {

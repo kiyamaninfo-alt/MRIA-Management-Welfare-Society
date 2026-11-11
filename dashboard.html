@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>MRIA කළමනාකාර සුබසාධක සංගමය | Member Dashboard</title>
+  <title>MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය | Member Dashboard</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
   <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png"/>
   <link rel="apple-touch-icon" href="/assets/icon-192.png"/>
@@ -37,8 +37,8 @@
           <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
         </div>
         <div class="flex flex-col">
-          <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight">
-            MRIA කළමනාකාර සුබසාධක සංගමය
+          <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight truncate max-w-[160px] sm:max-w-none">
+            MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
           </span>
           <span class="text-[11px] text-on-surface-variant font-medium">
             MRIA Management Welfare Association
@@ -136,12 +136,7 @@
       </div>
     </div>
 
-    <!-- 1. DISMISSIBLE DASHBOARD NOTIFICATION CENTER (TOP 3 ALERTS) -->
-    <section id="dashboardNotificationCenter" class="space-y-3">
-      <!-- Alerts dynamically injected here -->
-    </section>
-
-    <!-- 2. FINANCIAL STANDING CARDS -->
+    <!-- 1. FINANCIAL STANDING CARDS -->
     <section>
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-bold text-on-surface" data-i18n="my_dashboard">
@@ -173,10 +168,6 @@
             <span id="duesBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700">
               <span class="material-symbols-outlined text-[14px]">check_circle</span>
               <span data-i18n="paid">Settled</span>
-            </span>
-            <span class="text-primary font-semibold flex items-center gap-0.5 group-hover:underline">
-              <span data-i18n="click_for_history">View Ledger</span>
-              <span class="material-symbols-outlined text-[14px]">chevron_right</span>
             </span>
           </div>
         </div>
@@ -214,7 +205,7 @@
               </span>
               <span class="material-symbols-outlined text-primary">volunteer_activism</span>
             </div>
-            <div id="benefitsClaimedDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1">
+            <div id="benefitsClaimedDisplay" class="text-2xl sm:text-3xl font-extrabold text-on-surface my-1 font-mono tabular-nums">
               Rs. 0.00
             </div>
           </div>
@@ -266,7 +257,7 @@
       </div>
     </section>
 
-    <!-- 4. BOC BANK COORDINATES & QR -->
+    <!-- 4. OFFICIAL BANK COORDINATES & QR -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
       <!-- Bank Coordinates (5 Cols) -->
@@ -275,33 +266,33 @@
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-primary text-[20px]">qr_code_2</span>
             <h4 class="font-bold text-sm text-on-surface" data-i18n="bank_details_title">
-              Official Bank of Ceylon Account
+              Official Association Bank Account
             </h4>
           </div>
-          <span id="displayBankBadge" class="px-2 py-0.5 bg-sky-50 text-sky-700 text-[10px] font-bold rounded-full">BOC Mattala</span>
+          <span id="displayBankBadge" class="px-2 py-0.5 bg-sky-50 text-sky-700 text-[10px] font-bold rounded-full">Mattala Branch</span>
         </div>
 
         <div class="flex flex-col sm:flex-row items-center gap-4 bg-sky-50/50 border border-sky-100 rounded-xl p-3">
           <div class="p-1.5 bg-white border border-outline-variant rounded-xl shadow-sm shrink-0">
-            <img id="bankQrImg" alt="BOC QR Code" class="w-[140px] h-[140px] object-contain" src="/assets/default-bank-qr.svg" />
+            <img id="bankQrImg" alt="LankaQR Code" class="w-[140px] h-[140px] object-contain" src="/assets/default-bank-qr.svg" />
           </div>
           <div class="text-center sm:text-left space-y-1">
             <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full" data-i18n="bank_qr_title">
-              Scan &amp; Pay via BOC QR
+              Scan &amp; Pay via LankaQR
             </span>
             <p class="text-xs font-semibold text-on-surface">Compatible with all LankaQR Banking Apps</p>
-            <p class="text-[11px] text-on-surface-variant">BOC BApp, Commercial Q+, FriMi, Sampath WePay &amp; BOC Online Banking.</p>
+            <p class="text-[11px] text-on-surface-variant">Commercial Q+, FriMi, Sampath WePay &amp; Online Banking Apps.</p>
           </div>
         </div>
 
         <div class="space-y-2 border border-outline-variant rounded-xl p-3 bg-surface text-xs">
           <div class="flex justify-between">
             <span class="text-on-surface-variant font-medium" data-i18n="bank_name">Bank Name:</span>
-            <span id="displayBankName" class="font-semibold text-on-surface">Bank of Ceylon (BOC)</span>
+            <span id="displayBankName" class="font-semibold text-on-surface">Association Bank Account</span>
           </div>
           <div class="flex justify-between">
             <span class="text-on-surface-variant font-medium" data-i18n="bank_branch">Branch:</span>
-            <span id="displayBankBranch" class="font-semibold text-on-surface">Mattala Airport Branch (742)</span>
+            <span id="displayBankBranch" class="font-semibold text-on-surface">Mattala Branch</span>
           </div>
           <div class="flex justify-between">
             <span class="text-on-surface-variant font-medium" data-i18n="acc_name">Account Name:</span>
@@ -324,7 +315,7 @@
                 Monthly Dues History
               </h4>
             </div>
-            <button onclick="openModal('duesBreakdownModal')" class="text-primary text-xs font-semibold hover:underline">
+            <button onclick="window.openCurrentDuesBreakdown ? window.openCurrentDuesBreakdown() : openModal('duesBreakdownModal')" class="text-primary text-xs font-semibold hover:underline cursor-pointer">
               Inspect Breakdown
             </button>
           </div>
@@ -436,11 +427,6 @@
         </button>
       </div>
     </section>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
 
     <!-- 6. SOCIETY TREASURY & LIQUID ASSETS (ACROSS 3 ACCOUNTS) -->
     <section class="space-y-3">
@@ -466,17 +452,17 @@
         <!-- Total Liquid Assets -->
         <div class="bg-sky-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <span class="text-xs font-bold uppercase tracking-wider text-sky-200" data-i18n="treasury_total_liquid">Total Liquid Assets</span>
-          <div id="dashboardTreasuryTotal" class="text-2xl font-extrabold my-2 text-white">Rs. 2,100.00</div>
+          <div id="dashboardTreasuryTotal" class="text-2xl font-extrabold my-2 text-white font-mono tabular-nums">Rs. 2,100.00</div>
           <span class="text-[11px] text-sky-200" data-i18n="across_3_accounts">Across 3 Accounts</span>
         </div>
 
-        <!-- BOC Savings -->
+        <!-- Association Bank Savings -->
         <div class="bg-white border border-outline-variant rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_savings">BOC Savings</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_savings">Bank Savings Account</span>
             <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
           </div>
-          <div id="dashboardBalBoc" class="text-xl font-extrabold text-on-surface my-2">Rs. 1,300.00</div>
+          <div id="dashboardBalBoc" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 1,300.00</div>
           <span class="text-[11px] text-on-surface-variant font-mono font-medium">Acc: 8201948201</span>
         </div>
 
@@ -486,7 +472,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_cash">Cash in Hand</span>
             <span class="material-symbols-outlined text-primary text-[20px]">payments</span>
           </div>
-          <div id="dashboardBalCash" class="text-xl font-extrabold text-on-surface my-2">Rs. 800.00</div>
+          <div id="dashboardBalCash" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 800.00</div>
           <span class="text-[11px] text-on-surface-variant" data-i18n="petty_desk_cash">Petty &amp; Desk Cash</span>
         </div>
 
@@ -496,7 +482,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_fd">Fixed Deposits</span>
             <span class="material-symbols-outlined text-primary text-[20px]">lock_clock</span>
           </div>
-          <div id="dashboardBalFd" class="text-xl font-extrabold text-on-surface my-2">Rs. 0.00</div>
+          <div id="dashboardBalFd" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 0.00</div>
           <span class="text-[11px] text-on-surface-variant" data-i18n="term_deposits">Term Deposits</span>
         </div>
 
@@ -556,15 +542,21 @@
           </select>
         </div>
 
-        <!-- Conditional: Which month is paying? -->
-        <div id="paymentMonthContainer" class="p-3 bg-sky-50/50 rounded-xl border border-sky-100 space-y-1">
+        <!-- Conditional: Which month is paying? (FIFO Locked Display) -->
+        <div id="paymentMonthContainer" class="p-3 bg-sky-50/50 rounded-xl border border-sky-100 space-y-1.5">
           <label class="block text-xs font-bold text-primary mb-1" data-i18n="paying_month_label">
-            Which Month Are You Paying For? (අදාළ වන මාසය)
+            Settlement Billing Month (FIFO)
           </label>
-          <select id="paymentMonthSelect" name="billing_month" class="w-full px-3 py-2 rounded-xl border border-sky-200 bg-white text-xs font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors">
+          <div class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-sky-200 bg-slate-50 text-xs font-semibold text-on-surface shadow-xs">
+            <span class="material-symbols-outlined text-[18px] text-amber-600">lock</span>
+            <span id="displayPaymentMonthText" class="font-mono font-bold text-primary">Calculating earliest due...</span>
+            <span class="ml-auto text-[10px] text-on-surface-variant font-bold uppercase tracking-wider bg-sky-100/70 px-2 py-0.5 rounded-md">FIFO Locked</span>
+          </div>
+          <input type="hidden" id="paymentMonthHiddenInput" name="billing_month" value="" />
+          <select id="paymentMonthSelect" name="billing_month" class="hidden">
             <!-- Dynamically populated from pending dues and current month -->
           </select>
-          <p class="text-[10px] text-on-surface-variant">Allocated via FIFO to settle outstanding months in the ledger.</p>
+          <p class="text-[10px] text-on-surface-variant" data-i18n="fifo_settlement_notice">Allocated via FIFO to settle outstanding months in the ledger.</p>
         </div>
 
         <!-- Payment Amount -->
@@ -586,7 +578,7 @@
         <!-- Remarks / Notes -->
         <div>
           <label class="block text-xs font-bold text-on-surface mb-1" data-i18n="remarks_label">Remarks / Bank Reference (Optional)</label>
-          <input type="text" id="paymentRemarksInput" name="remarks" placeholder="e.g., BOC Online Ref #102948 or Cheque No" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+          <input type="text" id="paymentRemarksInput" name="remarks" placeholder="e.g., Online Ref #102948 or Cheque No" class="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
         </div>
 
         <!-- Conditional Slip Upload Area (For Bank Transfer and QR) -->
@@ -689,8 +681,8 @@
 
         <!-- Document Proof Attachment Dropzone (Item 13) -->
         <div>
-          <label class="block text-xs font-bold text-on-surface mb-1.5">
-            Proof Document / සහතික ලේඛනය (JPEG, PNG, or PDF max 5MB)
+          <label class="block text-xs font-bold text-on-surface mb-1.5" data-i18n="proof_document_optional">
+            Proof Document (Optional) / සහතික ලේඛනය (විකල්පයි)
           </label>
           <div class="grid grid-cols-2 gap-2 mb-2">
             <button type="button" id="btnOpenClaimCamera" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-sky-50 border border-primary/30 hover:border-primary text-primary rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer">
@@ -769,7 +761,7 @@
   <footer class="bg-white border-t border-outline-variant w-full py-6 mt-12">
     <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-on-surface-variant">
       <div class="font-semibold text-on-surface" data-i18n="footer_text">
-        © MRIA කළමනාකාර සුබසාධක සංගමය
+        © MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය
       </div>
       <div class="flex items-center gap-4">
         <button onclick="downloadConstitutionPdf()" class="hover:text-primary transition-colors cursor-pointer" data-i18n="download_constitution">Constitution</button>

@@ -122,6 +122,10 @@ export async function getCurrentUser() {
 }
 
 export async function getMemberProfile(emailOrUserId) {
+  if (!emailOrUserId || typeof emailOrUserId !== "string") {
+    return null;
+  }
+
   // If offline, retrieve cached member immediately
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     try {

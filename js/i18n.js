@@ -5,11 +5,11 @@ export const translations = {
   en: {
     // Identity & Branding
     app_title: "MRIA Management Welfare Association",
-    app_title_si: "MRIA කළමනාකාර සුබසාධක සංගමය",
+    app_title_si: "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
     hero_tagline: "Digital Platform - MRIA Management Welfare Association",
     sub_headline: "100% DEDICATED STAFF WELFARE",
     app_subtitle: "Official Member Portal & Financial Ledger",
-    footer_text: "© MRIA කළමනාකාර සුබසාධක සංගමය",
+    footer_text: "© MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
 
     // Auth & Navigation
     sign_in_google: "Sign in with Google",
@@ -22,8 +22,8 @@ export const translations = {
     // Roles
     role_admin: "Administrator",
     role_manager: "Manager",
-    role_secretary: "Secretary (ලේකම්)",
-    role_treasurer: "Treasurer (භාණ්ඩාගාරික)",
+    role_secretary: "Secretary",
+    role_treasurer: "Treasurer",
     role_committee_member: "Committee Member",
     role_member: "Member",
 
@@ -37,12 +37,15 @@ export const translations = {
     // Dashboard Cards & Stats
     outstanding_dues: "Outstanding Dues",
     current_month_status: "Current Month Due",
-    total_benefits_claimed: "Total Welfare Claimed",
+    total_benefits_claimed: "Total Welfare Benefits Received",
     last_payment: "Last Payment",
     last_claim: "Last Claimed",
     click_for_history: "Click to inspect monthly dues ledger",
     no_outstanding_dues: "All dues settled. Thank you!",
     paid: "Paid",
+    prepaid: "Prepaid",
+    settled_from_advance: "Settled from advance payment",
+    partial_prepaid: "Partial advance credit",
     pending: "Pending",
     overdue: "Overdue",
     settled: "Settled",
@@ -75,12 +78,12 @@ export const translations = {
     view_proof_document: "View Proof Document",
 
     // Bank Details & Transfer
-    bank_details_title: "Official Bank of Ceylon Account",
-    bank_name: "Bank of Ceylon",
+    bank_details_title: "Official Association Bank Account",
+    bank_name: "Association Bank Account",
     bank_branch: "Mattala Branch",
     acc_name: "MRIA Management Welfare Association",
     acc_number: "Account No",
-    bank_qr_title: "Scan & Pay via BOC QR",
+    bank_qr_title: "Scan & Pay via LankaQR",
 
     // Dues History & Ledger Popup
     dues_history: "Monthly Dues History",
@@ -130,6 +133,7 @@ export const translations = {
 
     // Welfare Claim Modal
     claim_modal_title: "Apply for Welfare Benefit",
+    claim_history: "Welfare Benefit Applications",
     select_benefit_type: "Benefit Type",
     claim_amount: "Claim Amount (LKR)",
     claim_notes: "Description / Notes",
@@ -176,7 +180,7 @@ export const translations = {
 
     // Treasury Module
     treasury_title: "Society Treasury & Financial Ledger",
-    treasury_account_savings: "BOC Savings",
+    treasury_account_savings: "Bank Savings Account",
     treasury_account_cash: "Cash in Hand",
     treasury_account_fd: "Fixed Deposits",
     treasury_total_funds: "Total Liquid Funds",
@@ -208,17 +212,29 @@ export const translations = {
     // Voucher Copy
     voucher_desc: "Instant downloadable PDF vouchers with official verification seals for every contribution and emergency grant transaction.",
 
+    // Notification Targeting & FIFO
+    target_all_members: "All Active Members",
+    target_arrears_members: "Members with Pending Arrears",
+    target_single_member: "Individual Member",
+    fifo_settlement_notice: "Allocated via FIFO to settle outstanding months in the ledger.",
+    fifo_locked_tooltip: "Month is locked to the earliest unpaid due according to FIFO settlement rules.",
+    proof_document_optional: "Proof Document (Optional)",
+    digital_voucher_ready: "Digital voucher ready for download or print",
+    member_notifications: "Member Notifications",
+    unread_badge: "UNREAD",
+    read_badge: "READ",
+
     offline_alert: "You are currently offline. Financial mutations are paused until connection is restored."
   },
 
   si: {
     // Identity & Branding
-    app_title: "MRIA කළමනාකාර සුබසාධක සංගමය",
-    app_title_si: "MRIA කළමනාකාර සුබසාධක සංගමය",
-    hero_tagline: "ඩිජිටල් වේදිකාව - MRIA කළමනාකාර සුබසාධක සංගමය",
+    app_title: "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
+    app_title_si: "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
+    hero_tagline: "ඩිජිටල් වේදිකාව - MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
     sub_headline: "100% කාර්ය මණ්ඩල සුබසාධනය උදෙසා",
     app_subtitle: "නිල සාමාජික ද්වාරය සහ මූල්‍ය ලෙජරය",
-    footer_text: "© MRIA කළමනාකාර සුබසාධක සංගමය",
+    footer_text: "© MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
 
     // Auth & Navigation
     sign_in_google: "Google මඟින් පිවිසෙන්න",
@@ -237,7 +253,7 @@ export const translations = {
     role_member: "සාමාජික",
 
     // Member Identity Header
-    member_epf: "සේ.අ.අංකය (EPF)",
+    member_epf: "සේවා නියුක්තිකයන්ගේ අර්ථසාධක අංකය",
     member_designation: "තනතුර",
     member_status: "සාමාජික තත්ත්වය",
     status_active: "ක්‍රියාකාරී සාමාජික",
@@ -252,6 +268,9 @@ export const translations = {
     click_for_history: "මාසික දායක මුදල් ලේඛනය පරීක්ෂා කිරීමට ඔබන්න",
     no_outstanding_dues: "සියලුම දායක මුදල් ගෙවා ඇත. ස්තූතියි!",
     paid: "ගෙවා ඇත",
+    prepaid: "අත්තිකාරමින් පියවා ඇත",
+    settled_from_advance: "අත්තිකාරම් මුදලින් පියවා ඇත",
+    partial_prepaid: "අත්තිකාරම් මුදලින් කොටසක් පියවා ඇත",
     pending: "ගෙවීමට ඇත",
     overdue: "පසුගිය හිඟ මුදල්",
     settled: "පියවා ඇත",
@@ -284,12 +303,12 @@ export const translations = {
     view_proof_document: "සාක්ෂි ලේඛනය බලන්න",
 
     // Bank Details & Transfer
-    bank_details_title: "නිල ලංකා බැංකු ගිණුම් විස්තර",
-    bank_name: "ලංකා බැංකුව (BOC)",
+    bank_details_title: "නිල සංගම් බැංකු ගිණුම් විස්තර",
+    bank_name: "සංගම් බැංකු ගිණුම",
     bank_branch: "මත්තල ශාඛාව",
-    acc_name: "MRIA කළමනාකාර සුබසාධක සංගමය",
+    acc_name: "MRIA කළමනාකාර අංශයේ සුබසාධක සංගමය",
     acc_number: "ගිණුම් අංකය",
-    bank_qr_title: "BOC QR මඟින් පහසුවෙන් ගෙවන්න",
+    bank_qr_title: "LankaQR මඟින් පහසුවෙන් ගෙවන්න",
 
     // Dues History & Ledger Popup
     dues_history: "මාසික දායක මුදල් වාර්තාව",
@@ -339,6 +358,7 @@ export const translations = {
 
     // Welfare Claim Modal
     claim_modal_title: "සුබසාධන ආධාර අයදුම්පත",
+    claim_history: "සුබසාධන අයදුම්පත් ඉතිහාසය",
     select_benefit_type: "ප්‍රතිලාභ වර්ගය",
     claim_amount: "අයදුම් කරන මුදල (රු.)",
     claim_notes: "විස්තරය / කරුණු",
@@ -355,10 +375,10 @@ export const translations = {
 
     // Unauthorized & Self-Registration
     unauthorized_title: "සාමාජික ලියාපදිංචිය අවශ්‍යයි",
-    unauthorized_msg: "ඔබ ලැයිස්තුගත නොවූ Google ගිණුමකින් පිවිස ඇත. ලේකම්වරයාගේ අනුමැතිය ලබාගැනීම සඳහා කරුණාකර ඔබගේ සේ.අ.අංකය (EPF) සහ තනතුර ඇතුළත් කර අයදුම් කරන්න.",
+    unauthorized_msg: "ඔබ ලැයිස්තුගත නොවූ Google ගිණුමකින් පිවිස ඇත. ලේකම්වරයාගේ අනුමැතිය ලබාගැනීම සඳහා කරුණාකර ඔබගේ සේවා නියුක්තිකයන්ගේ අර්ථසාධක අංකය සහ තනතුර ඇතුළත් කර අයදුම් කරන්න.",
     register_request_btn: "සාමාජිකත්වය ඉල්ලා සිටින්න",
     register_modal_title: "සාමාජික ලියාපදිංචි අයදුම්පත",
-    epf_number_label: "සේවා නියුක්තිකයන්ගේ අර්ථසාධක අංකය (EPF)",
+    epf_number_label: "සේවා නියුක්තිකයන්ගේ අර්ථසාධක අංකය",
     epf_placeholder: "උදා: 10245 හෝ EPF-1024",
     designation_label: "තනතුර",
     designation_placeholder: "උදා: ගුවන්තොටුපළ කළමනාකරු, මෙහෙයුම් නිලධාරී",
@@ -374,7 +394,7 @@ export const translations = {
     tab_receipts: "රිසිට්පත් ලේඛනය",
     tab_secretary: "සාමාජික තොරතුරු",
     tab_claims: "සුබසාධන ආධාර",
-    tab_defaulters: "හිඟ මුදල් ලේඛනය (31 නීතිය)",
+    tab_defaulters: "හිඟ මුදල් ලේඛනය (31 වන දින නීතිය)",
     tab_cms: "අන්තර්ගතය සහ සැකසුම්",
     bank_settings_title: "නිල බැංකු තොරතුරු සහ LankaQR කේතය",
     bank_settings_desc: "සාමාජිකයින්ට මුදල් තැන්පත් කිරීම සඳහා පෙන්වන නිල බැංකු ගිණුම් විස්තර සහ LankaQR කේතය මෙතැනින් සංස්කරණය කරන්න.",
@@ -385,11 +405,11 @@ export const translations = {
 
     // Treasury Module
     treasury_title: "සංගමයේ භාණ්ඩාගාරය සහ මූල්‍ය ලෙජරය",
-    treasury_account_savings: "ලංකා බැංකු ඉතුරුම් (BOC Savings)",
-    treasury_account_cash: "අතැති මුදල් (Cash in Hand)",
-    treasury_account_fd: "ස්ථාවර තැන්පතු (Fixed Deposits)",
+    treasury_account_savings: "බැංකු ඉතුරුම් ගිණුම",
+    treasury_account_cash: "අතැති මුදල්",
+    treasury_account_fd: "ස්ථාවර තැන්පතු",
     treasury_total_funds: "මුළු ද්‍රවශීල අරමුදල",
-    treasury_total_liquid: "මුළු ද්‍රවශීල වත්කම් (Total Liquid Assets)",
+    treasury_total_liquid: "මුළු ද්‍රවශීල වත්කම්",
     across_3_accounts: "ගිණුම් 3ක් හරහා",
     petty_desk_cash: "සුළු සහ කවුන්ටර මුදල්",
     term_deposits: "කාලීන තැන්පතු",
@@ -417,11 +437,23 @@ export const translations = {
     // Voucher Copy
     voucher_desc: "සෑම දායක මුදලක් සහ හදිසි ප්‍රදානයක් සඳහාම නිල තහවුරු කිරීමේ මුද්‍රාව සහිත ක්ෂණික බාගත කළ හැකි PDF වවුචර.",
 
+    // Notification Targeting & FIFO
+    target_all_members: "සියලුම ක්‍රියාකාරී සාමාජිකයින්",
+    target_arrears_members: "හිඟ මුදල් ඇති සාමාජිකයින්",
+    target_single_member: "තනි සාමාජිකයෙකුට",
+    fifo_settlement_notice: "පැරණිම හිඟ මුදල් පියවීම සඳහා FIFO පිළිවෙළට ස්වයංක්‍රීයව වෙන් කෙරේ.",
+    fifo_locked_tooltip: "FIFO නීතිය අනුව පියවිය යුතු පැරණිම මාසය ස්වයංක්‍රීයව තෝරා ඇත.",
+    proof_document_optional: "සාක්ෂි ලේඛනය (විකල්පයි)",
+    digital_voucher_ready: "ඩිජිටල් වවුචරය බාගත කිරීමට හෝ මුද්‍රණය කිරීමට සූදානම්",
+    member_notifications: "සාමාජික දැනුම්දීම්",
+    unread_badge: "නොකියවූ",
+    read_badge: "කියවූ",
+
     offline_alert: "ඔබ දැනට අන්තර්ජාලයෙන් විසන්ධි වී ඇත. මූල්‍ය ගනුදෙනු අත්හිටුවා ඇත."
   }
 };
 
-let currentLang = localStorage.getItem("mria_lang") || "si";
+let currentLang = (typeof localStorage !== "undefined" ? localStorage.getItem("mria_lang") : null) || "si";
 
 export function getLanguage() {
   return currentLang;

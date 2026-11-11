@@ -43,6 +43,13 @@ export function showToast(message, type = "info") {
 }
 
 export function openModal(modalId) {
+  if (modalId === "duesBreakdownModal" && !document.getElementById("duesBreakdownModal")) {
+    if (typeof window !== "undefined" && typeof window.openCurrentDuesBreakdown === "function") {
+      window.openCurrentDuesBreakdown();
+      return;
+    }
+  }
+
   const modal = document.getElementById(modalId);
   if (modal) {
     modal.classList.remove("hidden");
@@ -125,11 +132,11 @@ export function openContactModal(userEmail = "", userName = "") {
     `;
     document.body.appendChild(modal);
 
-    document.getElementById("closeContactModalBtn").addEventListener("click", () => {
+    modal.querySelector("#closeContactModalBtn")?.addEventListener("click", () => {
       closeModal("contactAdminModal");
     });
 
-    document.getElementById("contactAdminForm").addEventListener("submit", async (e) => {
+    modal.querySelector("#contactAdminForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const senderName = document.getElementById("contactSenderName")?.value.trim() || "";
       const senderEmail = document.getElementById("contactSenderEmail")?.value.trim() || "";
@@ -217,7 +224,7 @@ export function openContactModal(userEmail = "", userName = "") {
 /**
  * Renders the interactive payment history popup detailing paid vs unpaid months.
  */
-export function openDuesBreakdownModal(dues = [], memberBalance = {}) {
+export function openDuesBreakdownModal(dues = [], memberBalance = {}, memberName = "") {
   let modal = document.getElementById("duesBreakdownModal");
   if (!modal) {
     modal = document.createElement("div");
@@ -231,7 +238,7 @@ export function openDuesBreakdownModal(dues = [], memberBalance = {}) {
               <span class="material-symbols-outlined">receipt_long</span>
             </div>
             <div>
-              <h3 class="font-bold text-title text-on-surface" data-i18n="dues_breakdown_title">Monthly Contributions Breakdown</h3>
+              <h3 id="duesBreakdownTitleText" class="font-bold text-title text-on-surface" data-i18n="dues_breakdown_title">Monthly Contributions Breakdown</h3>
               <p class="text-caption text-on-surface-variant" data-i18n="click_for_history">Paid vs. Unpaid Ledger</p>
             </div>
           </div>
@@ -252,9 +259,14 @@ export function openDuesBreakdownModal(dues = [], memberBalance = {}) {
     `;
     document.body.appendChild(modal);
 
-    document.getElementById("closeDuesBreakdownBtn").addEventListener("click", () => {
+    modal.querySelector("#closeDuesBreakdownBtn")?.addEventListener("click", () => {
       closeModal("duesBreakdownModal");
     });
+  }
+
+  const titleEl = document.getElementById("duesBreakdownTitleText");
+  if (titleEl && memberName) {
+    titleEl.textContent = `${t("dues_breakdown_title") || "Monthly Contributions"} - ${memberName}`;
   }
 
   const container = document.getElementById("duesBreakdownContent");
@@ -267,21 +279,40 @@ export function openDuesBreakdownModal(dues = [], memberBalance = {}) {
   } else {
     container.innerHTML = dues.map((d) => {
       const isPaid = d.status === "paid";
+      const isPrepaid = isPaid && Boolean(d.is_advance_settled);
       return `
-        <div class="flex items-center justify-between p-3 rounded-xl border ${isPaid ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"}">
+        <div class="flex items-center justify-between p-3 rounded-xl border ${
+          isPrepaid
+            ? "border-teal-200 bg-teal-50/50"
+            : isPaid
+              ? "border-emerald-200 bg-emerald-50/50"
+              : "border-rose-200 bg-rose-50/50"
+        }">
           <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined ${isPaid ? "text-emerald-600" : "text-rose-600"}">
-              ${isPaid ? "check_circle" : "pending"}
+            <span class="material-symbols-outlined ${
+              isPrepaid ? "text-teal-600" : isPaid ? "text-emerald-600" : "text-rose-600"
+            }">
+              ${isPrepaid ? "task_alt" : isPaid ? "check_circle" : "pending"}
             </span>
             <div>
               <div class="font-semibold text-body text-on-surface">${d.billing_month}</div>
-              <div class="text-caption text-on-surface-variant">Due Date: ${d.due_date || "31st"}</div>
+              <div class="text-caption text-on-surface-variant">${
+                isPrepaid ? t("settled_from_advance") : (d.due_date ? `Due Date: ${d.due_date}` : "Due Date: 31st")
+              }</div>
             </div>
           </div>
           <div class="text-right">
-            <div class="font-bold text-body ${isPaid ? "text-emerald-700" : "text-rose-700"}">${formatCurrency(d.amount)}</div>
-            <span class="text-caption font-medium px-2 py-0.5 rounded-full ${isPaid ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}">
-              ${isPaid ? t("paid") : t("pending")}
+            <div class="font-bold text-body ${
+              isPrepaid ? "text-teal-700" : isPaid ? "text-emerald-700" : "text-rose-700"
+            }">${formatCurrency(d.amount)}</div>
+            <span class="text-caption font-medium px-2 py-0.5 rounded-full ${
+              isPrepaid
+                ? "bg-teal-100 text-teal-800"
+                : isPaid
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-rose-100 text-rose-800"
+            }">
+              ${isPrepaid ? t("prepaid") : isPaid ? t("paid") : t("pending")}
             </span>
           </div>
         </div>

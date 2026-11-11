@@ -1,195 +1,137 @@
-# Stage 7 Critic Review Report: Targeted Design Enhancement & Bug Remediation
+# Stage 7: Critic Review Report
 
-**Target:** `/home/anjana/Documents/Software/MRIA Welfare Association /docs/designs/targeted_design_enhancement_and_bug_remediation.md` (`Lines 1..777`)
-
-## Reviewer Status
-
-| Reviewer | Status |
-| --- | --- |
-| `egm-structural` | completed |
-| `egm-design` | completed |
-| `egm-style` | completed |
+**Target Document:** [`docs/designs/comprehensive_remediation_and_governance_refinement.md`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/docs/designs/comprehensive_remediation_and_governance_refinement.md) (FeatureRange: `lines 1..358`)  
+**Reviewers:** `[egm-design, egm-structural, egm-style]`  
+**Date:** 2026-11-11  
 
 ---
 
-## Executive Summary of Findings
-
-* 🔴 **Blockers:** 4
-* 🟡 **Majors:** 5
-* 🟢 **Nits:** 4
+## Severity Breakdown
+* 🔴 **Blocker:** 4
+* 🟡 **Major:** 5
+* 🟢 **Nit:** 2
+* **Total Prioritized Findings:** 11
 
 ---
 
 ## Prioritized Findings (Blockers -> Major -> Nits)
 
-### 1. Double-Entry Ledger Failure: `void_payment_receipt` Omits Account Balance Updates and Breaks Non-Dues Receipts - Severity: Blocker
+### 1. Broken Payment Submission Runtime Binding (`paymentMonthSelect` vs `paymentMonthHiddenInput`) - Severity: 🔴 Blocker
 * **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 391-487` (Pillar 2, Item 4) & `Lines 201-213` (State Machine)
-* **Discrepancy Description**: 
-  1. The stored procedure `public.void_payment_receipt` inserts a compensating outflow into `treasury_transactions`, but does NOT decrement `treasury_accounts.current_balance`, directly contradicting state diagram step `DecrementBalance` (Line 207) and the specification rationale (Line 789).
-  2. The function hardcodes dues un-settling via `payment_dues_reconciliation` (Lines 428-440) and assumes all voided payments are monthly dues. If an `admission_fee` (Rs. 500) or `donation` payment is voided, dues reconciliation returns 0 rows, and the member's admission fee liability is not restored in `calculateMemberBalance` because the payment status transition alone does not re-evaluate admission exemptions.
-  3. The function infers the outflow source account strictly via a coarse `CASE WHEN payment_method = 'cash' THEN 'cash_in_hand' ELSE 'boc_savings' END` instead of inspecting the original `treasury_transactions` row generated during payment verification. If the payment was made via `qr_payment` or deposited into another designated account, the reversal debits the wrong treasury asset account.
-* **Rationale & Recommendation**: 
-  Double-entry ledger safety requires absolute mathematical and relational parity. Update `void_payment_receipt` to:
-  1. Check `v_payment.payment_type`. If `admission_fee`, explicitly audit that the admission fee requirement is re-activated for non-legacy members.
-  2. Query `treasury_transactions WHERE reference_no LIKE '%' || p_payment_id::text` or inspect the original inflow to ensure the exact matching account is debited.
-  3. Include an explicit balance update: `UPDATE public.treasury_accounts SET current_balance = current_balance - v_payment.amount WHERE id = v_source_account;` (if balances are stored in a table rather than a dynamic view).
-
----
-
-### 2. Fatal Database Runtime Exception: `delete_or_archive_member` Assigns Unlisted Enum Value `'archived'` - Severity: Blocker
-* **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 320-389` (Pillar 2, Item 3) & Migration Plan `Line 785`
-* **Discrepancy Description**: 
-  In `supabase/migrations/20261108000001_initial_schema.sql` (Line 5), the role enum is defined as:
-  `CREATE TYPE app_role AS ENUM ('admin', 'manager', 'official', 'treasurer', 'member');`
-  In `delete_or_archive_member` (Line 351), the procedure executes:
-  `UPDATE public.members SET is_approved = false, role = 'archived' WHERE id = p_member_id;`
-  Because `'archived'` is not a recognized value of `app_role`, PostgreSQL will throw a fatal runtime exception (`22P02: invalid input value for enum app_role: "archived"`), aborting the transaction and blocking all soft archival operations. The migration plan on Line 785 only specifies adding `'voided'` to `payment_status`, completely omitting `'archived'` from `app_role`.
-* **Rationale & Recommendation**: 
-  Add `ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'archived';` to `supabase/migrations/20261109000006_enhanced_governance_remediations.sql`. Furthermore, verify that frontend role checks (e.g., `ROLE_TABS` in `js/page-admin.js`) do not throw `undefined` errors when encountering an archived user.
-
----
-
-### 3. Critical Security Flaw: Unauthenticated Anonymous Open INSERT Policy on `admin_inquiries` - Severity: Blocker
-* **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 642-644` (Pillar 4, Item 17)
-* **Discrepancy Description**: 
-  The Row Level Security policy for inserting inquiries is defined as:
-  ```sql
-  CREATE POLICY "Users insert inquiries" ON public.admin_inquiries
-      FOR INSERT WITH CHECK (true);
+* **Affected Scope:** Section 5 (Lines 221-251), Section 1 Architecture Diagram (Lines 120, 149)
+* **Discrepancy Description**: Section 5 explicitly replaces `<select id="paymentMonthSelect">` in `dashboard.html` with a locked display container and `<input type="hidden" id="paymentMonthHiddenInput" name="billing_month" />`. However, in `js/page-dashboard.js` (line 1000), the form submit event listener reads:
+  ```javascript
+  const selectedMonth = document.getElementById("paymentMonthSelect")?.value;
   ```
-  `WITH CHECK (true)` allows completely unauthenticated, anonymous actors holding the public Supabase anon key to insert arbitrary rows. Attackers can forge `sender_id`, `sender_name`, `sender_email`, and `sender_epf` to impersonate association officials or flood the database with unauthenticated spam.
-* **Rationale & Recommendation**: 
-  Enforce authentication in RLS:
-  ```sql
-  CREATE POLICY "Authenticated members insert inquiries" ON public.admin_inquiries
-      FOR INSERT TO authenticated
-      WITH CHECK (
-          auth.uid() IS NOT NULL AND 
-          (sender_id IS NULL OR sender_id = (SELECT id FROM public.members WHERE user_id = auth.uid()))
-      );
-  ```
-  If pre-registration inquiries from unapproved users are permitted, validate that `auth.uid() = (SELECT user_id FROM public.members WHERE id = sender_id)`.
+  Neither Section 5 nor the Technical Plan specifies updating this selector in `js/page-dashboard.js` to target `paymentMonthHiddenInput`. Consequently, at runtime `document.getElementById("paymentMonthSelect")` evaluates to `null`, `selectedMonth` evaluates to `undefined`, and line 1028 (`if (category === "monthly_due" && selectedMonth)`) silently evaluates to false. The payment is submitted with zero billing month annotation in the notes, breaking ledger attribution.
+* **Rationale & Recommendation**: A breaking DOM modification must be explicitly accompanied by the corresponding JS selector contract update in the spec. Update Section 5 to mandate:
+  1. In `js/page-dashboard.js`, update the submit listener to extract `selectedMonth = document.getElementById("paymentMonthHiddenInput")?.value`.
+  2. Fallback to extracting the attribute or defaulting cleanly if the hidden input is absent.
 
 ---
 
-### 4. Broken Financial Calculation: `calculateNetDuesStanding` Advance Formula Fails and Ignores Admission Fees - Severity: Blocker
-* **Reviewer Lens:** `egm-structural` & `egm-design`
-* **Affected Scope:** `Lines 501-524` (Pillar 3, Item 11)
-* **Discrepancy Description**: 
-  `calculateNetDuesStanding` computes advance payments using:
-  `const futureSettled = dues.filter((d) => d.status === "settled" && d.billing_month > today);`
-  In the MRIA system, future monthly dues rows are generated monthly; they are NOT pre-populated in `member_dues` months in advance. When a member pays for 4 months in advance, the payment is stored in `payments`, but `futureSettled` in `member_dues` evaluates to empty (`[]`). As a result, `totalAdvance` is always evaluated as 0!
-  Furthermore, the formula completely ignores `admissionFeeDue` (Rs. 500/=). A newly admitted member with an unpaid admission fee and zero overdue monthly dues will be presented with `net === 0` ("All Settled / සම්පූර්ණයෙන්ම ගෙවා ඇත"), directly conflicting with Card 1 and the treasury audit balance.
-* **Rationale & Recommendation**: 
-  Refactor `calculateNetDuesStanding`:
-  1. Retrieve verified payments sum for `monthly_due` vs total generated dues to calculate true prepaid credit balance.
-  2. Factor in `admissionFeeDue` from `calculateMemberBalance` as an arrears component.
-  3. Ensure that when `admissionFeeDue > 0`, the card displays the admission fee liability rather than showing an incorrect zero balance.
-
----
-
-### 5. Print Engine Failure: External Tailwind CDN Dependency in Offline PWA & Timing Race Condition - Severity: Major
+### 2. Card 1 Dues Settled Display Masking Active Month Pending Dues - Severity: 🔴 Blocker
 * **Reviewer Lens:** `egm-design`
-* **Affected Scope:** `Lines 671-715` (Pillar 5, Item 15)
-* **Discrepancy Description**: 
-  In `js/receipt.js`, `printReceipt()` injects `<script src="https://cdn.tailwindcss.com"></script>` into the print iframe.
-  1. **Offline Breakage:** MRIA PWA operates offline via `sw.js`. If the Treasurer or member is offline or in an area with poor airport connectivity, the 3MB CDN script fails to load, rendering the receipt as broken, unstyled HTML.
-  2. **Timing Race Condition:** Using `setTimeout(..., 500)` to trigger `iframe.contentWindow.print()` and then immediately calling `document.body.removeChild(iframe)` will abort the print dialog or print a blank page on slower mobile devices where layout takes >500ms.
-  3. **Sinhala Font Corruption:** The iframe document lacks the `Noto Sans Sinhala` font import. Sinhala text (`අවලංගු කරන ලදී`, `MRIA කළමනාකාර සුබසාධක සංගමය`) will render as unreadable glyph boxes ("tofu") on devices without native Sinhala system fonts.
-* **Rationale & Recommendation**: 
-  1. Replace the CDN script with a `<link rel="stylesheet" href="/assets/styles.css" />` tag to reuse the local compiled Tailwind styles.
-  2. Include `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap">`.
-  3. Use `iframe.onload = () => { iframe.contentWindow.print(); }` and listen to `iframe.contentWindow.onafterprint` before removing the iframe from the DOM.
+* **Affected Scope:** Section 4 (Lines 199-210), Goal 5 (Lines 51-52)
+* **Discrepancy Description**: Section 4 states that when `balanceInfo.priorArrears === 0`, Card 1 must display:
+  * Title: `Dues Settled` / `හිඟ මුදල් නැත`
+  * Amount: `Rs. 0.00`
+  * Badge: `Settled` / `ගෙවා ඇත`
+  However, in [`js/api.js`](file:///home/anjana/Documents/Software/MRIA%20Welfare%20Association%20/js/api.js#L51-L59), `priorArrears` strictly filters for dues prior to the current calendar month (`d.billing_month < currentMonthStr`). For the current month, dues are generated on the 1st of each month and tracked as `currentMonthDue` (included in `totalPending`). Under the proposed design, throughout any active month, a member who has NOT paid the current month will see Card 1 declare their account "Settled" (`Rs. 0.00 / Settled`). Yet when they click "Pay Dues", the payment modal displays an outstanding due of Rs. 300/= for the current month.
+* **Rationale & Recommendation**: Showing "Dues Settled (Rs. 0.00)" to a member who owes dues for the active month creates a false impression that no payment is required. Refine Card 1 logic:
+  * When `priorArrears > 0`: Display red `-Rs. ${priorArrears.toFixed(2)}` with `Arrears` / `හිඟ මුදල්` badge.
+  * When `priorArrears === 0` AND `currentMonthDue` is pending: Display `Current Month Due` / `වත්මන් මාසික මුදල` with amount `Rs. ${currentMonthDue.amount.toFixed(2)}` and `Due` / `ගෙවිය යුතුය` warning badge.
+  * When `totalPending === 0`: Display `Dues Settled` / `හිඟ මුදල් නැත` with `Rs. 0.00` and emerald `Settled` / `ගෙවා ඇත` badge.
 
 ---
 
-### 6. Medical & Bereavement Privacy Risk: `get-slip-url` Lacks Claim Document Authorization Checks - Severity: Major
+### 3. Inexecutable Arrears Targeting Query (`priorArrears > 0`) without Database Column or RPC - Severity: 🔴 Blocker
 * **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 596-600` (Pillar 4, Item 13) & `Lines 877-881` (Target File 11)
-* **Discrepancy Description**: 
-  The specification states: "Updates authorization check to permit presigned download if `payments.slip_key = slipKey` OR `benefit_claims.document_key = slipKey`."
-  Benefit claim documents contain sensitive medical invoices, hospital diagnosis records, and death certificates. If the Edge Function only checks whether the key exists in `benefit_claims` without checking *who* is requesting it, any authenticated member can query and view confidential medical and bereavement records of other airport staff.
-* **Rationale & Recommendation**: 
-  The Edge Function `get-slip-url` MUST enforce strict ownership verification:
-  Allow access only if:
-  1. The caller is an executive staff member (`admin`, `secretary`, `treasurer`, `manager`), OR
-  2. The caller's `member_id` strictly matches `benefit_claims.member_id`.
+* **Affected Scope:** Section 6 (Lines 263-267), CUJ 4 (Lines 95-98), Goal 8 (Line 57)
+* **Discrepancy Description**: Section 6 specifies that when dispatching to arrears defaults, the system will:
+  > "Query members with `priorArrears > 0` and batch-insert notifications."
+  However, `priorArrears` is NOT a database column in `public.members`. In the codebase, `priorArrears` is a client-side aggregated metric computed by `calculateMemberBalance(member)` in `js/api.js`, which requires multiple queries per member. The spec provides zero database mechanism (no SQL query, no view, no RPC) to identify this cohort across all members. If implemented naively on the client, the browser would have to fetch all members and make hundreds of individual queries in a loop, triggering severe rate-limiting and browser freeze.
+* **Rationale & Recommendation**: Define the backend mechanism explicitly:
+  * Leverage the existing PostgreSQL view `public.defaulters_roster` or execute a single targeted query against `public.member_dues`:
+    ```javascript
+    const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+    const { data: arrearsDues } = await supabase
+      .from("member_dues")
+      .select("member_id")
+      .eq("status", "pending")
+      .lt("billing_month", currentMonthStr);
+    const targetMemberIds = [...new Set((arrearsDues || []).map((d) => d.member_id))];
+    ```
 
 ---
 
-### 7. Auth User Desynchronization on Hard Deletion - Severity: Major
+### 4. Announcement Vanishing Trap in Notifications Modal Centralization - Severity: 🔴 Blocker
 * **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 369-386` (Pillar 2, Item 3)
-* **Discrepancy Description**: 
-  When a member with zero transactions is hard-deleted from `public.members`, their auth user record in Supabase `auth.users` remains alive because `members.user_id` has `ON DELETE SET NULL`. If this airport employee signs in again via Google OAuth, `js/auth.js` detects an active session in `auth.users` but cannot find their `public.members` record, causing an unhandled redirect loop or throwing exceptions.
-* **Rationale & Recommendation**: 
-  Specify that when hard-deleting an unlinked profile, the admin routine must also invoke the Supabase Admin API (`supabase.auth.admin.deleteUser(user_id)`) to purge the orphan auth record, or update `auth.js` to redirect authenticated users without a `members` record back to `unauthorized.html` for re-registration.
+* **Affected Scope:** Section 3 (Lines 183-193), Goal 2 (Line 48)
+* **Discrepancy Description**: Section 3 mandates removing `#dashboardNotificationCenter` from `dashboard.html` and removing announcement rendering from `refreshDashboardData()`, directing:
+  > "3. Route general announcements and 1-to-1 notifications into `#notificationsModal`"
+  However, in `js/page-dashboard.js`, `openNotificationsModal()` strictly calls `getNotifications(currentMember.id)`, which only fetches records from `public.notifications` (`WHERE recipient_id = memberId`). It does NOT query `public.announcements`. If dashboard banners are removed without adding announcement fetching into the modal, all announcements published by the committee in `public.announcements` will become completely invisible to members.
+* **Rationale & Recommendation**: Specify the concrete data integration model in Section 3:
+  1. Define how `loadNotifications()` queries both `public.notifications` and active rows from `public.announcements`.
+  2. Define how unread status for announcements is tracked (e.g., maintaining the existing `localStorage` dismissed array `mria_dismissed_announcements`).
 
 ---
 
-### 8. Locked Dashboard Preview Information Leak: Unapproved Users Access Society Announcements - Severity: Major
+### 5. Card 3 Semantic & Accounting Discrepancy (`disbursed` vs `approved` Claims) - Severity: 🟡 Major
 * **Reviewer Lens:** `egm-design`
-* **Affected Scope:** `Lines 602-621` (Pillar 4, Item 16)
-* **Discrepancy Description**: 
-  Item 16 allows unapproved Google OAuth users to access `dashboard.html` with disabled mutation buttons and zero-state financial cards. However, the document does not specify hiding the Association Notice Board (`#announcementsList`). Internal society circulars, financial announcements, or executive notices will be exposed to unvetted external Google accounts before the Secretary has approved their identity.
-* **Rationale & Recommendation**: 
-  Explicitly specify in Item 16 that when `member.is_approved === false`, `#announcementsList` and society updates are hidden or replaced with a "Pending Approval Notice" container.
+* **Affected Scope:** Section 4 (Lines 215-218), Goal 5 (Line 54)
+* **Discrepancy Description**: Goal 5 and Card 3 designate the metric as "Cumulative Lifetime Welfare Benefits Received ('ලබාගත් සුබසාධන ආධාර')", yet the calculation rule in Section 4 sums claims where `c.status === "disbursed" || c.status === "approved"`.
+  1. Semantic & Accounting conflict: "Received" (ලබාගත්) means funds actually paid out. An "approved" claim has only been committee-sanctioned; the cash/bank outflow has not yet occurred.
+  2. Value fluctuation: In `js/page-dashboard.js` line 525, the calculation evaluates `Number(c.disbursed_amount || c.claim_amount || 0)`. When a claim is approved for a reduced sum, `c.disbursed_amount` is null while in `approved` status, so the card temporarily sums `c.claim_amount`. Once disbursed, it switches to `c.disbursed_amount`, causing the member's lifetime metric to drop unexpectedly upon receiving funds.
+* **Rationale & Recommendation**: Align metric definition and formula: Strictly filter by `c.status === "disbursed"` and sum `c.disbursed_amount`.
 
 ---
 
-### 9. Currency Prefix Duplication and Formatting Inconsistency - Severity: Major
-* **Reviewer Lens:** `egm-design` & `egm-style`
-* **Affected Scope:** `Lines 307-315` (Pillar 1, Item 7) & `Lines 520-523` (Pillar 3, Item 11)
-* **Discrepancy Description**: 
-  In Item 11, the display format is specified as `-Rs. ${displayAmount}`.
-  However, in `js/ui.js` (Line 291), `formatCurrency(amount)` already prepends `Rs. `. If a developer passes `displayAmount` through `formatCurrency()`, the UI will render `-Rs. Rs. 500.00`. If they do not pass it through `formatCurrency()`, it lacks thousands comma separators (e.g., `-Rs. 1500` instead of `-Rs. 1,500.00`), directly violating Item 5.
-* **Rationale & Recommendation**: 
-  Update `formatCurrency` in `js/ui.js` to accept an options object: `formatCurrency(amount, { showSign: true })` producing `+Rs. 1,500.00` or `-Rs. 1,500.00`, and mandate that all UI views use this function rather than manual string concatenation.
-
----
-
-### 10. Toolbar Flex Wrap Layout Collapse on Small Screens (320px-360px) - Severity: Nit
+### 6. FIFO Locked Month Semantic Mismatch on Multi-Month and Partial Payments - Severity: 🟡 Major
 * **Reviewer Lens:** `egm-design`
-* **Affected Scope:** `Lines 250-294` (Pillar 1, Item 2)
-* **Discrepancy Description**: 
-  In the Receipts toolbar, the search box has `min-w-[200px]`, the Category filter has `min-w-[130px]`, and the Method filter has `min-w-[120px]`. On a 320px mobile viewport, these minimum widths cause controls to stack vertically in 4 separate lines with uneven borders.
-* **Rationale & Recommendation**: 
-  Apply responsive full-width classes on mobile: `w-full sm:w-auto sm:min-w-[130px] flex-1`.
+* **Affected Scope:** Section 5 (Lines 221-251), CUJ 1 (Lines 80-84), Alternative 1 (Lines 326-331)
+* **Discrepancy Description**: Section 5 locks the payment modal's billing month strictly to the single earliest unpaid month (or current month if clear), but leaves `#paymentAmountInput` editable.
+  * If a member pays Rs. 900 for Jan, Feb, and Mar 2026, the modal locks to `January 2026` and writes `[Billing Month: 2026-01]` into payment notes. Although PostgreSQL's trigger (`reconcile_verified_payment`) reconciles all 3 months, the receipt voucher states that the Rs. 900 payment was for January 2026 only, generating confusion during financial audits.
+* **Rationale & Recommendation**: Dynamically format payment notes to reflect multi-month coverage (e.g. `[Settling Dues via FIFO starting from: 2026-01]`) rather than attributing the entire sum to a single month string.
 
 ---
 
-### 11. Pagination State Reset Omission on Tab Switch / Filter Change - Severity: Nit
-* **Reviewer Lens:** `egm-design`
-* **Affected Scope:** `Lines 717-735` (Pillar 5, Item 18)
-* **Discrepancy Description**: 
-  `paymentsRenderLimit` is stored as a global module-level variable initialized to 5. When a member filters history or navigates between tabs, `paymentsRenderLimit` is never reset, leaving the DOM rendering 30+ items when the user expected the initial slice.
-* **Rationale & Recommendation**: 
-  Reset `paymentsRenderLimit = 5` whenever member data is reloaded, search filters change, or the history modal is re-opened.
-
----
-
-### 12. Inquiry Schema Missing Contact Phone Number - Severity: Nit
+### 7. Client-Side Broadcast Dispatch Anti-Pattern & API Abstraction Violation - Severity: 🟡 Major
 * **Reviewer Lens:** `egm-structural`
-* **Affected Scope:** `Lines 624-639` (Pillar 4, Item 17)
-* **Discrepancy Description**: 
-  The schema for `public.admin_inquiries` contains `sender_email` and `sender_epf`, but lacks `sender_phone`. Executive officers frequently need to call the employee back on their mobile phone for quick clarification when email delivery is delayed.
-* **Rationale & Recommendation**: 
-  Add `sender_phone VARCHAR(20)` to `admin_inquiries` and include the phone input field in the contact administration modal.
+* **Affected Scope:** Section 6 (Lines 263-267), Section 1 Architecture Diagram (Lines 125-126, 154-155)
+* **Discrepancy Description**: Section 6 states that when dispatching to `all`, `js/page-admin.js` will "Fetch all active members and execute batch insert into `public.notifications`."
+  * There is NO batch dispatch function in `js/api.js`. `sendNotification` only accepts a single recipient.
+  * Performing fan-out on the client by looping `sendNotification` incurs N network round-trips.
+* **Rationale & Recommendation**: Add `sendBatchNotifications(rows)` to `js/api.js` using Supabase's native array insert: `supabase.from("notifications").insert(rows)`.
 
 ---
 
-### 13. Missing Migration Rollback & Idempotency Safeguards - Severity: Nit
+### 8. Unhandled Database `NOT NULL` Constraints on Bilingual Notification Fields - Severity: 🟡 Major
+* **Reviewer Lens:** `egm-design`
+* **Affected Scope:** Section 2 (Lines 164-167), Section 6 (Lines 258-268)
+* **Discrepancy Description**: In the live PostgreSQL schema for `public.notifications`, columns `title_en`, `title_si`, `message_en`, and `message_si` are all defined as `NOT NULL`. If an administrator enters a message in only one language, the form submission will crash with a PostgreSQL NOT NULL violation.
+* **Rationale & Recommendation**: If an administrator supplies text in only one language, auto-populate the alternate language field with the same text to satisfy the schema invariant.
+
+---
+
+### 9. Omission of Error States, Edge Cases, and Premature "Zero Open Questions" Declaration - Severity: 🟡 Major
 * **Reviewer Lens:** `egm-style`
-* **Affected Scope:** `Lines 782-791` (Target File 1)
-* **Discrepancy Description**: 
-  The implementation plan does not provide rollback DDL or idempotent guards for table creation, policy definitions, and enum modifications.
-* **Rationale & Recommendation**: 
-  Ensure all policies drop existing definitions before creation (`DROP POLICY IF EXISTS ... ON ...`), use `CREATE TABLE IF NOT EXISTS`, and document corresponding rollback statements.
+* **Affected Scope:** Section Open Questions (Lines 72-76), CUJs 1-5 (Lines 78-106)
+* **Discrepancy Description**: Specifications must define error conditions and failure modes. CUJs depict only happy-path scenarios, omitting slip upload network drops or partial batch insert failures.
+* **Rationale & Recommendation**: Expand CUJs to include recovery flows and list implementation directives in Open Questions.
 
 ---
 
-### Next Action Recommendation
-All 13 findings are structured and ready for immediate remediation. Please review and apply the required fixes to `/home/anjana/Documents/Software/MRIA Welfare Association /docs/designs/targeted_design_enhancement_and_bug_remediation.md` and persist this report to `/home/anjana/Documents/Software/MRIA Welfare Association /critic_report.md`.
+### 10. Traceability Void for "19 Scoped Bug Remediations" - Severity: 🟢 Nit
+* **Reviewer Lens:** `egm-style`
+* **Affected Scope:** Overview (Line 13), Technical Plan Intro (Line 112), Detailed Plan (Line 361)
+* **Discrepancy Description**: The document repeatedly cites "19 scoped bug remediations", yet nowhere is there a cross-reference table mapping each item to its architectural solution and target files.
+* **Rationale & Recommendation**: Insert a cross-reference table mapping Bug Item IDs (1..19) to their respective problem category, target file, and technical plan section.
+
+---
+
+### 11. Bilingual Terminology Inconsistency in Card 3 ("Claimed" vs "Received") - Severity: 🟢 Nit
+* **Reviewer Lens:** `egm-style`
+* **Affected Scope:** Section 4 (Line 216)
+* **Discrepancy Description**: Line 216 defines `Title: Total Welfare Benefits Claimed / ලබාගත් සුබසාධන ආධාර`. "Claimed" means applied for, whereas "ලබාගත්" explicitly means received/obtained.
+* **Rationale & Recommendation**: Align the English title to `Total Welfare Benefits Received` to match the Sinhala title and Goal 5.
