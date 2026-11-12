@@ -1,112 +1,218 @@
-# Comprehensive Foreign Key & Query Performance Indexing Architecture
+# Feature Concepts Brief: Claims Workflow Optimization, Dues Waiver System & Canonical Emblem Architecture
 
 * **Author:** Antigravity Engineering
 * **Date:** 2026-11-12
-* **Reviewers:** Swarm Consensus (`egm-design`, `egm-codebase-details`, `egm-zoom-out`, `egm-comprehension`, `egm-implementation-readiness`, `egm-structural`)
-* **Status:** Step 2 & 3 - Multi-Lens Synthesis & Interactive Refinement
+* **Target Milestone:** MRIA Welfare Association Platform — Governance & Ledger Extensions
+* **Review Mode:** EGM Brainstorm & Architectural Specification (Step 3: Multi-Lens Synthesis)
+* **Consensus Reviewers:** `egm-design`, `egm-codebase-details`, `egm-zoom-out`, `egm-comprehension`, `egm-implementation-readiness`, `egm-structural`
 
 ---
 
-## Overview
+## 1. Overview & Problem Statement
 
-In PostgreSQL, foreign key constraints (`REFERENCES target_table(id)`) enforce referential integrity but do not automatically create indexes on referencing columns. 
+This specification defines three targeted enhancements to the MRIA Welfare Association administrative platform:
 
-An inspection of the MRIA Welfare Association database revealed that only primary keys and unique constraints have automatic B-Tree indexes. Foreign keys and frequently queried access paths across core application tables lack secondary B-Tree indexes. Without proper indexing:
-1. **Sequential Scans on Joins & Filters:** Member ledgers, receipt queues, notification feeds, and cashbook calculations perform full table scans across all historical records.
-2. **Foreign Key Cascade & Delete Contention:** Modifying or deleting parent records in `members`, `payments`, or `member_dues` forces sequential scans on child tables to verify referential integrity, acquiring table-level `SHARE` locks and causing connection pool queueing.
-3. **Supabase Performance Advisor Flags:** Database advisors report unindexed foreign keys across `payments`, `payment_dues_reconciliation`, `treasury_transactions`, `notifications`, `benefit_claims`, and auxiliary tables.
+1. **Claims Review Search & Disbursement Acceleration:**
+   The current claims review queue and payout desk require manual scanning of all rows. The committee requires instant search filtering across applicant identities, statuses, and approved-only queues, alongside a root-admin-only expedited approval-to-payout shortcut that respects the four-eyes segregation policy for other officers.
 
-This feature deploys a streamlined, workload-aligned indexing migration that achieves 100% foreign key coverage, prunes redundant index definitions, aligns with active query access paths, and executes with strict lock timeouts.
+2. **Dues & Fee Waiver Subsystem ("ගෙවීම් නිදහස් කරන්න"):**
+   Certain members (e.g., special hardship cases, honorary appointments, extended unpaid medical leaves) require lawful exemption from statutory admission fees or specific monthly dues. An administrative tab, cryptographic ability gate (`waive_statutory_dues`), and non-destructive transactional waiver ledger must allow authorized officers to release dues with mandatory reason tracking, guaranteeing zero cashbook pollution, exclusion from arrears, and reversible state tracking with full audit logging.
 
----
-
-## Analysis
-
-### 1. Contrarian / YAGNI & Deduplication Lens (`egm-zoom-out` & `egm-structural`)
-* **Elimination of Redundant Leading Prefix Indexes:**
-  * In PostgreSQL B-Trees, an index on `(col1, col2)` automatically satisfies referential integrity checks and equality lookups on `col1`. Creating separate single-column indexes on `col1` alongside composite indexes starting with `col1` is completely redundant.
-  * Pruning redundant single-column indexes on `payments (member_id)`, `benefit_claims (member_id)`, and `notifications (recipient_id)` cuts write amplification and index storage bloat by over 40%.
-* **Reinventing Covered Keys on `member_dues`:**
-  * `member_dues` already has a unique index on `(member_id, billing_month)` (`member_dues_member_id_billing_month_key`), which already satisfies foreign key checks from `members(id)`. Adding a redundant `(member_id)` index is unnecessary.
-  * The actual performance bottleneck for dues is the committee's `defaulters_roster` view, which filters across all members: `WHERE status = 'pending' AND billing_month < now()`. This is solved via a lightweight partial index: `(billing_month, member_id) WHERE status = 'pending'`.
-
-### 2. Architecture & Access Path Alignment Lens (`egm-design` & `egm-implementation-readiness`)
-* **Realignment with Active Codebase Query Paths (`js/api.js`):**
-  * `getMemberPayments`: Queries `WHERE member_id = $1 ORDER BY created_at DESC`. Indexing `payments (member_id, created_at DESC)` satisfies both the foreign key check and chronological sorting without an in-memory sort node.
-  * `getPendingPayments`: Queries `WHERE status = 'pending_approval' ORDER BY created_at DESC` across all members. A targeted partial index `payments (created_at DESC) WHERE status = 'pending_approval'` accelerates the review queue instantly while remaining near-zero bytes in size.
-  * `getPaymentReceipts`: Queries `WHERE status = 'verified' ORDER BY created_at DESC`. Indexed via `payments (status, created_at DESC)`.
-  * `getNotifications`: Queries `WHERE recipient_id = $1 ORDER BY created_at DESC`. Indexed via `notifications (recipient_id, created_at DESC)`.
-  * `getTreasuryTransactions`: Orders by `(transaction_date DESC, created_at DESC)`. Indexed via `treasury_transactions (transaction_date DESC, created_at DESC)`.
-* **Pruning Append-Only `audit_logs` Indexes:**
-  * `audit_logs` is queried in the application exclusively via `getAuditLogs` using `.order("timestamp", { ascending: false }).limit(25)`.
-  * Retain `audit_logs (timestamp DESC)` and `audit_logs (entity_type, entity_id)`. Omit speculative `user_email` indexing to protect write throughput on this append-heavy ledger.
-
-### 3. Observability, SRE & Locking Safety Lens (`egm-codebase-details` & `egm-comprehension`)
-* **Locking Guardrails in Transactional Block:**
-  * To guarantee that standard DDL index builds cannot block incoming production transactions or exhaust connection pools if a concurrent lock is held, the migration enforces:
-    ```sql
-    SET LOCAL lock_timeout = '5s';
-    SET LOCAL statement_timeout = '60s';
-    ```
-* **Post-Migration Statistics Refresh:**
-  * Immediately following index creation, the migration invokes `ANALYZE` across all modified tables so PostgreSQL's cost-based query planner updates `pg_statistic` and adopts the new indexes without waiting for background autovacuum.
-* **100% Database Advisor Coverage:**
-  * Includes the remaining auxiliary foreign keys flagged by Supabase advisor (`admin_inquiries.sender_id`, `admin_inquiries.resolved_by`, `announcements.created_by`, `system_settings.updated_by`) to ensure 100% clean linter observability.
+3. **Canonical Logo Architecture:**
+   The platform requires a clean, symbol-only vector placeholder emblem (aviation wings + welfare shield) located strictly at `assets/mria-logo.svg`, enabling seamless manual asset swapping without code modifications.
 
 ---
 
-## Concrete Index Inventory
+## 2. In-Scope Goals vs. Out-of-Scope Non-Goals
 
-### Core Transaction Tables:
-1. **`public.payments`**:
-   * `idx_payments_member_created`: `ON payments (member_id, created_at DESC)` — Covers FK, RLS, and `getMemberPayments`.
-   * `idx_payments_status_created`: `ON payments (status, created_at DESC)` — Covers `getPaymentReceipts`.
-   * `idx_payments_pending_created`: `ON payments (created_at DESC) WHERE status = 'pending_approval'` — Partial index for pending slip queue.
-   * `idx_payments_verified_by`: `ON payments (verified_by)` — Covers FK to staff.
-2. **`public.payment_dues_reconciliation`**:
-   * `idx_payment_dues_reconciliation_payment_id`: `ON payment_dues_reconciliation (payment_id)` — Covers FK and cascade lookups.
-   * `idx_payment_dues_reconciliation_due_id`: `ON payment_dues_reconciliation (due_id)` — Covers FK to dues.
-3. **`public.treasury_transactions`**:
-   * `idx_treasury_transactions_date_created`: `ON treasury_transactions (transaction_date DESC, created_at DESC)` — Covers cashbook ledger.
-   * `idx_treasury_transactions_claim_id`: `ON treasury_transactions (claim_id)` — Covers FK to claims.
-   * `idx_treasury_transactions_payment_id`: `ON treasury_transactions (payment_id)` — Covers FK to payments.
-   * `idx_treasury_transactions_source_account`: `ON treasury_transactions (source_account_id)` — Covers FK to accounts.
-   * `idx_treasury_transactions_dest_account`: `ON treasury_transactions (destination_account_id)` — Covers FK to accounts.
-   * `idx_treasury_transactions_recorded_by`: `ON treasury_transactions (recorded_by)` — Covers FK to staff.
-4. **`public.notifications`**:
-   * `idx_notifications_recipient_created`: `ON notifications (recipient_id, created_at DESC)` — Covers FK, RLS, and chronological feed.
-5. **`public.benefit_claims`**:
-   * `idx_benefit_claims_member_created`: `ON benefit_claims (member_id, created_at DESC)` — Covers FK, RLS, and member history.
-   * `idx_benefit_claims_benefit_type_id`: `ON benefit_claims (benefit_type_id)` — Covers FK to benefit types.
-   * `idx_benefit_claims_approved_by`: `ON benefit_claims (approved_by)` — Covers FK to approver.
-   * `idx_benefit_claims_disbursed_by`: `ON benefit_claims (disbursed_by)` — Covers FK to disburser.
-6. **`public.member_dues`**:
-   * `idx_member_dues_pending_billing`: `ON member_dues (billing_month, member_id) WHERE status = 'pending'` — Partial index accelerating `defaulters_roster`.
-7. **`public.audit_logs`**:
-   * `idx_audit_logs_timestamp`: `ON audit_logs (timestamp DESC)` — Covers audit log feed.
-   * `idx_audit_logs_entity`: `ON audit_logs (entity_type, entity_id)` — Covers entity history lookups.
+### In-Scope Goals
+* **Review Queue Real-Time Search:** Search bar and trigger button on the Claims Review Queue filtering applicant full name, EPF, benefit program, and claim status with 150ms debounce and instant clear.
+* **Payout Desk Approved Claims Search:** Dedicated selector in the Direct Benefit Payout Desk listing approved, not-yet-disbursed claims for one-click form pre-filling.
+* **Beneficiary Selection Lock:** Locking member selection when an approved claim is loaded into the Payout Desk to prevent accidental cross-member disbursement.
+* **Root-Admin-Only Expedited Payout Shortcut:** An "Approve & Go to Payout" button visible exclusively to `krishaja@gmail.com`. For non-root officers, the four-eyes segregation rule remains strictly enforced (approved claims pass to a separate officer's payout queue).
+* **Dedicated Admin Waivers Tab:** A top-level admin tab displaying a member search bar, complete 360-degree payment and benefit claim history dossier, and waiver controls.
+* **Granular Waiver Ability (`waive_statutory_dues`):** A dedicated enum value in `public.app_ability`, assignable exclusively by the root administrator. No user (including the Treasurer) receives this ability by default.
+* **Atomic Transactional Database RPCs:** `fn_record_dues_waiver` and `fn_reverse_dues_waiver` executing waiver insertion and `member_dues.status` transitions atomically under PostgreSQL transaction blocks.
+* **Partial Unique Indexes for Safe Reversibility:** Partial indexes filtering `WHERE is_active = true` to allow repeatable waiver/reversal cycles without unique key collisions.
+* **Waiver Accounting Isolation:** Waived dues are strictly excluded from pending arrears, advance prepaid balance calculations, and the defaulters roster. Waivers create zero cashbook inflow/outflow rows in `treasury_transactions`.
+* **Prohibition on Waiving Paid Dues:** Strict database check preventing any waiver on dues already settled as `'paid'`.
+* **Individual Waiver Reversibility:** Every waiver entry contains an "Undo Waiver" action requiring a mandatory reason, restoring the due to pending while permanently retaining audit trail history.
+* **Canonical Symbol-Only SVG:** Clean vector shield with aviation wings in `assets/mria-logo.svg` without embedded lettering.
 
-### Auxiliary Linter Coverage:
-8. **`public.admin_inquiries`**:
-   * `idx_admin_inquiries_sender_id`: `ON admin_inquiries (sender_id)` — Covers FK.
-   * `idx_admin_inquiries_resolved_by`: `ON admin_inquiries (resolved_by)` — Covers FK.
-9. **`public.announcements`**:
-   * `idx_announcements_created_by`: `ON announcements (created_by)` — Covers FK.
-10. **`public.system_settings`**:
-    * `idx_system_settings_updated_by`: `ON system_settings (updated_by)` — Covers FK.
+### Out-of-Scope Non-Goals
+* **No Batch Claim Actions:** Bulk approvals or mass disbursements are explicitly prohibited; each application must be reviewed individually.
+* **No Automatic Role Granting:** The `waive_statutory_dues` permission is never granted automatically based on user roles (`admin`, `treasurer`, etc.).
+* **No Dashboard Metrics Modification:** The top three dashboard metric cards (*Advance Prepaid Balance*, *Contributions Paid to Date*, *Total Welfare Benefits Received*) and their calculations remain strictly untouched.
+* **No Financial Cash Flow for Waivers:** A waiver is a statutory debt forgiveness, not a cash payment; it must never touch treasury reserves or account balances.
 
 ---
 
-## Goals vs. Non-Goals
+## 3. Detailed Architecture & Technical Design
 
-### In-Scope Goals:
-* Achieve 100% indexing on all foreign keys across the database.
-* Prune all redundant single-column indexes where a composite index already covers the leading key.
-* Match exact query shapes in `js/api.js` to eliminate in-memory sort steps.
-* Apply strict lock timeouts (`5s`) and an immediate `ANALYZE` run in the migration.
-* Provide an automated rollback script and verification query.
+### A. Claims Search & Root Admin Shortcut
 
-### Out-of-Scope Non-Goals:
-* Modifying application JavaScript queries.
-* Table partitioning or log archival policies.
-* Modifying database schemas or constraints.
+#### 1. Review Queue Search Interface
+* Location: Top of `#tab-content-claims` above the Review Queue table.
+* Elements: `#claimsReviewSearchInput` input with debounce and instant-clear button.
+* Filter behavior: Case-insensitive search matching `members.full_name`, `members.epf_number`, `benefit_types.title_en`, and `benefit_claims.status`.
+* Action Buttons: Unapproved claims display `Approve` and `Reject` for regular officers. The misleading `Disburse` button is removed on unapproved claims. For root admin `krishaja@gmail.com`, an expedited `Approve & Go to Payout` button is rendered.
+
+#### 2. Payout Desk Approved Claims Filter & Beneficiary Lock
+* Location: Inside `#grantPayoutDeskSection`.
+* Elements: `#payoutDeskApprovedSearchSelect` dropdown populated exclusively with claims where `status = 'approved'` and `disbursed_at IS NULL`.
+* Beneficiary Lock: Loading an approved claim sets `#grantMemberSearchInput` and `#grantMemberSelect` to `disabled = true`, preventing beneficiary desynchronization. Clicking `#btnUnlinkGrantClaim` unlocks the member selector.
+
+---
+
+### B. Dues & Fee Waiver Subsystem ("ගෙවීම් නිදහස් කරන්න")
+
+#### 1. Database Schema & Partial Indexes
+```sql
+-- 1. Ability Enum
+ALTER TYPE public.app_ability ADD VALUE IF NOT EXISTS 'waive_statutory_dues';
+
+-- 2. Dues Waivers Table
+CREATE TABLE IF NOT EXISTS public.dues_waivers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL REFERENCES public.members(id) ON DELETE CASCADE,
+    waiver_type TEXT NOT NULL CHECK (waiver_type IN ('admission_fee', 'monthly_due')),
+    billing_month DATE NULL,
+    due_id UUID REFERENCES public.member_dues(id) ON DELETE SET NULL,
+    waived_amount NUMERIC(10, 2) NOT NULL CHECK (waived_amount > 0),
+    reason TEXT NOT NULL CHECK (length(trim(reason)) >= 5),
+    waived_by UUID NOT NULL REFERENCES public.members(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    reversed_by UUID REFERENCES public.members(id),
+    reversed_at TIMESTAMPTZ NULL,
+    reversal_reason TEXT NULL
+);
+
+-- Partial Indexes ensuring safe reversibility without collisions:
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_monthly_waiver 
+ON public.dues_waivers (member_id, billing_month) 
+WHERE is_active = true AND waiver_type = 'monthly_due';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_admission_waiver 
+ON public.dues_waivers (member_id) 
+WHERE is_active = true AND waiver_type = 'admission_fee';
+```
+
+#### 2. Transactional Atomic Database RPCs
+* **`fn_record_dues_waiver`**:
+  * Validates that caller is root admin (`is_root_admin()`) or has `has_ability('waive_statutory_dues')`.
+  * Verifies target due is NOT already `'paid'`.
+  * Atomically updates `member_dues.status = 'waived'`.
+  * Inserts record into `public.dues_waivers`.
+  * Invokes `fn_record_audit_log('WAIVE_STATUTORY_DUE', ...)`.
+* **`fn_reverse_dues_waiver`**:
+  * Validates caller authority.
+  * Sets `is_active = false`, records `reversed_by`, `reversed_at`, `reversal_reason`.
+  * If linked to a monthly due, atomically updates `member_dues.status = 'pending'`.
+  * Invokes `fn_record_audit_log('REVERSE_STATUTORY_WAIVER', ...)`.
+
+#### 3. Ledger & Defaulters Roster Recalculation Engine
+* In `js/api.js`:
+  * `calculateMemberDues()`: Active monthly waivers mark corresponding dues as `'waived'` and active admission fee waivers mark the fee as exempt.
+  * `calculateMemberBalance()`: Waived months are filtered out of `totalBilledUpToNow` (`d.status !== 'waived'`), preventing statutory waivers from falsely consuming prepaid cash balances.
+* In `defaulters_roster` database view:
+  * Only pending dues (`WHERE status = 'pending'`) are counted as arrears. Waived dues (`status = 'waived'`) are immediately and automatically excluded.
+
+#### 4. Admin Waivers Tab UI (`#tab-content-waivers`)
+* Tab Navigation: Added to `#adminTabsHeader` with title "Dues & Fee Waivers (ගෙවීම් නිදහස් කිරීම්)".
+* Member Search Bar: `#waiverMemberSearchInput` for instant member discovery.
+* Member 360 Dossier Card:
+  * Section A: Member Identification & Membership Status.
+  * Section B: Complete Payment History (verified dues and receipts).
+  * Section C: Welfare Benefits Claim History (all grants received).
+  * Section D: Outstanding Dues & Admission Fee Status with "Waive Due (නිදහස් කරන්න)" action buttons on pending rows only.
+  * Section E: Active & Historical Waivers Table with "Undo Waiver (අවලංගු කරන්න)" button.
+* Waiver Confirmation Dialog (`#waiverActionModal`): Validates minimum 5-character reason before submission.
+* Reversal Confirmation Dialog (`#waiverReverseModal`): Validates mandatory reversal reason before committing undo.
+
+---
+
+### C. Emblem Logo Architecture
+
+* **Canonical File:** `assets/mria-logo.svg`.
+* **Design Specifications:**
+  * Viewbox: `0 0 120 120`.
+  * Geometry: Minimalist protective shield with stylized aerodynamic aviation wings and central trust star/spark.
+  * Styling: Vector stroke scalability (`vector-effect="non-scaling-stroke"`).
+  * Typography: Symbol-only (zero embedded text strings in English or Sinhala).
+  * Palette: Primary cyan `#0284C7`, secondary dark slate `#0F172A`, surface white `#FFFFFF`.
+* **Consumer References:** All pages (`index.html`, `dashboard.html`, `admin.html`, `unauthorized.html`) link to `/assets/mria-logo.svg`. Replacing this single file updates the entire platform.
+
+---
+
+## 4. Phased Implementation & Verification Plan
+
+```mermaid
+flowchart TD
+    P1["Phase 1: Canonical Logo Asset<br/>assets/mria-logo.svg symbol-only vector"] --> P2["Phase 2: Database Waiver Engine & RPCs<br/>waive_statutory_dues, dues_waivers, atomic RPCs & audit triggers"]
+    P2 --> P3["Phase 3: Claims Workflow Optimization<br/>Review queue search, approved claims selector & root admin shortcut"]
+    P3 --> P4["Phase 4: Admin Waivers Dossier & API<br/>Member 360 dossier, waiver modal, undo flow & ledger alignment"]
+    P4 --> P5["Phase 5: Automated Verification Suite<br/>100% test coverage across search, waivers, reversal & audit logging"]
+```
+
+### Phase 1: Canonical Emblem Asset
+1. Update `assets/mria-logo.svg` with the symbol-only aviation shield vector design.
+2. Verify asset path and rendering across `index.html`, `dashboard.html`, `admin.html`, and `unauthorized.html`.
+
+### Phase 2: Database Waiver Engine & Atomic RPCs
+1. Create migration `20261112000005_dues_waivers_and_ability.sql` and rollback script.
+2. Add `waive_statutory_dues` to `public.app_ability`.
+3. Create `public.dues_waivers` table with partial unique indexes (`WHERE is_active = true`).
+4. Establish RLS policies restricting inserts and updates to root admin and members with `waive_statutory_dues`.
+5. Deploy `fn_record_dues_waiver` and `fn_reverse_dues_waiver` transactional functions.
+6. Deploy `trg_audit_dues_waivers` to record all waiver and reversal events in `public.audit_logs`.
+
+### Phase 3: Claims Workflow & Disbursement Shortcuts
+1. Add `#claimsReviewSearchInput` with 150ms debounce and clear button in `admin.html`.
+2. Add `#payoutDeskApprovedSearchSelect` to the Payout Desk in `admin.html`.
+3. In `js/page-admin.js`, implement client-side real-time filtering for `allClaimsList`.
+4. Render "Approve & Go to Payout" shortcut exclusively for `krishaja@gmail.com`; preserve standard four-eyes workflow for all other officers.
+5. Lock beneficiary member selector when a claim is linked to the payout desk.
+
+### Phase 4: Admin Waivers Tab & Member Dossier
+1. Add `tab-waivers` to navigation bar in `admin.html`.
+2. Build Member 360 dossier layout in `admin.html` with search bar.
+3. In `js/api.js`, export `recordDuesWaiver()`, `reverseDuesWaiver()`, and `getMemberWaivers()`.
+4. Update `calculateMemberDues()` and `calculateMemberBalance()` in `js/api.js` to recognize active waivers and exclude waived months from `totalBilledUpToNow`.
+5. Build waiver and reversal confirmation dialogs with mandatory reason validation in `admin.html` and `js/page-admin.js`.
+
+### Phase 5: Automated Verification Suite
+1. Create `scripts/test-phase-e-waivers-and-claims.mjs`.
+2. Verify:
+   - Claims search filtering by name, EPF, and status.
+   - Root admin expedited payout shortcut vs non-root four-eyes enforcement.
+   - Privilege check: unauthorized users cannot waive dues.
+   - Prohibiting waiver on already paid dues.
+   - Successful waiver of admission fee and monthly dues with mandatory reason.
+   - Exclusion of waived dues from arrears, advance balance calculation, and defaulters roster.
+   - Non-pollution of cash book (zero treasury transaction rows created).
+   - Safe waiver reversal ("undo waiver") returning due to pending without unique key collision.
+   - Complete audit trail logging in `public.audit_logs`.
+   - Local logo asset integrity across all 4 HTML pages.
+
+---
+
+## 5. Alternatives Weighed & Rejected
+
+| Alternative Considered | Rejection Rationale |
+| :--- | :--- |
+| **Table-Level `UNIQUE(member_id, billing_month, is_active)`** | **Rejected by Goldfish Review:** Breaks repeated waiver/reversal lifecycles because multiple historical rows with `is_active = false` cause duplicate key errors. Resolved via partial unique indexes `WHERE is_active = true`. |
+| **Client-Side Split Mutation (`insert` then `update`)** | **Rejected by Goldfish Review:** Network interruptions between requests leave split-brain state where waiver is recorded but due remains pending. Resolved via atomic Postgres RPCs `fn_record_dues_waiver` and `fn_reverse_dues_waiver`. |
+| **Waiving Already-Paid Dues** | **Rejected by Goldfish Review:** Creates financial discrepancies between collected cash and ledger state. Resolved by enforcing `status <> 'paid'` in the RPC. |
+| **Directly deleting rows in `member_dues` to clear debt** | **Rejected:** Deleting rows destroys historical billing continuity, makes audit reconstruction impossible, and prevents reversible state ("undo"). Storing distinct records in `public.dues_waivers` preserves a complete audit trail. |
+| **Injecting dummy zero-amount payments into `payments` table** | **Rejected:** Pollutes member payment history and receipt numbering sequences with synthetic entries. A dedicated waiver ledger cleanly separates actual financial remittances from statutory committee exemptions. |
+| **Granting `waive_statutory_dues` automatically to Treasurer role** | **Rejected:** The user explicitly required that dues waiver authority must be assignable exclusively on a per-member basis by the root administrator to prevent unauthorized balance cancellations. |
+| **Embedding lettering inside `assets/mria-logo.svg`** | **Rejected:** The user requested a symbol-only emblem so they can later swap in their own canonical organization logo without having text conflict with UI page headers. |
+
+---
+
+## 6. Rollback & Safety Invariants
+
+1. **Migration Rollback Script:** `supabase/migrations/20261112000005_dues_waivers_and_ability_rollback.sql` reverts table, enum, RPCs, policies, and triggers cleanly.
+2. **Dashboard Cards Invariant:** No modifications will be made to `outstandingDuesDisplay`, `currentMonthAmountDisplay`, or `benefitsClaimedDisplay` in `dashboard.html` or `js/page-dashboard.js`.
+3. **Database Financial Invariant:** No waiver or reversal operation will ever insert, update, or delete rows in `public.treasury_transactions`.

@@ -69,8 +69,18 @@ export async function calculateMemberBalance(member) {
       .maybeSingle();
 
     if (!admissionPayment) {
-      const setting = await getSystemSetting("admission_fee_amount");
-      admissionFeeDue = setting?.amount != null ? Number(setting.amount) : 500.00;
+      const { data: activeAdmissionWaiver } = await supabase
+        .from("dues_waivers")
+        .select("id")
+        .eq("member_id", member.id)
+        .eq("waiver_type", "admission_fee")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!activeAdmissionWaiver) {
+        const setting = await getSystemSetting("admission_fee_amount");
+        admissionFeeDue = setting?.amount != null ? Number(setting.amount) : 500.00;
+      }
     }
   }
 
@@ -107,7 +117,7 @@ export async function calculateMemberBalance(member) {
   const duesSetting = await getSystemSetting("monthly_due_amount");
   const monthlyRate = duesSetting?.amount != null ? Number(duesSetting.amount) : 300.00;
 
-  const totalBilledUpToNow = dues.filter((d) => d.billing_month <= currentMonthStr).length * monthlyRate;
+  const totalBilledUpToNow = dues.filter((d) => d.billing_month <= currentMonthStr && d.status !== "waived").length * monthlyRate;
   const advanceBalance = Math.max(0, totalDuesPaid - totalBilledUpToNow);
 
   const priorArrears = priorPendingDues.reduce((sum, d) => sum + Number(d.amount), 0) + admissionFeeDue;
@@ -714,6 +724,17 @@ export async function reviewBenefitClaim(claimId, status, reviewerMemberId, note
 }
 
 /**
+ * Root-admin-only expedited Approve & Go to Payout atomic shortcut.
+ */
+export async function approveAndGoToPayout(claimId) {
+  const { data, error } = await supabase.rpc("fn_claim_approve_and_go_to_payout", {
+    p_claim_id: claimId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Disburses a benefit claim (automatically records outflow in Treasury via trigger).
  */
 export async function disburseBenefitClaim({ claimId, disbursedAmount, disbursedByMemberId, notes = null }) {
@@ -1283,4 +1304,142 @@ export async function resolveAdminInquiry(inquiryId, notes, resolvedBy) {
 
   if (error) throw error;
   return data;
+}
+
+// ================= TREASURY PUBLIC AGGREGATE SUMMARY =================
+
+/**
+ * Fetches public aggregated treasury summary without exposing individual transactions.
+ */
+export async function getPublicTreasurySummary() {
+  const { data, error } = await supabase.rpc("get_public_treasury_summary");
+  if (error) {
+    console.error("Error fetching public treasury summary:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ================= GRANULAR ABILITY RBAC APIS =================
+
+/**
+ * Fetches granular ability keys assigned to the currently authenticated staff member.
+ */
+export async function getMyAbilities() {
+  const { data, error } = await supabase.rpc("get_my_abilities");
+  if (error) {
+    console.error("Error fetching my abilities:", error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Fetches granular ability keys for a target member.
+ */
+export async function getMemberAbilities(memberId) {
+  const { data, error } = await supabase.rpc("get_member_abilities", {
+    p_target_member_id: memberId,
+  });
+  if (error) {
+    console.error("Error fetching member abilities:", error);
+    throw error;
+  }
+  return data || [];
+}
+
+/**
+ * Updates granular ability keys for a target member (Root Admin or assign_roles).
+ */
+export async function setMemberAbilities(memberId, abilities) {
+  const { data, error } = await supabase.rpc("set_member_abilities", {
+    p_target_member_id: memberId,
+    p_abilities: abilities,
+  });
+  if (error) {
+    console.error("Error setting member abilities:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ================= DUES & ADMISSION FEE WAIVER APIS =================
+
+/**
+ * Records a statutory waiver for a monthly due or admission fee via atomic RPC.
+ */
+export async function recordDuesWaiver({
+  memberId,
+  waiverType,
+  billingMonth = null,
+  dueId = null,
+  waivedAmount = null,
+  reason,
+}) {
+  const { data, error } = await supabase.rpc("fn_record_dues_waiver", {
+    p_member_id: memberId,
+    p_waiver_type: waiverType,
+    p_billing_month: billingMonth,
+    p_due_id: dueId,
+    p_waived_amount: waivedAmount,
+    p_reason: reason,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Reverses a previously granted statutory waiver via atomic RPC.
+ */
+export async function reverseDuesWaiver({ waiverId, reversalReason }) {
+  const { data, error } = await supabase.rpc("fn_reverse_dues_waiver", {
+    p_waiver_id: waiverId,
+    p_reversal_reason: reversalReason,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetches all waiver records for a specific member.
+ */
+export async function getMemberWaivers(memberId) {
+  const { data, error } = await supabase
+    .from("dues_waivers")
+    .select("*, waived_by_member:members!dues_waivers_waived_by_fkey(full_name, epf_number), reversed_by_member:members!dues_waivers_reversed_by_fkey(full_name, epf_number)")
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Notice loading member waivers with join, using fallback:", error.message);
+    const fallback = await supabase
+      .from("dues_waivers")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false });
+    return fallback.data || [];
+  }
+  return data || [];
+}
+
+/**
+ * Fetches all active and past waivers across the association (for admin management).
+ */
+export async function getAllWaivers() {
+  const { data, error } = await supabase
+    .from("dues_waivers")
+    .select("*, member:members!dues_waivers_member_id_fkey(full_name, epf_number, email), waived_by_member:members!dues_waivers_waived_by_fkey(full_name, epf_number), reversed_by_member:members!dues_waivers_reversed_by_fkey(full_name, epf_number)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Notice loading all waivers with join, using fallback:", error.message);
+    const fallback = await supabase
+      .from("dues_waivers")
+      .select("*")
+      .order("created_at", { ascending: false });
+    return fallback.data || [];
+  }
+  return data || [];
 }

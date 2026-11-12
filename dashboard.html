@@ -34,7 +34,7 @@
       <!-- Brand & Emblem -->
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-sky-50 border border-sky-100 shrink-0">
-          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
+          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="/assets/mria-logo.svg"/>
         </div>
         <div class="flex flex-col">
           <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight truncate max-w-[160px] sm:max-w-none">
@@ -452,7 +452,7 @@
         <!-- Total Liquid Assets -->
         <div class="bg-sky-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <span class="text-xs font-bold uppercase tracking-wider text-sky-200" data-i18n="treasury_total_liquid">Total Liquid Assets</span>
-          <div id="dashboardTreasuryTotal" class="text-2xl font-extrabold my-2 text-white font-mono tabular-nums">Rs. 2,100.00</div>
+          <div id="dashboardTreasuryTotal" class="text-2xl font-extrabold my-2 text-white font-mono tabular-nums">--</div>
           <span class="text-[11px] text-sky-200" data-i18n="across_3_accounts">Across 3 Accounts</span>
         </div>
 
@@ -462,7 +462,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_savings">Bank Savings Account</span>
             <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
           </div>
-          <div id="dashboardBalBoc" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 1,300.00</div>
+          <div id="dashboardBalBoc" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">--</div>
           <span class="text-[11px] text-on-surface-variant font-mono font-medium">Acc: 8201948201</span>
         </div>
 
@@ -472,7 +472,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_cash">Cash in Hand</span>
             <span class="material-symbols-outlined text-primary text-[20px]">payments</span>
           </div>
-          <div id="dashboardBalCash" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 800.00</div>
+          <div id="dashboardBalCash" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">--</div>
           <span class="text-[11px] text-on-surface-variant" data-i18n="petty_desk_cash">Petty &amp; Desk Cash</span>
         </div>
 
@@ -482,7 +482,7 @@
             <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" data-i18n="treasury_account_fd">Fixed Deposits</span>
             <span class="material-symbols-outlined text-primary text-[20px]">lock_clock</span>
           </div>
-          <div id="dashboardBalFd" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">Rs. 0.00</div>
+          <div id="dashboardBalFd" class="text-xl font-extrabold text-on-surface my-2 font-mono tabular-nums">--</div>
           <span class="text-[11px] text-on-surface-variant" data-i18n="term_deposits">Term Deposits</span>
         </div>
 
@@ -645,6 +645,111 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL 1B: PAYMENT CONFIRMATION PRE-SUBMISSION MODAL -->
+  <div id="paymentConfirmModal" class="fixed inset-0 z-60 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto space-y-4">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2.5">
+          <span class="material-symbols-outlined text-primary text-[26px]">verified</span>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-on-surface" data-i18n="confirm_payment_title">Confirm Welfare Payment</h3>
+            <p class="text-xs text-on-surface-variant">Review all remittance coordinates before final commitment.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('paymentConfirmModal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Overview Cards Grid -->
+      <div class="space-y-3 text-xs">
+        
+        <!-- Member & Amount Highlight Box -->
+        <div class="p-3.5 bg-sky-50/70 border border-sky-100 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-bold text-sky-800 uppercase tracking-wider block">Member EPF</span>
+            <span id="confirmPaymentEpf" class="font-mono font-bold text-sm text-sky-950">-</span>
+            <span id="confirmPaymentMemberName" class="block text-[11px] text-sky-700 truncate max-w-[200px]"></span>
+          </div>
+          <div class="text-right">
+            <span class="text-[11px] font-bold text-sky-800 uppercase tracking-wider block">Total Amount</span>
+            <span id="confirmPaymentAmount" class="font-mono font-black text-lg text-primary">Rs. 0.00</span>
+          </div>
+        </div>
+
+        <!-- Detail Breakdown Table -->
+        <div class="border border-outline-variant rounded-xl divide-y divide-outline-variant bg-surface">
+          <div class="p-2.5 flex items-center justify-between">
+            <span class="text-on-surface-variant font-medium">Months Being Paid:</span>
+            <span id="confirmPaymentMonth" class="font-bold text-on-surface font-mono">-</span>
+          </div>
+          <div class="p-2.5 flex items-center justify-between">
+            <span class="text-on-surface-variant font-medium">Payment Purpose / Reason:</span>
+            <span id="confirmPaymentReason" class="font-semibold text-on-surface">-</span>
+          </div>
+          <div class="p-2.5 flex items-center justify-between">
+            <span class="text-on-surface-variant font-medium">Payment Method:</span>
+            <span id="confirmPaymentMethod" class="font-semibold text-on-surface">-</span>
+          </div>
+        </div>
+
+        <!-- Recipient Official Bank Coordinates -->
+        <div id="confirmBankCoordinatesBox" class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold text-[11px] text-slate-800 uppercase tracking-wider">
+            <span class="material-symbols-outlined text-[16px] text-primary">account_balance</span>
+            <span>Recipient Association Bank Coordinates</span>
+          </div>
+          <div class="text-[11px] text-slate-700 space-y-0.5">
+            <div><span class="font-semibold text-slate-900">Bank:</span> <span id="confirmBankName">Bank of Ceylon</span> (<span id="confirmBankBranch">Mattala Airport Branch</span>)</div>
+            <div><span class="font-semibold text-slate-900">Account No:</span> <span id="confirmBankAccountNo" class="font-mono font-bold text-primary">8201948201</span></div>
+            <div><span class="font-semibold text-slate-900">Account Name:</span> <span id="confirmBankAccountName">MRIA Management Welfare Association</span></div>
+          </div>
+        </div>
+
+        <!-- Slip Attachment Preview Thumbnail -->
+        <div class="border border-outline-variant rounded-xl p-3 bg-surface space-y-2">
+          <span class="text-[11px] font-bold text-on-surface uppercase tracking-wider block">Attached Deposit Slip Preview</span>
+          <div id="confirmSlipThumbnailContainer" class="flex items-center gap-3">
+            <img id="confirmSlipThumbnailImg" alt="Deposit Slip Preview" class="w-16 h-16 object-contain rounded-lg border border-outline-variant bg-white p-0.5 shadow-xs" />
+            <div class="min-w-0 flex-1">
+              <div id="confirmSlipFileName" class="font-semibold text-on-surface truncate">-</div>
+              <div id="confirmSlipFileSize" class="text-[11px] text-on-surface-variant">-</div>
+            </div>
+          </div>
+          <div id="confirmSlipCashNotice" class="hidden text-[11px] text-amber-700 italic">
+            Direct physical cash handover to the treasurer. No deposit slip required.
+          </div>
+        </div>
+
+        <!-- Non-Refundable Acknowledgment Checkbox -->
+        <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
+          <label class="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" id="confirmNonRefundableCheckbox" class="mt-0.5 rounded border-amber-300 text-primary focus:ring-primary h-4 w-4" />
+            <div class="text-[11px] text-amber-900 font-medium leading-relaxed">
+              <span class="font-bold">Non-Refundable Acknowledgment:</span>
+              I certify that this payment remittance is accurate and conforms to the constitution of the MRIA Welfare Association. I understand that all approved dues and contributions are final and non-refundable.
+            </div>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex items-center justify-between pt-3 border-t border-outline-variant">
+        <button type="button" id="btnBackToEditPayment" onclick="closeModal('paymentConfirmModal')" class="px-4 py-2 border border-outline-variant rounded-xl text-xs font-semibold hover:bg-surface cursor-pointer">
+          Back to Edit
+        </button>
+        <button type="button" id="btnFinalConfirmPayment" disabled class="mutation-btn px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all">
+          <span class="material-symbols-outlined text-[18px]">lock</span>
+          <span>Confirm &amp; Submit Remittance</span>
+        </button>
+      </div>
+
     </div>
   </div>
 

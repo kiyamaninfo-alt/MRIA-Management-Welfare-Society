@@ -1,8 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
-  <rect width="120" height="120" rx="24" fill="#F8FAFC"/>
-  <rect x="2" y="2" width="116" height="116" rx="22" stroke="#E2E8F0" stroke-width="2"/>
-  <circle cx="60" cy="60" r="44" stroke="#0284C7" stroke-width="2.5" stroke-dasharray="4 3"/>
-  <path d="M60 26L86 42V68C86 82 75 93 60 98C45 93 34 82 34 68V42L60 26Z" fill="#0284C7" fill-opacity="0.08" stroke="#0284C7" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M48 68L56 76L72 56" stroke="#0284C7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="60" cy="46" r="5" fill="#0284C7"/>
+  <!-- Circular Base Badge -->
+  <circle cx="60" cy="60" r="56" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <circle cx="60" cy="60" r="51" stroke="#0284C7" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.6"/>
+
+  <!-- Left Aviation Wing -->
+  <path d="M54 48C42 42 26 40 16 46C24 50 34 52 48 54C36 56 24 59 18 66C26 68 36 67 50 64C40 68 32 74 26 82C36 82 46 76 56 70" 
+        fill="#0284C7" fill-opacity="0.12" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Right Aviation Wing -->
+  <path d="M66 48C78 42 94 40 104 46C96 50 86 52 72 54C84 56 96 59 102 66C94 68 84 67 70 64C80 68 88 74 94 82C84 82 74 76 64 70" 
+        fill="#0284C7" fill-opacity="0.12" stroke="#0284C7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Central Protective Welfare Shield -->
+  <path d="M60 26L78 35V58C78 72 70 84 60 89C50 84 42 72 42 58V35L60 26Z" 
+        fill="#0F172A" stroke="#0284C7" stroke-width="2.5" stroke-linejoin="round"/>
+  
+  <path d="M60 30L74 37V57C74 69 67 79 60 84C53 79 46 69 46 57V37L60 30Z" 
+        fill="#0284C7" fill-opacity="0.25"/>
+
+  <!-- Core Emblem: Central Compass Star & Trust Spark -->
+  <path d="M60 41L63.5 53L75.5 56.5L63.5 60L60 72L56.5 60L44.5 56.5L56.5 53L60 41Z" 
+        fill="#FFFFFF" stroke="#38BDF8" stroke-width="1.2" stroke-linejoin="round"/>
+
+  <!-- Center Accent Core -->
+  <circle cx="60" cy="56.5" r="2.5" fill="#0284C7"/>
 </svg>

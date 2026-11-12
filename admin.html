@@ -34,7 +34,7 @@
       <!-- Brand & Emblem -->
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-sky-50 border border-sky-100 shrink-0">
-          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="https://lh3.googleusercontent.com/aida/AEtjO1UlQKrvKs2eaX1z0QM6D2ajGmB3-euqY-YyzwpyFWcu_EL6oHB0pmmqob_aY6iNMsVrSevf5zvm7v8UE6d4GMi5YFMPyeKDxAhAOGtXFDTJ0ZqJXp1e5uPHpegGAjy0hOpuYXxPQdDLS0fyBdW4Tz4KEhAOFggDTBY34kbvV4QU2VzhB8WVZyomgT-C7x7deKC7FM_DYtaIu903_bulPvqHc8LZmsPSToSa84yEiCYcKjDnU5hIhUrGKWQ"/>
+          <img alt="MRIA Emblem Crest" class="w-full h-full object-contain p-1" src="/assets/mria-logo.svg"/>
         </div>
         <div class="flex flex-col">
           <span class="text-sm sm:text-base font-bold text-on-surface leading-tight tracking-tight truncate max-w-[160px] sm:max-w-none">
@@ -143,6 +143,13 @@
         <button id="tab-btn-defaulters" onclick="switchAdminTab('defaulters')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
           <span class="material-symbols-outlined text-[18px]">person_off</span>
           <span data-i18n="tab_defaulters">Defaulters (31st)</span>
+        </button>
+
+        <!-- Tab: Fee Release & Member 360 Dossier -->
+        <button id="tab-btn-waivers" onclick="switchAdminTab('waivers')" class="tab-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-[18px]">money_off</span>
+          <span data-i18n="tab_waivers">Fee Release</span>
+          <span id="tabWaiversCountBadge" class="hidden px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">0</span>
         </button>
 
         <!-- Tab: CMS & Settings -->
@@ -805,6 +812,17 @@
           </button>
         </div>
 
+        <!-- Member Search & Quick Filter Bar -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div class="relative flex-1 max-w-md">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
+            <input type="text" id="memberSearchInput" oninput="window.filterMemberDirectory(this.value)" placeholder="Search member by Name, EPF, Email, or Designation..." class="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+          </div>
+          <div class="text-[11px] text-on-surface-variant font-medium self-end sm:self-center">
+            Click <strong class="text-indigo-800">Abilities</strong> on any member to assign granular operational rights.
+          </div>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
@@ -884,6 +902,22 @@
             <button type="button" onclick="window.unlinkClaimFromGrantDesk()" class="text-[11px] font-bold text-rose-600 hover:text-rose-800 shrink-0 px-2 py-0.5 rounded border border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer">
               Unlink
             </button>
+          </div>
+
+          <!-- Payout Desk: Approved Claims Quick-Selector -->
+          <div class="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-slate-700 flex items-center gap-1.5" for="payoutDeskApprovedSearchSelect">
+                <span class="material-symbols-outlined text-primary text-[16px]">task_alt</span>
+                <span>Select Approved Claim (අනුමත කළ ඉල්ලීම්)</span>
+              </label>
+              <span id="payoutDeskApprovedCount" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                0 Awaiting Payout
+              </span>
+            </div>
+            <select id="payoutDeskApprovedSearchSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer">
+              <option value="">-- Pick from Approved Claims awaiting disbursement --</option>
+            </select>
           </div>
 
           <form id="grantDisbursementForm" class="space-y-4">
@@ -1073,6 +1107,30 @@
           </button>
         </div>
 
+        <!-- Claims Review Queue Real-Time Search Bar -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+          <div class="relative flex-1">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px] pointer-events-none">search</span>
+            <input 
+              type="text" 
+              id="claimsReviewSearchInput" 
+              placeholder="Search claims by applicant name, EPF, benefit type, or status..." 
+              autocomplete="off"
+              class="w-full pl-9 pr-8 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-medium text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-xs"
+            />
+            <button 
+              type="button" 
+              id="claimsReviewClearSearchBtn" 
+              onclick="window.clearClaimsReviewSearch()"
+              class="hidden absolute right-2.5 top-2.5 text-on-surface-variant hover:text-rose-600 transition-colors cursor-pointer"
+              title="Clear search"
+            >
+              <span class="material-symbols-outlined text-[18px]">cancel</span>
+            </button>
+          </div>
+          <span id="claimsReviewMatchCount" class="text-[11px] font-mono text-on-surface-variant font-medium shrink-0"></span>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
@@ -1121,6 +1179,293 @@
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- ================= TAB: FEE RELEASE & MEMBER 360 DOSSIER ================= -->
+    <div id="tab-content-waivers" class="tab-content hidden space-y-6">
+      
+      <!-- Top Banner: Title & Description -->
+      <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-outline-variant">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100 shrink-0">
+              <span class="material-symbols-outlined text-[24px]">money_off</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-base text-on-surface">Fee Release &amp; Member 360 Dossier (ගෙවීම් නිදහස් කිරීම් සහ සාමාජික විස්තර)</h3>
+              <p class="text-xs text-on-surface-variant">Inspect comprehensive payment &amp; benefit history for any member, or release statutory dues with mandatory reasons.</p>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
+            <span class="material-symbols-outlined text-[15px]">verified_user</span>
+            <span>Waiver Authority Controlled</span>
+          </span>
+        </div>
+
+        <!-- Member Search Bar -->
+        <div class="relative space-y-2">
+          <label class="block text-xs font-bold text-slate-700 flex items-center gap-1.5" for="waiverMemberSearchInput">
+            <span class="material-symbols-outlined text-primary text-[16px]">person_search</span>
+            <span>Search Member (සාමාජිකයා සොයන්න)</span>
+          </label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3.5 top-3 text-on-surface-variant text-[20px] pointer-events-none">search</span>
+            <input 
+              type="text" 
+              id="waiverMemberSearchInput" 
+              autocomplete="off"
+              placeholder="Type Name, EPF Number (e.g. EPF-88991), Phone, or Email to view Member 360 Dossier..." 
+              class="w-full pl-11 pr-10 py-2.5 rounded-xl border border-outline-variant bg-surface text-xs font-semibold text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-xs"
+            />
+            <button 
+              type="button" 
+              id="waiverClearMemberBtn" 
+              onclick="window.clearWaiverMember()" 
+              class="hidden absolute right-3 top-2.5 text-on-surface-variant hover:text-rose-600 transition-colors cursor-pointer"
+              title="Clear selection"
+            >
+              <span class="material-symbols-outlined text-[20px]">cancel</span>
+            </button>
+          </div>
+
+          <!-- Autocomplete Dropdown List -->
+          <div id="waiverMemberSearchResults" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-outline-variant rounded-xl shadow-xl z-30 max-h-60 overflow-y-auto divide-y divide-slate-100"></div>
+        </div>
+      </div>
+
+      <!-- MEMBER 360 DOSSIER CONTAINER (Shown when a member is selected) -->
+      <div id="waiverMemberDossierContainer" class="hidden space-y-6">
+
+        <!-- Member Profile Header & Financial Summary Card -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-outline-variant">
+            <div class="flex items-center gap-3.5">
+              <div id="dossierMemberAvatar" class="w-12 h-12 rounded-2xl bg-sky-100 text-primary font-black text-base flex items-center justify-center border border-sky-200 shrink-0">
+                M
+              </div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h4 id="dossierMemberName" class="font-black text-lg text-on-surface">Member Name</h4>
+                  <span id="dossierMemberStatusBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase">ACTIVE</span>
+                  <span id="dossierMemberRoleBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">MEMBER</span>
+                </div>
+                <div class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-3 flex-wrap">
+                  <span>EPF: <strong id="dossierMemberEpf" class="text-slate-800 font-mono font-bold">-</strong></span>
+                  <span>•</span>
+                  <span>Phone: <span id="dossierMemberPhone" class="font-mono text-slate-700">-</span></span>
+                  <span>•</span>
+                  <span>Email: <span id="dossierMemberEmail" class="text-slate-700">-</span></span>
+                  <span>•</span>
+                  <span>Joined: <span id="dossierMemberJoined" class="text-slate-700 font-mono">-</span></span>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" onclick="window.clearWaiverMember()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+              <span>Back to Overview</span>
+            </button>
+          </div>
+
+          <!-- 4 KPI Metrics for this Member -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="p-3.5 rounded-xl bg-sky-50 border border-sky-100">
+              <div class="text-[11px] font-bold text-sky-800 uppercase tracking-wider">Advance Prepaid Balance</div>
+              <div id="dossierAdvanceBalance" class="text-lg font-black text-primary font-mono mt-1 tabular-nums">Rs. 0.00</div>
+              <div class="text-[10px] text-sky-600 mt-0.5">Prepaid funds ready for auto-settlement</div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-100">
+              <div class="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Pending Arrears</div>
+              <div id="dossierPendingArrears" class="text-lg font-black text-amber-700 font-mono mt-1 tabular-nums">Rs. 0.00</div>
+              <div id="dossierPendingMonthsCount" class="text-[10px] text-amber-600 mt-0.5">0 months pending</div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-purple-50 border border-purple-100">
+              <div class="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Statutory Dues Waived</div>
+              <div id="dossierWaivedTotal" class="text-lg font-black text-purple-700 font-mono mt-1 tabular-nums">Rs. 0.00</div>
+              <div id="dossierWaivedCount" class="text-[10px] text-purple-600 mt-0.5">0 waivers recorded</div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-100">
+              <div class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Admission Fee Status</div>
+              <div id="dossierAdmissionStatusBadge" class="text-sm font-black text-emerald-700 mt-1 uppercase">Pending</div>
+              <div id="dossierAdmissionActionBtnContainer" class="mt-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Statutory Dues & Fee Release Actions -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-purple-700 text-[20px]">calendar_month</span>
+              <h4 class="font-bold text-sm text-on-surface">Monthly Dues &amp; Fee Release Actions (මාසික ගාස්තු තත්ත්වය)</h4>
+            </div>
+            <span class="text-xs text-on-surface-variant font-medium">Click <strong>Waive Due</strong> to release specific hardship months</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Billing Month</th>
+                  <th class="py-2.5 px-3 text-right">Due Amount</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Settlement / Waiver Details</th>
+                  <th class="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="dossierMonthlyDuesTableBody" class="divide-y divide-outline-variant">
+                <tr><td colspan="5" class="py-6 text-center text-on-surface-variant">Loading member dues...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 2: Complete Payment & Receipt History -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">receipt_long</span>
+              <h4 class="font-bold text-sm text-on-surface">Payment &amp; Receipt History (ගෙවීම් සහ රිසිට්පත් ඉතිහාසය)</h4>
+            </div>
+            <span id="dossierPaymentsCount" class="text-xs text-on-surface-variant font-mono">0 payments</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Payment Date</th>
+                  <th class="py-2.5 px-3">Receipt / Ref</th>
+                  <th class="py-2.5 px-3 text-right">Amount</th>
+                  <th class="py-2.5 px-3">Method</th>
+                  <th class="py-2.5 px-3">Allocated Months</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3 text-right">Voucher</th>
+                </tr>
+              </thead>
+              <tbody id="dossierPaymentsTableBody" class="divide-y divide-outline-variant">
+                <tr><td colspan="7" class="py-6 text-center text-on-surface-variant">Loading payment records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 3: Benefit & Welfare Claims History -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-emerald-700 text-[20px]">volunteer_activism</span>
+              <h4 class="font-bold text-sm text-on-surface">Benefit &amp; Welfare Grants History (සුබසාධන දීමනා සහ ප්‍රතිලාභ)</h4>
+            </div>
+            <span id="dossierClaimsCount" class="text-xs text-on-surface-variant font-mono">0 claims</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Claim Date</th>
+                  <th class="py-2.5 px-3">Benefit Program</th>
+                  <th class="py-2.5 px-3 text-right">Claim Amount</th>
+                  <th class="py-2.5 px-3 text-right">Disbursed Amount</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Disbursed Date / Method</th>
+                  <th class="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="dossierClaimsTableBody" class="divide-y divide-outline-variant">
+                <tr><td colspan="7" class="py-6 text-center text-on-surface-variant">Loading benefit claims...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 4: Member Waivers & Reversals History -->
+        <div class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-purple-700 text-[20px]">history_edu</span>
+              <h4 class="font-bold text-sm text-on-surface">Member Fee Release Audit Trail (නිදහස් කිරීම් සහ අවලංගු කිරීම් ඉතිහාසය)</h4>
+            </div>
+            <span id="dossierMemberWaiversCount" class="text-xs text-on-surface-variant font-mono">0 records</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Granted Date</th>
+                  <th class="py-2.5 px-3">Fee Type / Month</th>
+                  <th class="py-2.5 px-3 text-right">Waived Amount</th>
+                  <th class="py-2.5 px-3">Authorized By</th>
+                  <th class="py-2.5 px-3">Mandatory Reason</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="dossierMemberWaiversTableBody" class="divide-y divide-outline-variant">
+                <tr><td colspan="7" class="py-6 text-center text-on-surface-variant">No waivers recorded for this member.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ASSOCIATION-WIDE RECENT WAIVERS LEDGER (Shown by default or below dossier) -->
+      <div id="waiverAssociationLedgerCard" class="bg-white border border-outline-variant rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-outline-variant">
+          <div>
+            <h4 class="font-bold text-base text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-purple-700 text-[22px]">policy</span>
+              <span>Association Statutory Dues Waivers Ledger (සංගමයේ සියලුම නිදහස් කිරීම් ලේඛනය)</span>
+            </h4>
+            <p class="text-xs text-on-surface-variant">Audit register of all statutory dues and admission fee releases granted under EC authority.</p>
+          </div>
+          <button type="button" onclick="window.refreshWaiversData()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-outline-variant hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">refresh</span>
+            <span>Refresh Ledger</span>
+          </button>
+        </div>
+
+        <!-- Ledger Real-time Search & Filter -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div class="relative flex-1 max-w-md">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px] pointer-events-none">search</span>
+            <input 
+              type="text" 
+              id="waiverLedgerSearchInput" 
+              oninput="window.filterWaiversLedger(this.value)" 
+              placeholder="Filter ledger by member name, EPF, month, or reason..." 
+              class="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant bg-surface text-xs font-semibold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+          </div>
+          <div id="waiverLedgerSummaryStats" class="text-xs font-medium text-on-surface-variant flex items-center gap-3">
+            <span>Loading summary...</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Date</th>
+                <th class="py-2.5 px-3">Member</th>
+                <th class="py-2.5 px-3">Waiver Type / Month</th>
+                <th class="py-2.5 px-3 text-right">Amount</th>
+                <th class="py-2.5 px-3">Authorized By</th>
+                <th class="py-2.5 px-3">Mandatory Justification</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="waiversLedgerTableBody" class="divide-y divide-outline-variant">
+              <tr><td colspan="8" class="py-8 text-center text-on-surface-variant">Loading waivers ledger...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
 
     <!-- ================= TAB 7: CMS & CONSTITUTION ================= -->
@@ -2343,6 +2688,341 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- RECORD DUES WAIVER MODAL -->
+  <div id="recordWaiverModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-purple-700 text-[24px]">money_off</span>
+          <h3 class="font-bold text-base text-on-surface">Grant Fee Release (ගෙවීම් නිදහස් කිරීම)</h3>
+        </div>
+        <button type="button" onclick="closeModal('recordWaiverModal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <form id="recordWaiverForm" class="space-y-4">
+        <input type="hidden" id="recordWaiverMemberId" value="" />
+        <input type="hidden" id="recordWaiverDueId" value="" />
+        <input type="hidden" id="recordWaiverType" value="monthly_due" />
+        <input type="hidden" id="recordWaiverMonth" value="" />
+        <input type="hidden" id="recordWaiverAmount" value="0" />
+
+        <div class="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs space-y-1.5">
+          <div class="flex justify-between">
+            <span class="text-purple-900 font-medium">Beneficiary:</span>
+            <strong id="recordWaiverMemberDisplay" class="text-purple-950 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-purple-900 font-medium">Due Target:</span>
+            <strong id="recordWaiverTargetDisplay" class="text-purple-950 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-purple-900 font-medium">Waived Amount:</span>
+            <strong id="recordWaiverAmountDisplay" class="text-purple-950 font-mono font-bold">Rs. 0.00</strong>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] space-y-1">
+          <div class="font-bold flex items-center gap-1">
+            <span class="material-symbols-outlined text-[15px]">info</span>
+            <span>Statutory Waiver Rules:</span>
+          </div>
+          <div>• Waived dues do NOT count as arrears and will not appear in the defaulters roster.</div>
+          <div>• Creates zero cash inflow in the treasury cash book.</div>
+          <div>• Does not consume or touch the member's advance prepaid balance.</div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-700" for="recordWaiverReason">
+            Mandatory Reason / Justification (අනිවාර්ය හේතුව) <span class="text-rose-600">*</span>
+          </label>
+          <textarea 
+            id="recordWaiverReason" 
+            required 
+            rows="3" 
+            minlength="5"
+            placeholder="e.g. Special executive committee hardship relief granted under resolution 2026/04..." 
+            class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs focus:border-purple-600 focus:ring-1 focus:ring-purple-600 outline-none"
+          ></textarea>
+          <div class="text-[10px] text-on-surface-variant">Minimum 5 characters. This justification is permanently recorded in audit logs.</div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('recordWaiverModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer text-xs">Cancel</button>
+          <button type="submit" id="submitRecordWaiverBtn" class="mutation-btn px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold shadow-sm flex items-center gap-1.5 cursor-pointer text-xs">
+            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            <span>Confirm &amp; Record Waiver</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- REVERSE DUES WAIVER (UNDO) MODAL -->
+  <div id="reverseWaiverModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative my-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-rose-700 text-[24px]">undo</span>
+          <h3 class="font-bold text-base text-on-surface">Undo Fee Release (නිදහස් කිරීම අවලංගු කිරීම)</h3>
+        </div>
+        <button type="button" onclick="closeModal('reverseWaiverModal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <form id="reverseWaiverForm" class="space-y-4">
+        <input type="hidden" id="reverseWaiverId" value="" />
+
+        <div class="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 text-xs space-y-1.5">
+          <div class="flex justify-between">
+            <span class="text-rose-900 font-medium">Beneficiary:</span>
+            <strong id="reverseWaiverMemberDisplay" class="text-rose-950 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-rose-900 font-medium">Target Due:</span>
+            <strong id="reverseWaiverTargetDisplay" class="text-rose-950 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-rose-900 font-medium">Originally Waived By:</span>
+            <strong id="reverseWaiverAuthorDisplay" class="text-rose-950 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-rose-900 font-medium">Original Reason:</span>
+            <span id="reverseWaiverOriginalReasonDisplay" class="text-rose-900 italic">-</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] space-y-1">
+          <div class="font-bold flex items-center gap-1">
+            <span class="material-symbols-outlined text-[15px]">warning</span>
+            <span>Reversal Policy:</span>
+          </div>
+          <div>• Undoing returns the due to <strong>pending</strong> status and it will reappear in the defaulters roster.</div>
+          <div>• If the member has an available advance prepaid balance, it will automatically auto-settle the due.</div>
+          <div>• Both the original waiver and this reversal remain permanently recorded in audit logs.</div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-700" for="reverseWaiverReason">
+            Mandatory Reversal Reason (අවලංගු කිරීමේ හේතුව) <span class="text-rose-600">*</span>
+          </label>
+          <textarea 
+            id="reverseWaiverReason" 
+            required 
+            rows="3" 
+            minlength="5"
+            placeholder="e.g. EC cancelled hardship waiver following member request to reconcile via advance balance..." 
+            class="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface text-xs focus:border-rose-600 focus:ring-1 focus:ring-rose-600 outline-none"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('reverseWaiverModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer text-xs">Cancel</button>
+          <button type="submit" id="submitReverseWaiverBtn" class="mutation-btn px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-bold shadow-sm flex items-center gap-1.5 cursor-pointer text-xs">
+            <span class="material-symbols-outlined text-[16px]">undo</span>
+            <span>Confirm Reversal (Undo Waiver)</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ASSIGN MEMBER ABILITIES MODAL -->
+  <div id="memberAbilitiesModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white border border-outline-variant rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl relative my-auto max-h-[95vh] overflow-y-auto space-y-4">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2.5">
+          <span class="material-symbols-outlined text-primary text-[24px]">manage_accounts</span>
+          <div>
+            <h4 class="font-bold text-sm sm:text-base text-on-surface">Assign Member Operational Abilities</h4>
+            <p class="text-xs text-on-surface-variant">Configure granular operational permissions and section edit rights.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('memberAbilitiesModal')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Target Member Details Header -->
+      <div id="abilityModalMemberHeader" class="p-3 bg-sky-50 border border-sky-100 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <div id="abilityModalMemberName" class="font-bold text-sky-950 text-sm">Loading Member...</div>
+          <div id="abilityModalMemberDetails" class="text-sky-800 text-[11px]">EPF: - | Email: -</div>
+        </div>
+        <span id="abilityModalMemberRole" class="px-2.5 py-1 bg-white border border-sky-200 text-sky-900 rounded-lg font-bold text-[11px] self-start sm:self-center">
+          MEMBER
+        </span>
+      </div>
+
+      <form id="memberAbilitiesForm" class="space-y-4 text-xs">
+        <input type="hidden" id="abilityModalMemberId" />
+
+        <!-- Domain 1: Administration & Role Assignment -->
+        <div class="space-y-2">
+          <div class="font-bold text-on-surface flex items-center gap-1.5 pb-1 border-b border-outline-variant text-[11px] uppercase tracking-wider text-primary">
+            <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+            <span>Role Delegation &amp; System Audits</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="assign_roles" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">1. Role &amp; Ability Assignment</div>
+                <div class="text-[11px] text-on-surface-variant">Ability to search members and grant or revoke abilities</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="view_audit_logs" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">9. System Audit Trail &amp; Activity Logs</div>
+                <div class="text-[11px] text-on-surface-variant">Inspect immutable system audit logs and change histories</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Domain 2: Financial Operations -->
+        <div class="space-y-2">
+          <div class="font-bold text-on-surface flex items-center gap-1.5 pb-1 border-b border-outline-variant text-[11px] uppercase tracking-wider text-amber-700">
+            <span class="material-symbols-outlined text-[16px]">account_balance</span>
+            <span>Financial &amp; Cash Desk Operations</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="approve_slips" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">2. Bank Deposit Slip Approval</div>
+                <div class="text-[11px] text-on-surface-variant">Verify and approve member bank deposit slips</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="collect_cash" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">3. Cash Desk Collection</div>
+                <div class="text-[11px] text-on-surface-variant">Record physical counter cash receipts &amp; dues settlements</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="manage_treasury" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">4. Society Treasury</div>
+                <div class="text-[11px] text-on-surface-variant">Post treasury adjustments and generate statements</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="manage_receipts" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">5. Receipts &amp; Vouchers Register</div>
+                <div class="text-[11px] text-on-surface-variant">View and export official receipts &amp; grant vouchers</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer sm:col-span-2">
+              <input type="checkbox" name="abilityCheckbox" value="view_defaulters" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">7. Defaulters Roster</div>
+                <div class="text-[11px] text-on-surface-variant">Inspect monthly dues arrears and defaulters list</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Domain 3: Welfare Benefit Grants -->
+        <div class="space-y-2">
+          <div class="font-bold text-on-surface flex items-center gap-1.5 pb-1 border-b border-outline-variant text-[11px] uppercase tracking-wider text-emerald-700">
+            <span class="material-symbols-outlined text-[16px]">volunteer_activism</span>
+            <span>Welfare Benefit Grants &amp; Disbursements</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="benefit_payout_desk" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">6.1 Direct Benefit Payout Desk</div>
+                <div class="text-[11px] text-on-surface-variant">Execute fund disbursements &amp; treasury outflows</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="benefit_review_edit" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">6.2 Review Queue (With Edit)</div>
+                <div class="text-[11px] text-on-surface-variant">Review, adjust amounts, and approve/reject claims</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="benefit_review_view" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">6.3 Review Queue (Read Only)</div>
+                <div class="text-[11px] text-on-surface-variant">Inspect applications without decision authority</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Domain 4: Content & Settings (Section 8) -->
+        <div class="space-y-2">
+          <div class="font-bold text-on-surface flex items-center gap-1.5 pb-1 border-b border-outline-variant text-[11px] uppercase tracking-wider text-purple-700">
+            <span class="material-symbols-outlined text-[16px]">tune</span>
+            <span>Section 8: Content &amp; Settings Edit Access</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="edit_bank_coordinates" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.1 Bank Coordinates &amp; LankaQR</div>
+                <div class="text-[11px] text-on-surface-variant">Edit official bank account numbers, branch &amp; QR</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="edit_dues_statutory" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.2 Monthly Dues &amp; Statutory Fees</div>
+                <div class="text-[11px] text-on-surface-variant">Edit default monthly contribution &amp; admission fees</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="edit_welfare_programs" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.3 Welfare Benefit Programs</div>
+                <div class="text-[11px] text-on-surface-variant">Add, edit, or pause welfare programs &amp; limits</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="view_respond_inquiries" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.4 General Inquiries &amp; Help Desk</div>
+                <div class="text-[11px] text-on-surface-variant">Authorized view and reply access to general member messages</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer">
+              <input type="checkbox" name="abilityCheckbox" value="view_medical_inquiries" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.4b Confidential Medical &amp; Welfare Inquiries</div>
+                <div class="text-[11px] text-on-surface-variant">Authorized access to sensitive medical &amp; welfare messages</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-2.5 p-2 rounded-xl border border-outline-variant bg-surface hover:bg-sky-50/50 cursor-pointer sm:col-span-2">
+              <input type="checkbox" name="abilityCheckbox" value="dispatch_notifications" class="mt-0.5 text-primary focus:ring-primary rounded" />
+              <div>
+                <div class="font-bold text-on-surface">8.5 Dispatch Member Notification</div>
+                <div class="text-[11px] text-on-surface-variant">Send broadcast or 1-to-1 member notifications</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+          <button type="button" onclick="closeModal('memberAbilitiesModal')" class="px-4 py-2 border border-outline-variant rounded-xl font-semibold hover:bg-surface cursor-pointer">Cancel</button>
+          <button type="submit" id="saveMemberAbilitiesBtn" class="mutation-btn px-5 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover shadow-sm flex items-center gap-1.5 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">save</span>
+            <span>Save &amp; Commit Abilities</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

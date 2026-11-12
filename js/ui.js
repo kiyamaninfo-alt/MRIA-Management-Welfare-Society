@@ -116,6 +116,13 @@ export function openContactModal(userEmail = "", userName = "") {
             </div>
           </div>
           <div>
+            <label class="block text-caption font-medium text-on-surface mb-1">Inquiry Category (ප්‍රවර්ගය)</label>
+            <select id="contactCategory" class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm font-medium">
+              <option value="general">General Administration Inquiry (සාමාන්‍ය විමසීමක්)</option>
+              <option value="welfare_medical">Welfare / Medical Aid Inquiry - Confidential (රහසිගත වෛද්‍ය/සුබසාධන විමසීමක්)</option>
+            </select>
+          </div>
+          <div>
             <label class="block text-caption font-medium text-on-surface mb-1" data-i18n="contact_subject">Subject</label>
             <input type="text" id="contactSubject" placeholder="Inquiry topic..." class="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-body text-sm" required />
           </div>
@@ -168,6 +175,8 @@ export function openContactModal(userEmail = "", userName = "") {
           } catch (_) {}
         }
 
+        const categoryVal = document.getElementById("contactCategory")?.value || "general";
+
         const { error } = await supabase.from("admin_inquiries").insert([
           {
             sender_id: senderId,
@@ -175,6 +184,7 @@ export function openContactModal(userEmail = "", userName = "") {
             sender_email: senderEmail,
             sender_phone: senderPhone,
             sender_epf: senderEpf,
+            category: categoryVal,
             subject: subjectText,
             message: messageText,
             status: "pending",

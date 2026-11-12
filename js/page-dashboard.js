@@ -7,7 +7,7 @@ import {
   getBenefitTypes,
   getAnnouncements,
   getSystemSetting,
-  getTreasuryBalances,
+  getPublicTreasurySummary,
   submitPayment,
   submitBenefitClaim,
   getNotifications,
@@ -204,43 +204,46 @@ async function refreshDashboardData() {
 }
 
 /**
- * Loads dynamic treasury balances if available from the database,
- * otherwise retains the default initial asset values.
+ * Loads dynamic treasury balances from getPublicTreasurySummary(),
+ * displaying verified society reserves or "Unavailable" on error/failure.
  */
 async function loadTreasuryReserves() {
-  try {
-    const balances = await getTreasuryBalances();
-    if (balances && balances.length > 0) {
-      let total = 0;
-      let hasData = false;
-      balances.forEach((b) => {
-        const bal = Number(b.current_balance ?? b.balance ?? 0);
-        total += bal;
-        if (bal > 0) hasData = true;
-      });
+  const totalEl = document.getElementById("dashboardTreasuryTotal");
+  const bocEl = document.getElementById("dashboardBalBoc");
+  const cashEl = document.getElementById("dashboardBalCash");
+  const fdEl = document.getElementById("dashboardBalFd");
 
-      if (hasData) {
-        balances.forEach((b) => {
-          const bal = Number(b.current_balance ?? b.balance ?? 0);
-          if (b.account_id === "boc_savings") {
-            const el = document.getElementById("dashboardBalBoc");
-            if (el) el.textContent = formatCurrency(bal);
-          }
-          if (b.account_id === "cash_in_hand") {
-            const el = document.getElementById("dashboardBalCash");
-            if (el) el.textContent = formatCurrency(bal);
-          }
-          if (b.account_id === "fixed_deposits") {
-            const el = document.getElementById("dashboardBalFd");
-            if (el) el.textContent = formatCurrency(bal);
-          }
-        });
-        const totalEl = document.getElementById("dashboardTreasuryTotal");
-        if (totalEl) totalEl.textContent = formatCurrency(total);
+  const setUnavailable = () => {
+    const text = t("status_unavailable") || "Unavailable";
+    if (totalEl) totalEl.textContent = text;
+    if (bocEl) bocEl.textContent = text;
+    if (cashEl) cashEl.textContent = text;
+    if (fdEl) fdEl.textContent = text;
+  };
+
+  try {
+    const summary = await getPublicTreasurySummary();
+    if (summary && Array.isArray(summary.accounts) && summary.accounts.length > 0) {
+      if (totalEl) {
+        totalEl.textContent = formatCurrency(Number(summary.total_liquid_assets ?? 0));
       }
+
+      summary.accounts.forEach((acc) => {
+        const bal = Number(acc.current_balance ?? 0);
+        if (acc.account_id === "boc_savings" && bocEl) {
+          bocEl.textContent = formatCurrency(bal);
+        } else if (acc.account_id === "cash_in_hand" && cashEl) {
+          cashEl.textContent = formatCurrency(bal);
+        } else if (acc.account_id === "fixed_deposits" && fdEl) {
+          fdEl.textContent = formatCurrency(bal);
+        }
+      });
+    } else {
+      setUnavailable();
     }
   } catch (err) {
-    console.debug("Treasury balances live fetch skipped / using defaults:", err);
+    console.error("Treasury balances live fetch failed:", err);
+    setUnavailable();
   }
 }
 
@@ -1024,10 +1027,102 @@ function setupActionListeners() {
     });
   }
 
-  // Payment form submission
+  // Payment form submission with Pre-Submission Confirmation Modal (Phase D)
+  let pendingPaymentData = null;
+
+  function populatePaymentConfirmationModal(data) {
+    // 1. Member EPF & Name
+    const epfEl = document.getElementById("confirmPaymentEpf");
+    const nameEl = document.getElementById("confirmPaymentMemberName");
+    if (epfEl) epfEl.textContent = currentMember?.epf_number || "N/A";
+    if (nameEl) nameEl.textContent = currentMember?.full_name || currentMember?.email || "Member";
+
+    // 2. Total Amount
+    const amountEl = document.getElementById("confirmPaymentAmount");
+    if (amountEl) amountEl.textContent = formatCurrency(data.amount);
+
+    // 3. Months Being Paid
+    const monthEl = document.getElementById("confirmPaymentMonth");
+    if (monthEl) {
+      if (data.category === "monthly_due") {
+        const rawMonth = data.selectedMonth || "";
+        const formattedMonth = rawMonth ? rawMonth.slice(0, 7) : "Current / FIFO Next";
+        monthEl.textContent = `${formattedMonth} (FIFO Allocation)`;
+      } else {
+        monthEl.textContent = "N/A (Non-Dues Contribution)";
+      }
+    }
+
+    // 4. Reason
+    const reasonEl = document.getElementById("confirmPaymentReason");
+    if (reasonEl) {
+      const reasonLabels = {
+        monthly_due: "Monthly Due (මාසික දායක මුදල)",
+        admission_fee: "Admission Fee (ඇතුල්වීමේ ගාස්තුව)",
+        donation: "Donation / Aid (ආධාර / පරිත්‍යාග)",
+        other: "Other Contribution (වෙනත් දායකත්ව)",
+      };
+      reasonEl.textContent = reasonLabels[data.category] || data.category;
+    }
+
+    // 5. Payment Method
+    const methodEl = document.getElementById("confirmPaymentMethod");
+    if (methodEl) {
+      const methodLabels = {
+        bank_transfer: "Bank Deposit / Online Transfer (බැංකු තැන්පතු)",
+        qr_payment: "LankaQR App Payment (LankaQR මඟින්)",
+        cash: "Direct Cash to Treasurer (අතින් දුන් මුදල්)",
+      };
+      methodEl.textContent = methodLabels[data.method] || data.method;
+    }
+
+    // 6. Recipient Bank Coordinates
+    // Rendered directly from association settings in modal HTML: BOC, Mattala Airport Branch, Acc 8201948201
+
+    // 7. Slip Attachment Preview Thumbnail
+    const slipContainer = document.getElementById("confirmSlipThumbnailContainer");
+    const slipNotice = document.getElementById("confirmSlipCashNotice");
+    const slipImg = document.getElementById("confirmSlipThumbnailImg");
+    const slipFileName = document.getElementById("confirmSlipFileName");
+    const slipFileSize = document.getElementById("confirmSlipFileSize");
+
+    if (data.method === "cash") {
+      if (slipContainer) slipContainer.classList.add("hidden");
+      if (slipNotice) slipNotice.classList.remove("hidden");
+    } else {
+      if (slipContainer) slipContainer.classList.remove("hidden");
+      if (slipNotice) slipNotice.classList.add("hidden");
+
+      if (data.slipFile) {
+        if (slipFileName) slipFileName.textContent = data.slipFile.name;
+        if (slipFileSize) slipFileSize.textContent = `${(data.slipFile.size / 1024).toFixed(1)} KB`;
+        if (slipImg) {
+          if (data.slipFile.type && data.slipFile.type.startsWith("image/")) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              slipImg.src = ev.target.result;
+            };
+            reader.readAsDataURL(data.slipFile);
+          } else {
+            slipImg.src = "/assets/default-bank-qr.svg";
+          }
+        }
+      }
+    }
+
+    // 8. Non-Refundable Checkbox & Final Submit Button Reset
+    const checkbox = document.getElementById("confirmNonRefundableCheckbox");
+    const finalSubmitBtn = document.getElementById("btnFinalConfirmPayment");
+    if (checkbox) checkbox.checked = false;
+    if (finalSubmitBtn) {
+      finalSubmitBtn.disabled = true;
+      finalSubmitBtn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+  }
+
   const paymentForm = document.getElementById("paymentForm");
   if (paymentForm) {
-    paymentForm.addEventListener("submit", async (e) => {
+    paymentForm.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const category = document.getElementById("paymentCategorySelect")?.value || "monthly_due";
@@ -1047,17 +1142,62 @@ function setupActionListeners() {
         return;
       }
 
-      const submitBtn = paymentForm.querySelector("button[type='submit']");
+      // Prepare confirmation payload
+      pendingPaymentData = {
+        category,
+        method,
+        amount,
+        selectedMonth,
+        remarks,
+        slipFile: selectedSlipFile,
+      };
+
+      // Populate confirmation modal and display
+      populatePaymentConfirmationModal(pendingPaymentData);
+      openModal("paymentConfirmModal");
+    });
+  }
+
+  // Checkbox toggle listener for Non-Refundable acknowledgment
+  const confirmCheckbox = document.getElementById("confirmNonRefundableCheckbox");
+  const finalSubmitBtn = document.getElementById("btnFinalConfirmPayment");
+
+  if (confirmCheckbox && finalSubmitBtn) {
+    confirmCheckbox.addEventListener("change", () => {
+      finalSubmitBtn.disabled = !confirmCheckbox.checked;
+      if (confirmCheckbox.checked) {
+        finalSubmitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      } else {
+        finalSubmitBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+    });
+  }
+
+  // Final commitment execution
+  if (finalSubmitBtn) {
+    finalSubmitBtn.addEventListener("click", async () => {
+      if (!pendingPaymentData) return;
+      if (!confirmCheckbox || !confirmCheckbox.checked) {
+        showToast("Please acknowledge the non-refundable declaration to proceed.", "warning");
+        return;
+      }
+
+      const { category, method, amount, selectedMonth, remarks, slipFile } = pendingPaymentData;
+
       try {
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.textContent = "Submitting Payment...";
-        }
+        finalSubmitBtn.disabled = true;
+        finalSubmitBtn.innerHTML = `
+          <span class="material-symbols-outlined text-[18px] animate-spin">refresh</span>
+          <span>Committing Remittance...</span>
+        `;
 
         let slipKey = null;
-        if (selectedSlipFile && (method === "bank_transfer" || method === "qr_payment")) {
-          if (submitBtn) submitBtn.textContent = "Uploading Slip File...";
-          slipKey = await uploadBankSlip(selectedSlipFile);
+        if (slipFile && (method === "bank_transfer" || method === "qr_payment")) {
+          finalSubmitBtn.innerHTML = `
+            <span class="material-symbols-outlined text-[18px] animate-spin">cloud_upload</span>
+            <span>Uploading Slip Proof...</span>
+          `;
+          slipKey = await uploadBankSlip(slipFile);
         }
 
         let formattedNotes = "";
@@ -1078,20 +1218,23 @@ function setupActionListeners() {
         });
 
         showToast(t("payment_submitted_success") || "Payment submitted successfully for verification!", "success");
+        closeModal("paymentConfirmModal");
         closeModal("payment-modal");
-        paymentForm.reset();
+        paymentForm?.reset();
         resetSlipFile();
+        pendingPaymentData = null;
 
         await refreshDashboardData();
       } catch (err) {
         console.error("Payment submission error:", err);
         showToast(err.message || "Failed to submit payment.", "error");
       } finally {
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = `
-            <span class="material-symbols-outlined text-[18px]">check_circle</span>
-            <span>${t("submit_slip") || "Submit Payment"}</span>
+        if (finalSubmitBtn) {
+          finalSubmitBtn.disabled = true;
+          finalSubmitBtn.classList.add("opacity-50", "cursor-not-allowed");
+          finalSubmitBtn.innerHTML = `
+            <span class="material-symbols-outlined text-[18px]">lock</span>
+            <span>Confirm &amp; Submit Remittance</span>
           `;
         }
       }

@@ -254,9 +254,20 @@ export async function checkAuthAndWhitelist({ requireApproved = true, allowedRol
     return { user, member, isApproved: Boolean(member?.is_approved) };
   }
 
-  // Check role authorization for protected pages (e.g. admin.html)
+  // Check role or ability authorization for protected pages (e.g. admin.html)
   if (allowedRoles && allowedRoles.length > 0) {
-    if (!allowedRoles.includes(member.role)) {
+    let isAllowed = allowedRoles.includes(member.role);
+    if (!isAllowed) {
+      try {
+        const { data: myAbilities } = await supabase.rpc("get_my_abilities");
+        if (myAbilities && myAbilities.length > 0) {
+          isAllowed = true;
+        }
+      } catch (e) {
+        console.warn("Could not check member abilities in auth check:", e);
+      }
+    }
+    if (!isAllowed) {
       alert("Access Denied: You do not have administrative privileges.");
       window.location.href = "/dashboard.html";
       return null;

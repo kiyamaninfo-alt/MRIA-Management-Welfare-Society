@@ -13,6 +13,7 @@ import {
   createMember,
   getAllBenefitClaims,
   reviewBenefitClaim,
+  approveAndGoToPayout,
   disburseBenefitClaim,
   recordDirectBenefitGrant,
   undoClaimDisbursement,
@@ -36,6 +37,15 @@ import {
   sendBatchNotifications,
   getAdminInquiries,
   resolveAdminInquiry,
+  getMyAbilities,
+  getMemberAbilities,
+  setMemberAbilities,
+  recordDuesWaiver,
+  reverseDuesWaiver,
+  getMemberWaivers,
+  getAllWaivers,
+  getMemberPayments,
+  getMemberClaims,
 } from "./api.js";
 import { getSignedSlipUrl } from "./storage.js";
 import { renderReceiptHtml, renderGrantVoucherHtml, shareGrantVoucher, downloadGrantVoucherFile } from "./receipt.js";
@@ -53,6 +63,7 @@ import {
 } from "./ui.js";
 
 let currentStaff = null;
+let currentStaffAbilities = [];
 let allMembers = [];
 let allBenefitTypes = [];
 let allClaimsList = [];
@@ -70,6 +81,12 @@ const ROLE_TABS = {
   committee_member: ["claims", "defaulters", "receipts"],
 };
 
+export function hasStaffAbility(ability) {
+  if (currentStaff?.email === "krishaja@gmail.com") return true;
+  return currentStaffAbilities.includes(ability);
+}
+window.hasStaffAbility = hasStaffAbility;
+
 document.addEventListener("DOMContentLoaded", async () => {
   initLanguage();
   initOfflineDetection();
@@ -82,10 +99,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { member } = authState;
   currentStaff = member;
 
+  // Load active abilities for current staff member
+  try {
+    currentStaffAbilities = await getMyAbilities();
+  } catch (e) {
+    console.warn("Failed to load abilities on init:", e);
+    currentStaffAbilities = [];
+  }
+
   // Render staff header
   renderStaffHeader(member);
 
-  // Filter tabs according to RBAC role
+  // Filter tabs according to RBAC role & granular operational abilities
   applyRoleTabPermissions(member.role);
 
   // Initialize data
@@ -114,14 +139,46 @@ function renderStaffHeader(member) {
 }
 
 function applyRoleTabPermissions(role) {
-  const allowed = ROLE_TABS[role] || ["claims"];
-  const tabButtons = document.querySelectorAll("#adminTabsNav .tab-button");
+  const isRootAdmin = currentStaff?.email === "krishaja@gmail.com";
+  let allowed = new Set(ROLE_TABS[role] || []);
 
+  if (isRootAdmin) {
+    allowed = new Set(["slips", "cash", "treasury", "receipts", "secretary", "claims", "defaulters", "waivers", "cms", "audit"]);
+  } else {
+    // Dynamically grant tabs from abilities
+    if (hasStaffAbility("approve_slips")) { allowed.add("slips"); allowed.add("receipts"); }
+    if (hasStaffAbility("collect_cash")) { allowed.add("cash"); allowed.add("receipts"); }
+    if (hasStaffAbility("manage_treasury")) { allowed.add("treasury"); allowed.add("receipts"); }
+    if (hasStaffAbility("manage_receipts")) { allowed.add("receipts"); }
+    if (hasStaffAbility("assign_roles")) { allowed.add("secretary"); }
+    if (
+      hasStaffAbility("benefit_payout_desk") ||
+      hasStaffAbility("benefit_review_edit") ||
+      hasStaffAbility("benefit_review_view")
+    ) {
+      allowed.add("claims");
+      allowed.add("receipts");
+    }
+    if (hasStaffAbility("view_defaulters")) { allowed.add("defaulters"); }
+    if (hasStaffAbility("waive_statutory_dues")) { allowed.add("waivers"); }
+    if (
+      hasStaffAbility("edit_bank_coordinates") ||
+      hasStaffAbility("edit_dues_statutory") ||
+      hasStaffAbility("edit_welfare_programs") ||
+      hasStaffAbility("view_respond_inquiries") ||
+      hasStaffAbility("dispatch_notifications")
+    ) {
+      allowed.add("cms");
+    }
+    if (hasStaffAbility("view_audit_logs")) { allowed.add("audit"); }
+  }
+
+  const tabButtons = document.querySelectorAll("#adminTabsNav .tab-button");
   let firstAllowedTab = null;
 
   tabButtons.forEach((btn) => {
     const tabKey = btn.id.replace("tab-btn-", "");
-    if (allowed.includes(tabKey)) {
+    if (allowed.has(tabKey)) {
       btn.classList.remove("hidden");
       if (!firstAllowedTab) firstAllowedTab = tabKey;
     } else {
@@ -169,6 +226,7 @@ export function switchAdminTab(targetTab) {
   if (targetTab === "secretary") loadSecretaryData();
   if (targetTab === "claims") loadClaimsData();
   if (targetTab === "defaulters") loadDefaultersData();
+  if (targetTab === "waivers") loadWaiversTabData();
   if (targetTab === "cms") {
     loadBankSettings();
     loadDuesSettings();
@@ -176,6 +234,7 @@ export function switchAdminTab(targetTab) {
     loadBenefitTypesSettings();
     loadAdminInquiries();
     populateNotificationRecipients();
+    applyCmsSectionEditGates();
   }
   if (targetTab === "audit") loadAuditLogsData();
 }
@@ -1640,9 +1699,134 @@ function setupAdminForms() {
   setupGrantDeskForm();
   setupVoidReceiptHandler();
   setupUndoClaimHandler();
+  setupClaimsSearchHandlers();
   setupInquiriesHandlers();
   setupNotificationHandlers();
+  setupMemberAbilitiesHandler();
+  setupWaiverHandlers();
 }
+
+function setupMemberAbilitiesHandler() {
+  const memberAbilitiesForm = document.getElementById("memberAbilitiesForm");
+  if (memberAbilitiesForm) {
+    memberAbilitiesForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const memberId = document.getElementById("abilityModalMemberId")?.value;
+      if (!memberId) return;
+
+      const checkedBoxes = Array.from(document.querySelectorAll("input[name='abilityCheckbox']:checked"));
+      const selectedAbilities = checkedBoxes.map((cb) => cb.value);
+
+      const submitBtn = document.getElementById("saveMemberAbilitiesBtn");
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Saving Abilities...";
+        }
+
+        await setMemberAbilities(memberId, selectedAbilities);
+        showToast("Member operational abilities updated successfully!", "success");
+        closeModal("memberAbilitiesModal");
+
+        // If the updated user is currently logged in, refresh active permissions immediately
+        if (currentStaff?.id === memberId) {
+          currentStaffAbilities = await getMyAbilities();
+          applyRoleTabPermissions(currentStaff.role);
+          applyCmsSectionEditGates();
+        }
+      } catch (err) {
+        console.error("Failed to save member abilities:", err);
+        showToast(err.message || "Failed to update abilities.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `
+            <span class="material-symbols-outlined text-[16px]">save</span>
+            <span>Save &amp; Commit Abilities</span>
+          `;
+        }
+      }
+    });
+  }
+}
+
+export function applyCmsSectionEditGates() {
+  const isRoot = currentStaff?.email === "krishaja@gmail.com";
+
+  // 8.1 Bank Coordinates & LankaQR Edit Gate
+  const canEditBank = isRoot || hasStaffAbility("edit_bank_coordinates");
+  ["settingBankName", "settingBankBranch", "settingAccountNumber", "settingAccountName"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !canEditBank;
+  });
+  const saveBankBtn = document.getElementById("saveBankSettingsBtn");
+  if (saveBankBtn) {
+    saveBankBtn.disabled = !canEditBank;
+    saveBankBtn.classList.toggle("opacity-50", !canEditBank);
+    saveBankBtn.classList.toggle("cursor-not-allowed", !canEditBank);
+  }
+  const resetQrBtn = document.getElementById("resetBankQrBtn");
+  if (resetQrBtn) resetQrBtn.disabled = !canEditBank;
+  const qrFileInput = document.getElementById("adminQrFileInput");
+  if (qrFileInput) qrFileInput.disabled = !canEditBank;
+  const bankStatusEl = document.getElementById("bankSettingsStatus");
+  if (bankStatusEl && !canEditBank) {
+    bankStatusEl.textContent = "(View Only: Restricted - edit rights required)";
+  }
+
+  // 8.2 Monthly Dues & Statutory Fees Edit Gate
+  const canEditDues = isRoot || hasStaffAbility("edit_dues_statutory");
+  const duesInput = document.getElementById("settingMonthlyDueAmount");
+  if (duesInput) duesInput.disabled = !canEditDues;
+  const saveDuesBtn = document.getElementById("saveDuesSettingsBtn");
+  if (saveDuesBtn) {
+    saveDuesBtn.disabled = !canEditDues;
+    saveDuesBtn.classList.toggle("opacity-50", !canEditDues);
+    saveDuesBtn.classList.toggle("cursor-not-allowed", !canEditDues);
+  }
+  const duesStatusEl = document.getElementById("duesSettingsStatus");
+  if (duesStatusEl && !canEditDues) {
+    duesStatusEl.textContent = "(View Only: Restricted - edit rights required)";
+  }
+  const addAdmissionBtn = document.querySelector("button[onclick='window.openAddAdmissionFeeModal()']");
+  if (addAdmissionBtn) {
+    addAdmissionBtn.disabled = !canEditDues;
+    addAdmissionBtn.classList.toggle("hidden", !canEditDues);
+  }
+
+  // 8.3 Welfare Benefit Programs & Facilities Edit Gate
+  const canEditWelfare = isRoot || hasStaffAbility("edit_welfare_programs");
+  const addBenefitBtn = document.querySelector("button[onclick='openAddBenefitModal()']");
+  if (addBenefitBtn) {
+    addBenefitBtn.disabled = !canEditWelfare;
+    addBenefitBtn.classList.toggle("hidden", !canEditWelfare);
+  }
+
+  // 8.4 Member Inquiries & Help Desk Gate
+  const canViewInquiries = isRoot || hasStaffAbility("view_respond_inquiries");
+  const inquiriesCard = document.getElementById("adminInquiriesCard");
+  if (inquiriesCard) {
+    inquiriesCard.classList.toggle("hidden", !canViewInquiries);
+  }
+
+  // 8.5 Dispatch Member Notification Gate
+  const canDispatchNotif = isRoot || hasStaffAbility("dispatch_notifications");
+  const dispatchCard = document.getElementById("adminNotificationsCard");
+  if (dispatchCard) {
+    const dispatchForm = document.getElementById("dispatchNotificationForm");
+    if (dispatchForm) {
+      dispatchForm.querySelectorAll("input, select, textarea, button").forEach((el) => {
+        el.disabled = !canDispatchNotif;
+      });
+      if (!canDispatchNotif) {
+        dispatchForm.classList.add("opacity-50");
+      } else {
+        dispatchForm.classList.remove("opacity-50");
+      }
+    }
+  }
+}
+window.applyCmsSectionEditGates = applyCmsSectionEditGates;
 
 // ================= TAB 3: SOCIETY TREASURY =================
 
@@ -2461,6 +2645,10 @@ async function loadSecretaryData() {
                 <span class="material-symbols-outlined text-[13px]">receipt_long</span>
                 <span>Dues</span>
               </button>
+              <button type="button" onclick="window.openMemberAbilitiesModal('${m.id}')" class="px-2.5 py-1 border border-indigo-300 text-indigo-800 bg-indigo-50/50 rounded-lg text-xs font-semibold hover:bg-indigo-100 flex items-center gap-1 cursor-pointer" title="Assign Functional Abilities & Permissions">
+                <span class="material-symbols-outlined text-[13px]">tune</span>
+                <span>Abilities</span>
+              </button>
               <button onclick="window.openEditMemberModal('${m.id}')" class="px-2.5 py-1 border border-outline-variant rounded-lg text-xs font-semibold hover:border-primary">
                 Edit
               </button>
@@ -2477,6 +2665,47 @@ async function loadSecretaryData() {
     console.error("Secretary data error:", err);
   }
 }
+
+window.filterMemberDirectory = function (query) {
+  const term = (query || "").toLowerCase().trim();
+  const rows = document.querySelectorAll("#memberDirectoryBody tr");
+  rows.forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(term) ? "" : "none";
+  });
+};
+
+window.openMemberAbilitiesModal = async function (memberId) {
+  const m = (allMembers || []).find((item) => item.id === memberId);
+  if (!m) return;
+
+  const idInput = document.getElementById("abilityModalMemberId");
+  const nameEl = document.getElementById("abilityModalMemberName");
+  const detailsEl = document.getElementById("abilityModalMemberDetails");
+  const roleEl = document.getElementById("abilityModalMemberRole");
+
+  if (idInput) idInput.value = m.id;
+  if (nameEl) nameEl.textContent = m.full_name || m.email;
+  if (detailsEl) detailsEl.textContent = `EPF: ${m.epf_number || "N/A"} | Email: ${m.email} | Phone: ${m.phone || "N/A"}`;
+  if (roleEl) roleEl.textContent = (m.role || "MEMBER").toUpperCase();
+
+  const checkboxes = document.querySelectorAll("input[name='abilityCheckbox']");
+  checkboxes.forEach((cb) => { cb.checked = false; });
+
+  try {
+    const granted = await getMemberAbilities(memberId);
+    checkboxes.forEach((cb) => {
+      if (granted.includes(cb.value)) {
+        cb.checked = true;
+      }
+    });
+  } catch (err) {
+    console.error("Failed to load member abilities:", err);
+    showToast("Could not load current abilities.", "warning");
+  }
+
+  openModal("memberAbilitiesModal");
+};
 
 window.approveMember = async function (memberId) {
   try {
@@ -2739,12 +2968,47 @@ window.loadClaimIntoPayoutDesk = function (claimId) {
     if (linkedDetails) {
       linkedDetails.textContent = `Disbursing ${bt.title_en || "welfare grant"} for ${m.full_name || "Member"} (EPF: ${m.epf_number || "N/A"})`;
     }
+
+    const isApprover = currentStaff?.id && claim.approved_by === currentStaff.id;
+    const isRootAdmin = (currentStaff?.email || "").toLowerCase() === "krishaja@gmail.com";
+    const deskSubmitBtn = document.getElementById("submitGrantDisbursementBtn");
+
+    if (isApprover && !isRootAdmin) {
+      if (linkedDetails) {
+        linkedDetails.innerHTML = `<span class="text-rose-700 font-bold">⚠️ Four-Eyes Policy: You approved this claim. Segregation of duties requires a different officer to disburse funds.</span>`;
+      }
+      if (deskSubmitBtn) {
+        deskSubmitBtn.disabled = true;
+        deskSubmitBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+    } else if (deskSubmitBtn) {
+      deskSubmitBtn.disabled = false;
+      deskSubmitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+    }
   }
 
-  // Select member
+  // Select member and lock beneficiary selection for linked claim
   const member = allMembers.find((m) => m.id === claim.member_id) || claim.members;
   if (member) {
     selectGrantMember(member);
+  }
+
+  // Lock member selector to prevent accidental beneficiary mismatch
+  const memberSearchInput = document.getElementById("grantMemberSearchInput");
+  const memberSelect = document.getElementById("grantMemberSelect");
+  if (memberSearchInput) {
+    memberSearchInput.disabled = true;
+    memberSearchInput.classList.add("bg-slate-100", "cursor-not-allowed", "opacity-75");
+  }
+  if (memberSelect) {
+    memberSelect.disabled = true;
+    memberSelect.classList.add("bg-slate-100", "cursor-not-allowed", "opacity-75");
+  }
+
+  // Sync approved claims quick-selector
+  const approvedSelect = document.getElementById("payoutDeskApprovedSearchSelect");
+  if (approvedSelect) {
+    approvedSelect.value = claim.id;
   }
 
   // Select benefit type
@@ -2782,8 +3046,29 @@ window.loadClaimIntoPayoutDesk = function (claimId) {
 window.unlinkClaimFromGrantDesk = function () {
   const claimIdInput = document.getElementById("grantClaimIdInput");
   const linkedAlert = document.getElementById("grantLinkedClaimAlert");
+  const deskSubmitBtn = document.getElementById("submitGrantDisbursementBtn");
+  const memberSearchInput = document.getElementById("grantMemberSearchInput");
+  const memberSelect = document.getElementById("grantMemberSelect");
+  const approvedSelect = document.getElementById("payoutDeskApprovedSearchSelect");
+
   if (claimIdInput) claimIdInput.value = "";
   if (linkedAlert) linkedAlert.classList.add("hidden");
+  if (approvedSelect) approvedSelect.value = "";
+
+  // Unlock beneficiary selector
+  if (memberSearchInput) {
+    memberSearchInput.disabled = false;
+    memberSearchInput.classList.remove("bg-slate-100", "cursor-not-allowed", "opacity-75");
+  }
+  if (memberSelect) {
+    memberSelect.disabled = false;
+    memberSelect.classList.remove("bg-slate-100", "cursor-not-allowed", "opacity-75");
+  }
+
+  if (deskSubmitBtn) {
+    deskSubmitBtn.disabled = false;
+    deskSubmitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  }
   updateLiveGrantVoucherPreview();
 };
 
@@ -3067,6 +3352,18 @@ function setupGrantDeskForm() {
     });
   }
 
+  const approvedSelect = document.getElementById("payoutDeskApprovedSearchSelect");
+  if (approvedSelect) {
+    approvedSelect.addEventListener("change", (e) => {
+      const claimId = e.target.value;
+      if (claimId) {
+        window.loadClaimIntoPayoutDesk(claimId);
+      } else {
+        window.unlinkClaimFromGrantDesk();
+      }
+    });
+  }
+
   // Initial preview render
   updateLiveGrantVoucherPreview();
 
@@ -3178,93 +3475,218 @@ function setupGrantDeskForm() {
   }
 }
 
-async function loadClaimsData() {
+let claimsSearchTerm = "";
+
+function populatePayoutDeskApprovedClaims(claims) {
+  const select = document.getElementById("payoutDeskApprovedSearchSelect");
+  const countBadge = document.getElementById("payoutDeskApprovedCount");
+  if (!select) return;
+
+  const approvedClaims = (claims || []).filter((c) => c.status === "approved");
+  if (countBadge) {
+    countBadge.textContent = `${approvedClaims.length} Awaiting Payout`;
+  }
+
+  const currentVal = select.value;
+  select.innerHTML = `<option value="">-- Pick from Approved Claims awaiting disbursement (${approvedClaims.length}) --</option>` +
+    approvedClaims.map((c) => {
+      const m = c.members || {};
+      const bt = c.benefit_types || {};
+      const ref = `CLM-${c.id.slice(0, 8).toUpperCase()}`;
+      const name = m.full_name || "Member";
+      const epf = m.epf_number ? ` (EPF: ${m.epf_number})` : "";
+      const amt = Number(c.claim_amount).toLocaleString("en-LK", { minimumFractionDigits: 2 });
+      const prog = bt.title_en || "Grant";
+      return `<option value="${c.id}">${ref} - ${name}${epf} - ${prog} (Rs. ${amt})</option>`;
+    }).join("");
+
+  if (currentVal && approvedClaims.some((c) => c.id === currentVal)) {
+    select.value = currentVal;
+  }
+}
+
+function renderClaimsQueueTable(claimsList) {
   const tbody = document.getElementById("benefitClaimsQueueBody");
+  const matchCount = document.getElementById("claimsReviewMatchCount");
+  const clearBtn = document.getElementById("claimsReviewClearSearchBtn");
   if (!tbody) return;
 
+  const term = (claimsSearchTerm || "").trim().toLowerCase();
+  if (clearBtn) {
+    clearBtn.classList.toggle("hidden", term.length === 0);
+  }
+
+  let filtered = claimsList || [];
+  if (term.length > 0) {
+    filtered = filtered.filter((c) => {
+      const m = c.members || {};
+      const bt = c.benefit_types || {};
+      const name = (m.full_name || "").toLowerCase();
+      const epf = (m.epf_number || "").toLowerCase();
+      const email = (m.email || "").toLowerCase();
+      const title = (bt.title_en || "").toLowerCase();
+      const titleSi = (bt.title_si || "").toLowerCase();
+      const status = (c.status || "").toLowerCase();
+      const ref = `clm-${c.id.slice(0, 8)}`.toLowerCase();
+
+      return (
+        name.includes(term) ||
+        epf.includes(term) ||
+        email.includes(term) ||
+        title.includes(term) ||
+        titleSi.includes(term) ||
+        status.includes(term) ||
+        ref.includes(term)
+      );
+    });
+  }
+
+  if (matchCount) {
+    matchCount.textContent = term.length > 0
+      ? `Showing ${filtered.length} of ${claimsList.length} claims`
+      : `${claimsList.length} total claims`;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-on-surface-variant font-medium">${
+      term.length > 0 ? "No welfare claims match your search criteria." : "No welfare claims submitted yet."
+    }</td></tr>`;
+    return;
+  }
+
+  const isRootAdmin = (currentStaff?.email || "").toLowerCase() === "krishaja@gmail.com";
+
+  tbody.innerHTML = filtered.map((c) => {
+    const m = c.members || {};
+    const bt = c.benefit_types || {};
+    const applicantName = m.full_name || m.email || "Member";
+    const applicantEpf = m.epf_number || "N/A";
+    const benefitTitle = bt.title_en || "Welfare Grant";
+
+    const proofBtn = c.document_key ? `
+      <button type="button" onclick="window.viewSlip('${c.document_key}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-on-surface font-semibold text-xs hover:bg-surface-variant shadow-xs cursor-pointer" title="View attached document proof">
+        <span class="material-symbols-outlined text-[14px]">attachment</span>
+        <span>Proof</span>
+      </button>` : "";
+
+    let actions = "";
+    if (c.status === "submitted") {
+      const shortcutBtn = isRootAdmin ? `
+        <button type="button" onclick="window.approveAndGoToPayout('${c.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer" title="Approve claim and immediately open Payout Desk (Root Admin shortcut)">
+          <span class="material-symbols-outlined text-[14px]">bolt</span>
+          <span>Approve &amp; Go to Payout</span>
+        </button>
+      ` : "";
+
+      actions = `
+        ${shortcutBtn}
+        <button type="button" onclick="window.reviewClaim('${c.id}', 'approved')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 cursor-pointer">Approve</button>
+        <button type="button" onclick="window.reviewClaim('${c.id}', 'rejected')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-50 cursor-pointer">Reject</button>
+      `;
+    } else if (c.status === "approved") {
+      actions = `
+        <button type="button" onclick="window.loadClaimIntoPayoutDesk('${c.id}')" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900 flex items-center gap-1 shadow-sm cursor-pointer" title="Load into Direct Benefit Payout Desk">
+          <span class="material-symbols-outlined text-[13px]">payments</span>
+          <span>Disburse Grant</span>
+        </button>
+      `;
+    } else if (c.status === "disbursed") {
+      const disbursedTime = new Date(c.disbursed_at || c.created_at).getTime();
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const isWithin30Days = !isNaN(disbursedTime) && (Date.now() - disbursedTime <= thirtyDaysMs);
+
+      const undoBtn = isWithin30Days ? `
+        <button type="button" onclick="window.openUndoClaimModal('${c.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer" title="Undo benefit payout within 30 days">
+          <span class="material-symbols-outlined text-[13px]">undo</span>
+          <span>Undo</span>
+        </button>
+      ` : "";
+
+      actions = `
+        <button type="button" onclick="window.viewGrantVoucher('${c.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer" title="View official disbursement voucher">
+          <span class="material-symbols-outlined text-[14px]">receipt_long</span>
+          <span>View Voucher</span>
+        </button>
+        ${undoBtn}
+      `;
+    } else {
+      actions = `<span class="text-on-surface-variant text-xs capitalize">${c.status}</span>`;
+    }
+
+    return `
+      <tr class="hover:bg-sky-50/30 transition-colors">
+        <td class="py-2.5 px-3 font-mono">${formatDate(c.created_at)}</td>
+        <td class="py-2.5 px-3">
+          <div class="font-bold text-on-surface">${applicantName}</div>
+          <div class="text-[11px] text-on-surface-variant">EPF: ${applicantEpf}</div>
+        </td>
+        <td class="py-2.5 px-3 font-medium">${benefitTitle}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(c.claim_amount)}</td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+            c.status === "disbursed"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+              : c.status === "approved"
+                ? "bg-amber-50 text-amber-800 border border-amber-200"
+                : "bg-sky-50 text-sky-800 border border-sky-200"
+          }">
+            ${c.status.toUpperCase()}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right">
+          <div class="inline-flex items-center gap-1.5 justify-end">${proofBtn} ${actions}</div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function setupClaimsSearchHandlers() {
+  const searchInput = document.getElementById("claimsReviewSearchInput");
+  if (searchInput) {
+    let debounceTimer = null;
+    searchInput.addEventListener("input", (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        claimsSearchTerm = e.target.value || "";
+        renderClaimsQueueTable(allClaimsList);
+      }, 150);
+    });
+  }
+}
+
+window.clearClaimsReviewSearch = function () {
+  const input = document.getElementById("claimsReviewSearchInput");
+  if (input) input.value = "";
+  claimsSearchTerm = "";
+  renderClaimsQueueTable(allClaimsList);
+};
+
+window.approveAndGoToPayout = async function (claimId) {
+  try {
+    showToast("Approving claim via Root Admin shortcut...", "info");
+    await approveAndGoToPayout(claimId);
+    showToast("Claim approved! Loading Direct Benefit Payout Desk...", "success");
+    await loadClaimsData();
+    window.loadClaimIntoPayoutDesk(claimId);
+    const section = document.getElementById("grantPayoutDeskSection");
+    if (section && section.classList.contains("hidden")) {
+      window.toggleGrantDesk();
+    }
+    section?.scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    console.error("Error in approveAndGoToPayout:", err);
+    showToast(err.message || "Failed to execute Approve & Go to Payout shortcut.", "error");
+  }
+};
+
+async function loadClaimsData() {
   try {
     const claims = await getAllBenefitClaims();
     allClaimsList = claims || [];
     window.allClaimsList = allClaimsList;
-
-    if (allClaimsList.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-on-surface-variant">No welfare claims submitted yet.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = allClaimsList.map((c) => {
-      const m = c.members || {};
-      const bt = c.benefit_types || {};
-      const applicantName = m.full_name || m.email || "Member";
-      const applicantEpf = m.epf_number || "N/A";
-      const benefitTitle = bt.title_en || "Welfare Grant";
-
-      const proofBtn = c.document_key ? `
-        <button type="button" onclick="window.viewSlip('${c.document_key}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-on-surface font-semibold text-xs hover:bg-surface-variant shadow-xs cursor-pointer" title="View attached document proof">
-          <span class="material-symbols-outlined text-[14px]">attachment</span>
-          <span>Proof</span>
-        </button>` : "";
-
-      let actions = "";
-      if (c.status === "submitted") {
-        actions = `
-          <button onclick="window.reviewClaim('${c.id}', 'approved')" class="mutation-btn px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>
-          <button onclick="window.reviewClaim('${c.id}', 'rejected')" class="mutation-btn px-2.5 py-1 border border-rose-300 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-50">Reject</button>
-          <button onclick="window.loadClaimIntoPayoutDesk('${c.id}')" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900 flex items-center gap-1 shadow-sm" title="Load into Direct Benefit Payout Desk">
-            <span class="material-symbols-outlined text-[13px]">payments</span>
-            <span>Disburse</span>
-          </button>
-        `;
-      } else if (c.status === "approved") {
-        actions = `
-          <button onclick="window.loadClaimIntoPayoutDesk('${c.id}')" class="mutation-btn px-2.5 py-1 bg-sky-800 text-white rounded-lg text-xs font-bold hover:bg-sky-900 flex items-center gap-1 shadow-sm" title="Load into Direct Benefit Payout Desk">
-            <span class="material-symbols-outlined text-[13px]">payments</span>
-            <span>Disburse Grant</span>
-          </button>
-        `;
-      } else if (c.status === "disbursed") {
-        const disbursedTime = new Date(c.disbursed_at || c.created_at).getTime();
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const isWithin30Days = !isNaN(disbursedTime) && (Date.now() - disbursedTime <= thirtyDaysMs);
-
-        const undoBtn = isWithin30Days ? `
-          <button type="button" onclick="window.openUndoClaimModal('${c.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer" title="Undo benefit payout within 30 days">
-            <span class="material-symbols-outlined text-[13px]">undo</span>
-            <span>Undo</span>
-          </button>
-        ` : "";
-
-        actions = `
-          <button onclick="window.viewGrantVoucher('${c.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer" title="View official disbursement voucher">
-            <span class="material-symbols-outlined text-[14px]">receipt_long</span>
-            <span>View Voucher</span>
-          </button>
-          ${undoBtn}
-        `;
-      } else {
-        actions = `<span class="text-on-surface-variant text-xs capitalize">${c.status}</span>`;
-      }
-
-      return `
-        <tr class="hover:bg-sky-50/30 transition-colors">
-          <td class="py-2.5 px-3 font-mono">${formatDate(c.created_at)}</td>
-          <td class="py-2.5 px-3">
-            <div class="font-bold text-on-surface">${applicantName}</div>
-            <div class="text-[11px] text-on-surface-variant">EPF: ${applicantEpf}</div>
-          </td>
-          <td class="py-2.5 px-3 font-medium">${benefitTitle}</td>
-          <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(c.claim_amount)}</td>
-          <td class="py-2.5 px-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${c.status === "disbursed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : (c.status === "approved" ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-sky-50 text-sky-800 border border-sky-200")}">
-              ${c.status.toUpperCase()}
-            </span>
-          </td>
-          <td class="py-2.5 px-3 text-right">
-            <div class="inline-flex items-center gap-1.5 justify-end">${proofBtn} ${actions}</div>
-          </td>
-        </tr>
-      `;
-    }).join("");
+    populatePayoutDeskApprovedClaims(allClaimsList);
+    renderClaimsQueueTable(allClaimsList);
   } catch (err) {
     console.error("Claims data error:", err);
   }
@@ -4541,10 +4963,16 @@ function renderAdminInquiriesTable() {
     const senderEpf = m.epf_number || "N/A";
     const senderPhone = iq.sender_phone || m.phone || "-";
     const isResolved = iq.status === "resolved";
+    const isMedical = iq.category === "welfare_medical";
 
     return `
       <tr class="hover:bg-sky-50/30 transition-colors">
-        <td class="py-2.5 px-3 font-mono">${formatDate(iq.created_at)}</td>
+        <td class="py-2.5 px-3 font-mono">
+          <div>${formatDate(iq.created_at)}</div>
+          <span class="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isMedical ? "bg-purple-100 text-purple-800 border border-purple-200" : "bg-slate-100 text-slate-700"}">
+            ${isMedical ? "Confidential Medical" : "General"}
+          </span>
+        </td>
         <td class="py-2.5 px-3">
           <div class="font-bold text-on-surface">${escapeHtml(senderName)}</div>
           <div class="text-[11px] text-on-surface-variant">EPF: ${escapeHtml(senderEpf)} • Tel: ${escapeHtml(senderPhone)}</div>
@@ -4775,6 +5203,726 @@ function setupNotificationHandlers() {
         btn.disabled = false;
         btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">send</span><span>Send Notification</span>';
       }
+    }
+  });
+}
+
+// =============================================================================
+// SECTION: FEE RELEASE / DUES WAIVERS & MEMBER 360 DOSSIER
+// =============================================================================
+
+let allWaiversList = [];
+let selectedDossierMember = null;
+let waiversLedgerSearchTerm = "";
+
+async function loadWaiversTabData() {
+  try {
+    allWaiversList = await getAllWaivers();
+    window.allWaiversList = allWaiversList;
+
+    const countBadge = document.getElementById("tabWaiversCountBadge");
+    const activeWaivers = (allWaiversList || []).filter((w) => w.status === "active");
+    if (countBadge) {
+      countBadge.textContent = String(activeWaivers.length);
+      countBadge.classList.toggle("hidden", activeWaivers.length === 0);
+    }
+
+    renderWaiversLedger(allWaiversList);
+
+    if (selectedDossierMember) {
+      await window.selectWaiverMember(selectedDossierMember.id);
+    }
+  } catch (err) {
+    console.error("Error loading waivers data:", err);
+    showToast("Failed to load statutory dues waivers ledger.", "error");
+  }
+}
+window.loadWaiversTabData = loadWaiversTabData;
+window.refreshWaiversData = loadWaiversTabData;
+
+function renderWaiversLedger(waivers) {
+  const tbody = document.getElementById("waiversLedgerTableBody");
+  const summaryEl = document.getElementById("waiverLedgerSummaryStats");
+  if (!tbody) return;
+
+  const list = waivers || [];
+  const term = (waiversLedgerSearchTerm || "").trim().toLowerCase();
+
+  const filtered = term
+    ? list.filter((w) => {
+        const m = w.member || {};
+        const author = w.waived_by_member || {};
+        const name = (m.full_name || "").toLowerCase();
+        const epf = (m.epf_number || "").toLowerCase();
+        const authorName = (author.full_name || "").toLowerCase();
+        const reason = (w.reason || "").toLowerCase();
+        const month = (w.billing_month || "").toLowerCase();
+        const type = (w.waiver_type || "").toLowerCase();
+        const status = (w.status || "").toLowerCase();
+        return (
+          name.includes(term) ||
+          epf.includes(term) ||
+          authorName.includes(term) ||
+          reason.includes(term) ||
+          month.includes(term) ||
+          type.includes(term) ||
+          status.includes(term)
+        );
+      })
+    : list;
+
+  if (summaryEl) {
+    const activeCount = list.filter((w) => w.status === "active").length;
+    const totalWaivedAmt = list
+      .filter((w) => w.status === "active")
+      .reduce((sum, w) => sum + Number(w.waived_amount || 0), 0);
+    summaryEl.innerHTML = `
+      <span>Active Waivers: <strong class="text-purple-800 font-bold">${activeCount}</strong></span>
+      <span>•</span>
+      <span>Total Waived: <strong class="text-primary font-mono font-bold">${formatCurrency(totalWaivedAmt)}</strong></span>
+      <span>•</span>
+      <span>Total Records: <strong class="text-slate-800 font-bold">${list.length}</strong></span>
+    `;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-on-surface-variant font-medium">${
+      term ? "No waiver records match your search filter." : "No statutory dues waivers recorded yet."
+    }</td></tr>`;
+    return;
+  }
+
+  const isAuthorizedToWaive = currentStaff?.email === "krishaja@gmail.com" || hasStaffAbility("waive_statutory_dues");
+
+  tbody.innerHTML = filtered.map((w) => {
+    const m = w.member || {};
+    const author = w.waived_by_member || {};
+    const memberName = m.full_name || "Member";
+    const memberEpf = m.epf_number ? ` (EPF: ${m.epf_number})` : "";
+    const authorName = author.full_name || "Authorized Officer";
+    const authorEpf = author.epf_number ? ` (${author.epf_number})` : "";
+    const isActive = w.status === "active";
+    const typeLabel = w.waiver_type === "admission_fee" ? "Admission Fee" : `Month: ${w.billing_month}`;
+
+    const undoBtn = isActive && isAuthorizedToWaive ? `
+      <button type="button" onclick="window.openReverseWaiverModal('${w.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer" title="Undo this fee release and return due to pending">
+        <span class="material-symbols-outlined text-[13px]">undo</span>
+        <span>Undo Waiver</span>
+      </button>
+    ` : "";
+
+    return `
+      <tr class="hover:bg-purple-50/20 transition-colors">
+        <td class="py-2.5 px-3 font-mono">${formatDate(w.created_at)}</td>
+        <td class="py-2.5 px-3">
+          <div class="font-bold text-on-surface">${escapeHtml(memberName)}</div>
+          <div class="text-[11px] text-on-surface-variant">${escapeHtml(memberEpf)}</div>
+        </td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
+            w.waiver_type === "admission_fee"
+              ? "bg-amber-100 text-amber-900 border border-amber-200"
+              : "bg-purple-100 text-purple-900 border border-purple-200"
+          }">
+            ${typeLabel}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(w.waived_amount)}</td>
+        <td class="py-2.5 px-3 text-xs">
+          <div class="font-medium text-slate-800">${escapeHtml(authorName)}</div>
+          <div class="text-[10px] text-slate-500 font-mono">${escapeHtml(authorEpf)}</div>
+        </td>
+        <td class="py-2.5 px-3 max-w-xs text-xs text-slate-700 break-words">
+          <span class="line-clamp-2" title="${escapeHtml(w.reason || "")}">${escapeHtml(w.reason || "-")}</span>
+        </td>
+        <td class="py-2.5 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            isActive
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+              : "bg-slate-100 text-slate-600 border border-slate-200"
+          }">
+            ${isActive ? "ACTIVE WAIVER" : "REVERSED"}
+          </span>
+        </td>
+        <td class="py-2.5 px-3 text-right">
+          <div class="inline-flex items-center gap-1.5 justify-end">
+            <button type="button" onclick="window.selectWaiverMember('${w.member_id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-xs font-semibold shadow-xs cursor-pointer" title="View Member 360 Dossier">
+              <span class="material-symbols-outlined text-[13px]">person</span>
+              <span>Dossier</span>
+            </button>
+            ${undoBtn}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+window.filterWaiversLedger = function (term) {
+  waiversLedgerSearchTerm = term || "";
+  renderWaiversLedger(allWaiversList);
+};
+
+window.filterWaiverMemberSearch = function (rawTerm) {
+  const dropdown = document.getElementById("waiverMemberSearchResults");
+  const clearBtn = document.getElementById("waiverClearMemberBtn");
+  if (!dropdown) return;
+
+  const term = (rawTerm || "").trim().toLowerCase();
+  if (clearBtn) clearBtn.classList.toggle("hidden", term.length === 0);
+
+  if (term.length < 1) {
+    dropdown.innerHTML = "";
+    dropdown.classList.add("hidden");
+    return;
+  }
+
+  const matches = (allMembers || []).filter((m) => {
+    const name = (m.full_name || "").toLowerCase();
+    const epf = (m.epf_number || "").toLowerCase();
+    const email = (m.email || "").toLowerCase();
+    const phone = (m.phone || "").toLowerCase();
+    return name.includes(term) || epf.includes(term) || email.includes(term) || phone.includes(term);
+  }).slice(0, 10);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = `<div class="p-3 text-xs text-on-surface-variant text-center">No members found matching "${escapeHtml(rawTerm)}".</div>`;
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  dropdown.innerHTML = matches.map((m) => `
+    <div onclick="window.selectWaiverMember('${m.id}')" class="p-3 hover:bg-purple-50 flex items-center justify-between cursor-pointer transition-colors">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-full bg-sky-100 text-primary font-bold flex items-center justify-center text-xs">
+          ${(m.full_name || m.email || "M")[0].toUpperCase()}
+        </div>
+        <div>
+          <div class="font-bold text-xs text-on-surface">${escapeHtml(m.full_name || m.email)}</div>
+          <div class="text-[11px] text-on-surface-variant font-mono">EPF: ${escapeHtml(m.epf_number || "N/A")} • Tel: ${escapeHtml(m.phone || "-")}</div>
+        </div>
+      </div>
+      <span class="material-symbols-outlined text-purple-700 text-[18px]">arrow_forward</span>
+    </div>
+  `).join("");
+  dropdown.classList.remove("hidden");
+};
+
+window.selectWaiverMember = async function (memberId) {
+  try {
+    const member = (allMembers || []).find((m) => m.id === memberId) || (await getAllMembers()).find((m) => m.id === memberId);
+    if (!member) {
+      showToast("Member record not found.", "warning");
+      return;
+    }
+    selectedDossierMember = member;
+
+    const input = document.getElementById("waiverMemberSearchInput");
+    const dropdown = document.getElementById("waiverMemberSearchResults");
+    const clearBtn = document.getElementById("waiverClearMemberBtn");
+    const container = document.getElementById("waiverMemberDossierContainer");
+
+    if (input) input.value = `${member.full_name || member.email} (EPF: ${member.epf_number || "N/A"})`;
+    if (dropdown) dropdown.classList.add("hidden");
+    if (clearBtn) clearBtn.classList.remove("hidden");
+    if (container) container.classList.remove("hidden");
+
+    showToast(`Loading 360 Dossier for ${member.full_name}...`, "info");
+
+    const [dues, payments, claims, waivers, balance] = await Promise.all([
+      getMemberDues(member.id),
+      getMemberPayments(member.id),
+      getMemberClaims(member.id),
+      getMemberWaivers(member.id),
+      calculateMemberBalance(member),
+    ]);
+
+    renderMemberDossier(member, dues || [], payments || [], claims || [], waivers || [], balance);
+    container?.scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    console.error("Error loading member dossier:", err);
+    showToast("Failed to load member dossier.", "error");
+  }
+};
+
+window.clearWaiverMember = function () {
+  selectedDossierMember = null;
+  const input = document.getElementById("waiverMemberSearchInput");
+  const dropdown = document.getElementById("waiverMemberSearchResults");
+  const clearBtn = document.getElementById("waiverClearMemberBtn");
+  const container = document.getElementById("waiverMemberDossierContainer");
+
+  if (input) input.value = "";
+  if (dropdown) {
+    dropdown.innerHTML = "";
+    dropdown.classList.add("hidden");
+  }
+  if (clearBtn) clearBtn.classList.add("hidden");
+  if (container) container.classList.add("hidden");
+};
+
+function renderMemberDossier(member, dues, payments, claims, waivers, balance) {
+  // 1. Header Profile & KPI Cards
+  const nameEl = document.getElementById("dossierMemberName");
+  const avatarEl = document.getElementById("dossierMemberAvatar");
+  const epfEl = document.getElementById("dossierMemberEpf");
+  const phoneEl = document.getElementById("dossierMemberPhone");
+  const emailEl = document.getElementById("dossierMemberEmail");
+  const joinedEl = document.getElementById("dossierMemberJoined");
+  const statusEl = document.getElementById("dossierMemberStatusBadge");
+  const roleEl = document.getElementById("dossierMemberRoleBadge");
+
+  if (nameEl) nameEl.textContent = member.full_name || member.email;
+  if (avatarEl) avatarEl.textContent = (member.full_name || member.email || "M")[0].toUpperCase();
+  if (epfEl) epfEl.textContent = member.epf_number || "N/A";
+  if (phoneEl) phoneEl.textContent = member.phone || "-";
+  if (emailEl) emailEl.textContent = member.email || "-";
+  if (joinedEl) joinedEl.textContent = formatDate(member.created_at);
+  if (statusEl) {
+    const isApproved = member.is_approved !== false;
+    statusEl.textContent = isApproved ? "ACTIVE" : "PENDING VERIFICATION";
+    statusEl.className = isApproved
+      ? "px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase"
+      : "px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase";
+  }
+  if (roleEl) {
+    roleEl.textContent = (member.role || "member").toUpperCase();
+  }
+
+  // 4 KPIs
+  const advEl = document.getElementById("dossierAdvanceBalance");
+  const arrEl = document.getElementById("dossierPendingArrears");
+  const arrCountEl = document.getElementById("dossierPendingMonthsCount");
+  const waivedEl = document.getElementById("dossierWaivedTotal");
+  const waivedCountEl = document.getElementById("dossierWaivedCount");
+  const admBadgeEl = document.getElementById("dossierAdmissionStatusBadge");
+  const admBtnContainer = document.getElementById("dossierAdmissionActionBtnContainer");
+
+  const pendingDues = (dues || []).filter((d) => d.status === "pending");
+  const waivedDues = (dues || []).filter((d) => d.status === "waived");
+  const activeWaivers = (waivers || []).filter((w) => w.status === "active");
+
+  const totalWaivedAmt = activeWaivers.reduce((sum, w) => sum + Number(w.waived_amount || 0), 0);
+
+  if (advEl) advEl.textContent = formatCurrency(balance?.advancePrepaidBalance || 0);
+  if (arrEl) arrEl.textContent = formatCurrency(balance?.totalPending || 0);
+  if (arrCountEl) arrCountEl.textContent = `${pendingDues.length} months pending`;
+  if (waivedEl) waivedEl.textContent = formatCurrency(totalWaivedAmt);
+  if (waivedCountEl) waivedCountEl.textContent = `${activeWaivers.length} active fee releases`;
+
+  // Admission Fee
+  const isAuthorizedToWaive = currentStaff?.email === "krishaja@gmail.com" || hasStaffAbility("waive_statutory_dues");
+  const admissionWaiver = activeWaivers.find((w) => w.waiver_type === "admission_fee");
+
+  if (admBadgeEl) {
+    if (member.admission_fee_verified) {
+      admBadgeEl.textContent = "VERIFIED PAID";
+      admBadgeEl.className = "text-sm font-black text-emerald-700 mt-1 uppercase";
+      if (admBtnContainer) admBtnContainer.innerHTML = "";
+    } else if (admissionWaiver) {
+      admBadgeEl.textContent = "WAIVED";
+      admBadgeEl.className = "text-sm font-black text-purple-700 mt-1 uppercase";
+      if (admBtnContainer) {
+        admBtnContainer.innerHTML = isAuthorizedToWaive ? `
+          <button type="button" onclick="window.openReverseWaiverModal('${admissionWaiver.id}')" class="mutation-btn inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer">
+            <span class="material-symbols-outlined text-[12px]">undo</span>
+            <span>Undo Fee Release</span>
+          </button>
+        ` : `<span class="text-[10px] text-purple-600">Hardship relief active</span>`;
+      }
+    } else {
+      admBadgeEl.textContent = "PENDING PAYMENT";
+      admBadgeEl.className = "text-sm font-black text-amber-700 mt-1 uppercase";
+      if (admBtnContainer) {
+        admBtnContainer.innerHTML = isAuthorizedToWaive ? `
+          <button type="button" onclick="window.openRecordWaiverModal('admission_fee', '${member.id}', null, null, 1000)" class="mutation-btn inline-flex items-center gap-1 px-2 py-0.5 mt-0.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-[10px] shadow-xs cursor-pointer">
+            <span class="material-symbols-outlined text-[12px]">money_off</span>
+            <span>Waive Admission Fee</span>
+          </button>
+        ` : `<span class="text-[10px] text-amber-600">Awaiting payment</span>`;
+      }
+    }
+  }
+
+  // 2. Section 1: Monthly Dues & Fee Release Actions Table
+  const duesTbody = document.getElementById("dossierMonthlyDuesTableBody");
+  if (duesTbody) {
+    if (!dues || dues.length === 0) {
+      duesTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-on-surface-variant font-medium">No monthly dues records found for this member.</td></tr>`;
+    } else {
+      duesTbody.innerHTML = dues.map((d) => {
+        const isWaived = d.status === "waived";
+        const isPaid = d.status === "paid";
+        const isPending = d.status === "pending";
+
+        const matchingWaiver = activeWaivers.find((w) => w.due_id === d.id || w.billing_month === d.billing_month);
+
+        let details = "-";
+        if (isWaived) {
+          const reasonTxt = matchingWaiver?.reason ? ` "${escapeHtml(matchingWaiver.reason)}"` : "";
+          const officerTxt = matchingWaiver?.waived_by_member?.full_name ? ` by ${escapeHtml(matchingWaiver.waived_by_member.full_name)}` : "";
+          details = `<span class="text-purple-700 font-semibold text-[11px]">Hardship relief${officerTxt}:${reasonTxt}</span>`;
+        } else if (isPaid) {
+          details = d.is_advance_settled
+            ? `<span class="text-emerald-700 font-semibold text-[11px]">Auto-settled via Advance Payment</span>`
+            : `<span class="text-emerald-700 font-semibold text-[11px]">Verified Direct Payment</span>`;
+        } else if (isPending) {
+          details = `<span class="text-amber-700 font-semibold text-[11px]">Outstanding Arrears (Subject to 31st rule)</span>`;
+        }
+
+        let actionBtn = "-";
+        if (isPending && isAuthorizedToWaive) {
+          actionBtn = `
+            <button type="button" onclick="window.openRecordWaiverModal('monthly_due', '${member.id}', '${d.id}', '${d.billing_month}', ${d.amount})" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shadow-xs cursor-pointer" title="Release statutory monthly contribution">
+              <span class="material-symbols-outlined text-[13px]">money_off</span>
+              <span>Waive Due</span>
+            </button>
+          `;
+        } else if (isWaived && matchingWaiver && isAuthorizedToWaive) {
+          actionBtn = `
+            <button type="button" onclick="window.openReverseWaiverModal('${matchingWaiver.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer" title="Undo waiver and return due to pending">
+              <span class="material-symbols-outlined text-[13px]">undo</span>
+              <span>Undo Waiver</span>
+            </button>
+          `;
+        }
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-3 font-mono font-bold text-slate-800">${d.billing_month}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(d.amount)}</td>
+            <td class="py-2.5 px-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                isPaid
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : isWaived
+                    ? "bg-purple-50 text-purple-800 border border-purple-200"
+                    : "bg-amber-50 text-amber-800 border border-amber-200"
+              }">
+                ${(d.status || "").toUpperCase()}
+              </span>
+            </td>
+            <td class="py-2.5 px-3">${details}</td>
+            <td class="py-2.5 px-3 text-right">${actionBtn}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
+  // 3. Section 2: Payment & Receipt History Table
+  const payTbody = document.getElementById("dossierPaymentsTableBody");
+  const payCountEl = document.getElementById("dossierPaymentsCount");
+  if (payCountEl) payCountEl.textContent = `${(payments || []).length} payment records`;
+
+  if (payTbody) {
+    if (!payments || payments.length === 0) {
+      payTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-on-surface-variant font-medium">No verified payment records on file.</td></tr>`;
+    } else {
+      payTbody.innerHTML = payments.map((p) => {
+        const receiptRef = p.receipt_number || `RCP-${p.id.slice(0, 8).toUpperCase()}`;
+        const allocated = (p.allocated_months || []).join(", ") || "General Contribution";
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-3 font-mono">${formatDate(p.created_at)}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-primary">${receiptRef}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-on-surface text-right tabular-nums">${formatCurrency(p.amount)}</td>
+            <td class="py-2.5 px-3 uppercase text-[11px] font-bold text-slate-700">${p.payment_method || "cash"}</td>
+            <td class="py-2.5 px-3 font-mono text-[11px] text-slate-600">${allocated}</td>
+            <td class="py-2.5 px-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                p.status === "verified"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : p.status === "rejected"
+                    ? "bg-rose-50 text-rose-800 border border-rose-200"
+                    : "bg-amber-50 text-amber-800 border border-amber-200"
+              }">
+                ${(p.status || "").toUpperCase()}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 text-right">
+              <button type="button" onclick="window.viewReceipt('${p.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer">
+                <span class="material-symbols-outlined text-[13px]">receipt</span>
+                <span>Receipt</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
+  // 4. Section 3: Benefit & Welfare Claims History Table
+  const claimTbody = document.getElementById("dossierClaimsTableBody");
+  const claimCountEl = document.getElementById("dossierClaimsCount");
+  if (claimCountEl) claimCountEl.textContent = `${(claims || []).length} welfare claims`;
+
+  if (claimTbody) {
+    if (!claims || claims.length === 0) {
+      claimTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-on-surface-variant font-medium">No welfare claims submitted by this member.</td></tr>`;
+    } else {
+      claimTbody.innerHTML = claims.map((c) => {
+        const bt = c.benefit_types || {};
+        const title = bt.title_en || "Welfare Grant";
+        const isDisbursed = c.status === "disbursed";
+        const disbursedInfo = isDisbursed
+          ? `${formatDate(c.disbursed_at || c.created_at)} (${c.payment_method || "cash"})`
+          : "-";
+
+        const voucherBtn = isDisbursed ? `
+          <button type="button" onclick="window.viewGrantVoucher('${c.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-300 bg-sky-50 text-primary font-bold text-xs hover:bg-sky-100 shadow-xs cursor-pointer">
+            <span class="material-symbols-outlined text-[13px]">receipt_long</span>
+            <span>Voucher</span>
+          </button>
+        ` : "-";
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-3 font-mono">${formatDate(c.created_at)}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-800">${escapeHtml(title)}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-slate-700 text-right tabular-nums">${formatCurrency(c.claim_amount)}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(c.disbursed_amount || 0)}</td>
+            <td class="py-2.5 px-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                c.status === "disbursed"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : c.status === "approved"
+                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                    : "bg-sky-50 text-sky-800 border border-sky-200"
+              }">
+                ${(c.status || "").toUpperCase()}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 font-mono text-xs text-slate-600">${disbursedInfo}</td>
+            <td class="py-2.5 px-3 text-right">${voucherBtn}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
+  // 5. Section 4: Member Waivers & Reversals History Table
+  const waiverTbody = document.getElementById("dossierMemberWaiversTableBody");
+  const waiverCountEl = document.getElementById("dossierMemberWaiversCount");
+  if (waiverCountEl) waiverCountEl.textContent = `${(waivers || []).length} records`;
+
+  if (waiverTbody) {
+    if (!waivers || waivers.length === 0) {
+      waiverTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-on-surface-variant font-medium">No fee releases or waivers recorded for this member.</td></tr>`;
+    } else {
+      waiverTbody.innerHTML = waivers.map((w) => {
+        const author = w.waived_by_member || {};
+        const authorName = author.full_name || "Authorized Officer";
+        const authorEpf = author.epf_number ? ` (${author.epf_number})` : "";
+        const isActive = w.status === "active";
+        const typeLabel = w.waiver_type === "admission_fee" ? "Admission Fee" : `Month: ${w.billing_month}`;
+
+        const undoBtn = isActive && isAuthorizedToWaive ? `
+          <button type="button" onclick="window.openReverseWaiverModal('${w.id}')" class="mutation-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 shadow-xs cursor-pointer">
+            <span class="material-symbols-outlined text-[13px]">undo</span>
+            <span>Undo Waiver</span>
+          </button>
+        ` : "-";
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-3 font-mono">${formatDate(w.created_at)}</td>
+            <td class="py-2.5 px-3 font-bold text-purple-900">${typeLabel}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-primary text-right tabular-nums">${formatCurrency(w.waived_amount)}</td>
+            <td class="py-2.5 px-3 text-xs">
+              <div class="font-medium text-slate-800">${escapeHtml(authorName)}</div>
+              <div class="text-[10px] text-slate-500 font-mono">${escapeHtml(authorEpf)}</div>
+            </td>
+            <td class="py-2.5 px-3 max-w-xs text-xs text-slate-700 break-words">${escapeHtml(w.reason || "-")}</td>
+            <td class="py-2.5 px-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isActive
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : "bg-slate-100 text-slate-600 border border-slate-200"
+              }">
+                ${isActive ? "ACTIVE WAIVER" : "REVERSED"}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 text-right">${undoBtn}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+}
+
+window.openRecordWaiverModal = function (type, memberId, dueId, month, amount) {
+  const isAuthorized = currentStaff?.email === "krishaja@gmail.com" || hasStaffAbility("waive_statutory_dues");
+  if (!isAuthorized) {
+    showToast("Access Denied: You require the waive_statutory_dues operational ability.", "error");
+    return;
+  }
+
+  const member = (allMembers || []).find((m) => m.id === memberId) || selectedDossierMember;
+  if (!member) {
+    showToast("Target member details not found.", "warning");
+    return;
+  }
+
+  const memberInput = document.getElementById("recordWaiverMemberId");
+  const dueInput = document.getElementById("recordWaiverDueId");
+  const typeInput = document.getElementById("recordWaiverType");
+  const monthInput = document.getElementById("recordWaiverMonth");
+  const amountInput = document.getElementById("recordWaiverAmount");
+  const reasonInput = document.getElementById("recordWaiverReason");
+
+  const memberDisplay = document.getElementById("recordWaiverMemberDisplay");
+  const targetDisplay = document.getElementById("recordWaiverTargetDisplay");
+  const amountDisplay = document.getElementById("recordWaiverAmountDisplay");
+
+  if (memberInput) memberInput.value = member.id;
+  if (dueInput) dueInput.value = dueId || "";
+  if (typeInput) typeInput.value = type;
+  if (monthInput) monthInput.value = month || "";
+  if (amountInput) amountInput.value = String(amount || 0);
+  if (reasonInput) reasonInput.value = "";
+
+  if (memberDisplay) memberDisplay.textContent = `${member.full_name || member.email} (EPF: ${member.epf_number || "N/A"})`;
+  if (targetDisplay) targetDisplay.textContent = type === "admission_fee" ? "Association Admission Fee" : `Monthly Contribution (${month})`;
+  if (amountDisplay) amountDisplay.textContent = formatCurrency(amount || 0);
+
+  openModal("recordWaiverModal");
+};
+
+window.openReverseWaiverModal = function (waiverId) {
+  const isAuthorized = currentStaff?.email === "krishaja@gmail.com" || hasStaffAbility("waive_statutory_dues");
+  if (!isAuthorized) {
+    showToast("Access Denied: You require the waive_statutory_dues operational ability.", "error");
+    return;
+  }
+
+  const waiver = (allWaiversList || []).find((w) => w.id === waiverId);
+  if (!waiver) {
+    showToast("Waiver record not found.", "warning");
+    return;
+  }
+
+  const idInput = document.getElementById("reverseWaiverId");
+  const reasonInput = document.getElementById("reverseWaiverReason");
+  const memberDisplay = document.getElementById("reverseWaiverMemberDisplay");
+  const targetDisplay = document.getElementById("reverseWaiverTargetDisplay");
+  const authorDisplay = document.getElementById("reverseWaiverAuthorDisplay");
+  const originalReasonDisplay = document.getElementById("reverseWaiverOriginalReasonDisplay");
+
+  if (idInput) idInput.value = waiver.id;
+  if (reasonInput) reasonInput.value = "";
+
+  const m = waiver.member || selectedDossierMember || {};
+  const author = waiver.waived_by_member || {};
+
+  if (memberDisplay) memberDisplay.textContent = `${m.full_name || m.email || "Member"} (EPF: ${m.epf_number || "N/A"})`;
+  if (targetDisplay) targetDisplay.textContent = waiver.waiver_type === "admission_fee" ? "Association Admission Fee" : `Monthly Due (${waiver.billing_month})`;
+  if (authorDisplay) authorDisplay.textContent = `${author.full_name || "Authorized Officer"} (EPF: ${author.epf_number || "N/A"}) on ${formatDate(waiver.created_at)}`;
+  if (originalReasonDisplay) originalReasonDisplay.textContent = waiver.reason || "-";
+
+  openModal("reverseWaiverModal");
+};
+
+function setupWaiverHandlers() {
+  // Record Waiver Form Submission
+  const recordForm = document.getElementById("recordWaiverForm");
+  if (recordForm) {
+    recordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById("submitRecordWaiverBtn");
+      const memberId = document.getElementById("recordWaiverMemberId")?.value;
+      const dueId = document.getElementById("recordWaiverDueId")?.value || null;
+      const waiverType = document.getElementById("recordWaiverType")?.value;
+      const billingMonth = document.getElementById("recordWaiverMonth")?.value || null;
+      const waivedAmount = Number(document.getElementById("recordWaiverAmount")?.value || 0);
+      const reason = document.getElementById("recordWaiverReason")?.value || "";
+
+      if (!reason || reason.trim().length < 5) {
+        showToast("Please provide a mandatory justification of at least 5 characters.", "warning");
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Recording Fee Release...";
+        }
+
+        await recordDuesWaiver({
+          memberId,
+          waiverType,
+          billingMonth,
+          dueId,
+          waivedAmount,
+          reason: reason.trim(),
+        });
+
+        showToast("Statutory due waiver recorded successfully! Waived due will not count as arrears.", "success");
+        closeModal("recordWaiverModal");
+
+        await loadWaiversTabData();
+        if (typeof loadDefaultersData === "function") {
+          loadDefaultersData();
+        }
+      } catch (err) {
+        console.error("Error recording waiver:", err);
+        showToast(err.message || "Failed to record statutory dues waiver.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Confirm &amp; Record Waiver</span>';
+        }
+      }
+    });
+  }
+
+  // Reverse Waiver Form Submission
+  const reverseForm = document.getElementById("reverseWaiverForm");
+  if (reverseForm) {
+    reverseForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById("submitReverseWaiverBtn");
+      const waiverId = document.getElementById("reverseWaiverId")?.value;
+      const reason = document.getElementById("reverseWaiverReason")?.value || "";
+
+      if (!reason || reason.trim().length < 5) {
+        showToast("Please provide a mandatory reversal justification of at least 5 characters.", "warning");
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Reversing Fee Release...";
+        }
+
+        await reverseDuesWaiver(waiverId, reason.trim());
+
+        showToast("Fee release reversed successfully! Due returned to pending (or settled from prepaid balance).", "success");
+        closeModal("reverseWaiverModal");
+
+        await loadWaiversTabData();
+        if (typeof loadDefaultersData === "function") {
+          loadDefaultersData();
+        }
+      } catch (err) {
+        console.error("Error reversing waiver:", err);
+        showToast(err.message || "Failed to reverse statutory dues waiver.", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">undo</span><span>Confirm Reversal (Undo Waiver)</span>';
+        }
+      }
+    });
+  }
+
+  // Close member search autocomplete dropdown on outside click
+  document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById("waiverMemberSearchResults");
+    const input = document.getElementById("waiverMemberSearchInput");
+    if (dropdown && !dropdown.contains(e.target) && e.target !== input) {
+      dropdown.classList.add("hidden");
     }
   });
 }

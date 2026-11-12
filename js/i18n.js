@@ -110,6 +110,7 @@ export const translations = {
     status_pending_approval: "Pending Approval",
     status_verified: "Verified",
     status_rejected: "Rejected",
+    status_unavailable: "Unavailable",
 
     // Payment Modal
     make_payment_btn: "Make a Payment",
@@ -130,6 +131,7 @@ export const translations = {
     slip_file_label: "Bank Slip File (JPEG, PNG, or PDF max 5MB)",
     submit_slip: "Submit Payment",
     submitting: "Submitting...",
+    confirm_payment_title: "Confirm Welfare Payment",
 
     // Welfare Claim Modal
     claim_modal_title: "Apply for Welfare Benefit",
@@ -170,6 +172,7 @@ export const translations = {
     tab_secretary: "Member Profiles",
     tab_claims: "Benefit Grants",
     tab_defaulters: "Defaulters (31st)",
+    tab_waivers: "Fee Release (Waivers)",
     tab_cms: "Content & Settings",
     bank_settings_title: "Official Bank Coordinates & LankaQR",
     bank_settings_desc: "Configure the official association bank account and LankaQR payment code shown on member dashboards.",
@@ -335,6 +338,7 @@ export const translations = {
     status_pending_approval: "අනුමැතිය අපේක්ෂාවෙන්",
     status_verified: "තහවුරු කර ඇත",
     status_rejected: "ප්‍රතික්ෂේප විය",
+    status_unavailable: "ලබාගත නොහැක",
 
     // Payment Modal
     make_payment_btn: "මුදල් ගෙවීමක් සිදු කරන්න",
@@ -355,6 +359,7 @@ export const translations = {
     slip_file_label: "බැංකු රිසිට්පත් ඡායාරූපය හෝ PDF ගොනුව (උපරිම 5MB)",
     submit_slip: "ගෙවීම තහවුරු කරන්න",
     submitting: "ඉදිරිපත් වෙමින් පවතී...",
+    confirm_payment_title: "සුබසාධක ගෙවීම තහවුරු කරන්න",
 
     // Welfare Claim Modal
     claim_modal_title: "සුබසාධන ආධාර අයදුම්පත",
@@ -395,6 +400,7 @@ export const translations = {
     tab_secretary: "සාමාජික තොරතුරු",
     tab_claims: "සුබසාධන ආධාර",
     tab_defaulters: "හිඟ මුදල් ලේඛනය (31 වන දින නීතිය)",
+    tab_waivers: "ගෙවීම් නිදහස් කිරීම්",
     tab_cms: "අන්තර්ගතය සහ සැකසුම්",
     bank_settings_title: "නිල බැංකු තොරතුරු සහ LankaQR කේතය",
     bank_settings_desc: "සාමාජිකයින්ට මුදල් තැන්පත් කිරීම සඳහා පෙන්වන නිල බැංකු ගිණුම් විස්තර සහ LankaQR කේතය මෙතැනින් සංස්කරණය කරන්න.",

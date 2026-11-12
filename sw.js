@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mria-welfare-v9';
+const CACHE_NAME = 'mria-welfare-v12';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
